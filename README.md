@@ -18,20 +18,23 @@ A native, animated application dock for Omarchy Quattro with Hyprland workspace 
 
 ---
 
-## 📦 Manual Installation
+## 📦 Installation
 
-### 1. Clone the repository
-Clone this plugin directly into your Omarchy plugins directory:
+### Option 1: Fast Install (Recommended)
+Add and enable the plugin with a single Omarchy command:
+
+```bash
+omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
+```
+
+---
+
+### Option 2: Manual Installation via Git
+If you prefer to clone the repository manually:
 
 ```bash
 git clone https://github.com/rosakodu/omarchy-dock.git ~/.config/omarchy/plugins/rosakodu.dock
-```
-
-### 2. Rescan plugins & restart shell
-Reload Omarchy shell to discover and register the new plugin:
-
-```bash
-omarchy-shell shell rescanPlugins
+omarchy plugin enable rosakodu.dock
 omarchy-restart-shell
 ```
 
@@ -42,9 +45,7 @@ omarchy-restart-shell
 To remove the dock:
 
 ```bash
-rm -rf ~/.config/omarchy/plugins/rosakodu.dock
-omarchy-shell shell rescanPlugins
-omarchy-restart-shell
+omarchy plugin remove rosakodu.dock
 ```
 
 ---

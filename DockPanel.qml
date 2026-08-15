@@ -55,7 +55,7 @@ Item {
         root.activeMenuItem = null
     }
 
-    // Pure standalone plugin lifecycle: enabled by default, disabled only if in disabledPlugins or removed from bar
+    // Standalone plugin lifecycle: enabled by default, disabled ONLY if in disabledPlugins
     function updatePluginEnabled() {
         var reg = root.pluginRegistry || (shell ? shell.pluginRegistry : null)
         if (reg && typeof reg.isEnabled === "function") {
@@ -71,20 +71,25 @@ Item {
                         root.pluginEnabled = false
                         return
                     }
+                    if (Array.isArray(cfg.plugins)) {
+                        for (var p = 0; p < cfg.plugins.length; p++) {
+                            if (cfg.plugins[p] && (cfg.plugins[p].id === "rosakodu.dock" || cfg.plugins[p] === "rosakodu.dock")) {
+                                root.pluginEnabled = true
+                                return
+                            }
+                        }
+                    }
                     if (cfg.bar && cfg.bar.layout) {
-                        var inLayout = false
                         for (var s in cfg.bar.layout) {
                             var arr = cfg.bar.layout[s] || []
                             for (var k = 0; k < arr.length; k++) {
                                 var entry = arr[k]
                                 if (entry && (entry.id === "rosakodu.dock" || entry === "rosakodu.dock")) {
-                                    inLayout = true
-                                    break
+                                    root.pluginEnabled = true
+                                    return
                                 }
                             }
                         }
-                        root.pluginEnabled = inLayout
-                        return
                     }
                 }
             }
