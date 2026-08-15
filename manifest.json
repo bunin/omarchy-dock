@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "lotos.dock",
+  "name": "Dock",
+  "version": "1.0.0",
+  "author": "Lotos",
+  "license": "MIT",
+  "description": "Native animated application dock for Omarchy Quattro with dynamic positioning, Hyprland window tracking, Drag & Drop, and seamless Omarchy theme integration.",
+  "kinds": [
+    "bar-widget",
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "panel": "DockPanel.qml"
+  },
+  "barWidget": {
+    "displayName": "Dock",
+    "category": "Launchers",
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "iconGlyph": "󰘳",
+      "iconSize": 18
+    },
+    "schema": [
+      {
+        "key": "iconGlyph",
+        "type": "string",
+        "label": "Bar Icon Glyph",
+        "default": "󰘳"
+      }
+    ]
+  }
+}
