@@ -31,9 +31,9 @@ Item {
     }
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
-    // Direct IPC handler for lotos.dock target
+    // Direct IPC handler for rosakodu.dock target
     IpcHandler {
-        target: "lotos.dock"
+        target: "rosakodu.dock"
         function open() { root.open(""); return "ok" }
         function close() { root.close(); return "ok" }
         function toggle() { root.toggle(); return "ok" }
@@ -59,7 +59,7 @@ Item {
     function updatePluginEnabled() {
         var reg = root.pluginRegistry || (shell ? shell.pluginRegistry : null)
         if (reg && typeof reg.isEnabled === "function") {
-            root.pluginEnabled = reg.isEnabled("lotos.dock")
+            root.pluginEnabled = reg.isEnabled("rosakodu.dock")
             return
         }
         try {
@@ -67,7 +67,7 @@ Item {
             if (raw && raw.length > 0) {
                 var cfg = JSON.parse(raw)
                 if (cfg) {
-                    if (Array.isArray(cfg.disabledPlugins) && cfg.disabledPlugins.indexOf("lotos.dock") !== -1) {
+                    if (Array.isArray(cfg.disabledPlugins) && cfg.disabledPlugins.indexOf("rosakodu.dock") !== -1) {
                         root.pluginEnabled = false
                         return
                     }
@@ -77,7 +77,7 @@ Item {
                             var arr = cfg.bar.layout[s] || []
                             for (var k = 0; k < arr.length; k++) {
                                 var entry = arr[k]
-                                if (entry && (entry.id === "lotos.dock" || entry === "lotos.dock")) {
+                                if (entry && (entry.id === "rosakodu.dock" || entry === "rosakodu.dock")) {
                                     inLayout = true
                                     break
                                 }
@@ -344,7 +344,7 @@ Item {
         id: dockWindow
         visible: root.opened && root.pluginEnabled && !remapTimer.running
 
-        WlrLayershell.namespace: "lotos-dock"
+        WlrLayershell.namespace: "omarchy-dock"
         WlrLayershell.layer: WlrLayer.Top
         exclusionMode: (root.opened && root.pluginEnabled && visible) ? ExclusionMode.Auto : ExclusionMode.Ignore
         color: "transparent"
@@ -434,7 +434,7 @@ Item {
         id: menuWindow
         visible: root.isMenuOpen && root.opened && root.pluginEnabled
 
-        WlrLayershell.namespace: "lotos-dock-menu"
+        WlrLayershell.namespace: "omarchy-dock-menu"
         WlrLayershell.layer: WlrLayer.Overlay
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"

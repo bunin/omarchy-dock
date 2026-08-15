@@ -4,7 +4,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "lotos.dock"
+  moduleName: "rosakodu.dock"
 
   readonly property string configuredIcon: setting("iconGlyph", "󰘳")
   readonly property string activeIcon: configuredIcon
@@ -14,24 +14,24 @@ BarWidget {
 
   readonly property bool isDockOpen: {
     if (root.bar && root.bar.shell && root.bar.shell.panelLoaders) {
-      var loader = root.bar.shell.panelLoaders["lotos.dock"]
+      var loader = root.bar.shell.panelLoaders["rosakodu.dock"]
       if (loader && loader.item && loader.item.opened !== undefined) {
         return loader.item.opened === true
       }
     }
     if (root.bar && root.bar.shell && typeof root.bar.shell.isPluginOpen === "function") {
-      return root.bar.shell.isPluginOpen("lotos.dock")
+      return root.bar.shell.isPluginOpen("rosakodu.dock")
     }
     return true
   }
 
   function toggleDock() {
     if (root.bar && root.bar.shell && typeof root.bar.shell.callIfLoaded === "function") {
-      root.bar.shell.callIfLoaded("lotos.dock", "toggle", "")
+      root.bar.shell.callIfLoaded("rosakodu.dock", "toggle", "")
     } else if (root.bar && root.bar.shell && typeof root.bar.shell.toggle === "function") {
-      root.bar.shell.toggle("lotos.dock", "{}")
+      root.bar.shell.toggle("rosakodu.dock", "{}")
     } else if (root.bar && typeof root.bar.run === "function") {
-      root.bar.run("omarchy-shell shell call lotos.dock toggle ''")
+      root.bar.run("omarchy-shell shell call rosakodu.dock toggle ''")
     }
   }
 
