@@ -14,7 +14,6 @@ function loadPinnedApps(storedJson) {
     try {
         var parsed = JSON.parse(storedJson);
         if (Array.isArray(parsed) && parsed.length > 0) {
-            // Ensure every pinned item has valid appClass
             for (var i = 0; i < parsed.length; i++) {
                 if (!parsed[i].appClass) {
                     parsed[i].appClass = parsed[i].id ? parsed[i].id.replace(/^pin_/, "") : (parsed[i].exec || "app");
@@ -22,9 +21,7 @@ function loadPinnedApps(storedJson) {
             }
             return parsed;
         }
-    } catch (e) {
-        // Fallback
-    }
+    } catch (e) {}
     return DEFAULT_PINNED.slice();
 }
 
@@ -46,15 +43,60 @@ function normalizeClass(cls) {
         .replace(/\.desktop$/, "");
 }
 
+var KNOWN_ALIASES = {
+    "google-chrome": ["google-chrome-stable", "chrome"],
+    "google-chrome-stable": ["google-chrome", "chrome"],
+    "visualstudio.code": ["code", "code-oss", "vscodium", "com.visualstudio.code"],
+    "code": ["visualstudio.code", "code-oss", "vscodium", "com.visualstudio.code"],
+    "mitchellh.ghostty": ["ghostty", "com.mitchellh.ghostty"],
+    "ghostty": ["mitchellh.ghostty", "com.mitchellh.ghostty"],
+    "telegram.desktop": ["telegramdesktop", "telegram-desktop", "org.telegram.desktop"],
+    "telegramdesktop": ["telegram.desktop", "telegram-desktop", "org.telegram.desktop"],
+    "kde.dolphin": ["dolphin", "org.kde.dolphin"],
+    "dolphin": ["kde.dolphin", "org.kde.dolphin"],
+    "gnome.nautilus": ["nautilus", "org.gnome.nautilus"],
+    "nautilus": ["gnome.nautilus", "org.gnome.nautilus"]
+};
+
+function isMatchingApp(targetClass, targetExec, clientClass, clientInitialClass) {
+    var tc = String(targetClass || "").toLowerCase().trim();
+    var te = String(targetExec || "").toLowerCase().trim();
+    var cc = String(clientClass || "").toLowerCase().trim();
+    var cic = String(clientInitialClass || "").toLowerCase().trim();
+
+    // 1. Direct raw exact match
+    if (tc && (cc === tc || cic === tc)) return true;
+    if (te && (cc === te || cic === te)) return true;
+
+    // 2. Normalized exact match
+    var ntc = normalizeClass(tc);
+    var nte = normalizeClass(te);
+    var ncc = normalizeClass(cc);
+    var ncic = normalizeClass(cic);
+
+    if (ntc && (ncc === ntc || ncic === ntc)) return true;
+    if (nte && (ncc === nte || ncic === nte)) return true;
+
+    // 3. Known exact aliases
+    if (ntc && KNOWN_ALIASES[ntc]) {
+        var al1 = KNOWN_ALIASES[ntc];
+        if (al1.indexOf(ncc) !== -1 || al1.indexOf(ncic) !== -1 || al1.indexOf(cc) !== -1) return true;
+    }
+    if (nte && KNOWN_ALIASES[nte]) {
+        var al2 = KNOWN_ALIASES[nte];
+        if (al2.indexOf(ncc) !== -1 || al2.indexOf(ncic) !== -1 || al2.indexOf(cc) !== -1) return true;
+    }
+
+    return false;
+}
+
 function togglePinItem(pinnedList, item) {
     if (!item) return pinnedList;
-    var targetNorm = normalizeClass(item.appClass || item.id || item.name);
     var isPinned = false;
 
     for (var i = 0; i < pinnedList.length; i++) {
         var p = pinnedList[i];
-        var pNorm = normalizeClass(p.appClass || p.id || p.name);
-        if (pNorm === targetNorm || (targetNorm.length > 2 && pNorm.indexOf(targetNorm) !== -1)) {
+        if (isMatchingApp(p.appClass, p.exec, item.appClass, item.exec)) {
             isPinned = true;
             break;
         }
@@ -62,12 +104,10 @@ function togglePinItem(pinnedList, item) {
 
     var next = [];
     if (isPinned) {
-        // UNPIN: remove all instances matching this app
+        // UNPIN: remove all matching instances
         for (var j = 0; j < pinnedList.length; j++) {
             var pj = pinnedList[j];
-            var pjNorm = normalizeClass(pj.appClass || pj.id || pj.name);
-            var matches = (pjNorm === targetNorm) || (targetNorm.length > 2 && pjNorm.indexOf(targetNorm) !== -1);
-            if (!matches) {
+            if (!isMatchingApp(pj.appClass, pj.exec, item.appClass, item.exec)) {
                 next.push(pj);
             }
         }
@@ -94,18 +134,13 @@ function reorderDockItem(pinnedList, dockItems, fromIndex, toIndex) {
     if (!sourceItem) return pinnedList;
 
     var next = [];
-    var targetNorm = normalizeClass(sourceItem.appClass || sourceItem.exec || sourceItem.name);
-
-    // Filter out source item from pinnedList if present
     for (var i = 0; i < pinnedList.length; i++) {
         var p = pinnedList[i];
-        var pNorm = normalizeClass(p.appClass || p.exec || p.name);
-        if (pNorm !== targetNorm) {
+        if (!isMatchingApp(p.appClass, p.exec, sourceItem.appClass, sourceItem.exec)) {
             next.push(p);
         }
     }
 
-    // Insert at toIndex (clamped)
     var insertIdx = Math.max(0, Math.min(next.length, toIndex));
     var rawClass = sourceItem.appClass || sourceItem.exec || "app";
     var pinnedEntry = {
@@ -152,21 +187,13 @@ function buildDockItems(pinnedApps, rawClients) {
             windows: []
         };
 
-        var targetNorm = normalizeClass(pinned.appClass);
-        var targetRaw = String(pinned.appClass || "").toLowerCase();
-
         for (var c = 0; c < clients.length; c++) {
             var cl = clients[c];
             if (!cl) continue;
-            var clClass = String(cl.class || cl.initialClass || "").toLowerCase();
-            var clNorm = normalizeClass(clClass);
+            var clClass = String(cl.class || "");
+            var clInitial = String(cl.initialClass || "");
 
-            var matches = (clClass === targetRaw) ||
-                          (clNorm === targetNorm && targetNorm.length > 0) ||
-                          (targetNorm.length > 2 && clNorm.indexOf(targetNorm) !== -1) ||
-                          (clNorm.length > 2 && targetNorm.indexOf(clNorm) !== -1);
-
-            if (matches) {
+            if (isMatchingApp(pinned.appClass, pinned.exec, clClass, clInitial)) {
                 item.isRunning = true;
                 item.windowCount++;
                 var wsId = (cl.workspace && cl.workspace.id !== undefined) ? cl.workspace.id : null;
@@ -193,12 +220,11 @@ function buildDockItems(pinnedApps, rawClients) {
         if (!clientClass || clientClass === "quickshell" || clientClass === "hyprland") continue;
 
         var clientTitle = String(client.title || clientClass);
-        var clientNorm = normalizeClass(clientClass);
         var cWsId = (client.workspace && client.workspace.id !== undefined) ? client.workspace.id : null;
 
         var existingUnpinned = null;
         for (var k = 0; k < items.length; k++) {
-            if (!items[k].isPinned && normalizeClass(items[k].appClass) === clientNorm) {
+            if (!items[k].isPinned && isMatchingApp(items[k].appClass, items[k].exec, clientClass, client.initialClass)) {
                 existingUnpinned = items[k];
                 break;
             }
