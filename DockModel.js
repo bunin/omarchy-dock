@@ -3,260 +3,219 @@
 .pragma library
 
 var DEFAULT_PINNED = [
-    { id: "pin_dolphin", appClass: "org.kde.dolphin", name: "Files", icon: "org.kde.dolphin", exec: "dolphin" },
-    { id: "pin_ghostty", appClass: "com.mitchellh.ghostty", name: "Terminal", icon: "com.mitchellh.ghostty", exec: "com.mitchellh.ghostty" },
-    { id: "pin_chrome", appClass: "google-chrome", name: "Google Chrome", icon: "google-chrome", exec: "google-chrome-stable" },
-    { id: "pin_code", appClass: "code", name: "VS Code", icon: "com.visualstudio.code", exec: "code" },
-    { id: "pin_steam", appClass: "steam", name: "Steam", icon: "steam", exec: "steam" }
+    "org.kde.dolphin",
+    "com.mitchellh.ghostty",
+    "steam",
+    "code",
+    "google-chrome",
+    "org.kde.krita"
 ];
 
-function loadPinnedApps(storedJson) {
-    if (!storedJson) return DEFAULT_PINNED.slice();
-    try {
-        var parsed = JSON.parse(storedJson);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            for (var i = 0; i < parsed.length; i++) {
-                if (!parsed[i].appClass) {
-                    parsed[i].appClass = parsed[i].id ? parsed[i].id.replace(/^pin_/, "") : (parsed[i].exec || "app");
-                }
-            }
-            return parsed;
-        }
-    } catch (e) {}
-    return DEFAULT_PINNED.slice();
+function stripDesktop(id) {
+    var value = String(id == null ? "" : id).trim();
+    if (value.slice(-8) === ".desktop") value = value.slice(0, -8);
+    return value;
 }
 
-function savePinnedApps(pinnedList) {
+function toArray(list) {
+    if (Array.isArray(list)) return list;
+    if (list && typeof list.length === "number") {
+        var out = [];
+        for (var i = 0; i < list.length; i++) out.push(list[i]);
+        return out;
+    }
+    return [];
+}
+
+function parsePinned(raw) {
+    var text = String(raw == null ? "" : raw).trim();
+    if (!text) return DEFAULT_PINNED.slice();
+
+    var parsed = null;
     try {
-        return JSON.stringify(pinnedList);
+        parsed = JSON.parse(text);
     } catch (e) {
-        return "[]";
+        return DEFAULT_PINNED.slice();
     }
-}
+    if (!parsed) return DEFAULT_PINNED.slice();
 
-function normalizeClass(cls) {
-    if (!cls) return "";
-    return String(cls).toLowerCase().trim()
-        .replace(/^org\./, "")
-        .replace(/^com\./, "")
-        .replace(/^io\./, "")
-        .replace(/^dev\./, "")
-        .replace(/\.desktop$/, "");
-}
-
-var KNOWN_ALIASES = {
-    "google-chrome": ["google-chrome-stable", "chrome"],
-    "google-chrome-stable": ["google-chrome", "chrome"],
-    "visualstudio.code": ["code", "code-oss", "vscodium", "com.visualstudio.code"],
-    "code": ["visualstudio.code", "code-oss", "vscodium", "com.visualstudio.code"],
-    "mitchellh.ghostty": ["ghostty", "com.mitchellh.ghostty"],
-    "ghostty": ["mitchellh.ghostty", "com.mitchellh.ghostty"],
-    "telegram.desktop": ["telegramdesktop", "telegram-desktop", "org.telegram.desktop"],
-    "telegramdesktop": ["telegram.desktop", "telegram-desktop", "org.telegram.desktop"],
-    "kde.dolphin": ["dolphin", "org.kde.dolphin"],
-    "dolphin": ["kde.dolphin", "org.kde.dolphin"],
-    "gnome.nautilus": ["nautilus", "org.gnome.nautilus"],
-    "nautilus": ["gnome.nautilus", "org.gnome.nautilus"]
-};
-
-function isMatchingApp(targetClass, targetExec, clientClass, clientInitialClass) {
-    var tc = String(targetClass || "").toLowerCase().trim();
-    var te = String(targetExec || "").toLowerCase().trim();
-    var cc = String(clientClass || "").toLowerCase().trim();
-    var cic = String(clientInitialClass || "").toLowerCase().trim();
-
-    // 1. Direct raw exact match
-    if (tc && (cc === tc || cic === tc)) return true;
-    if (te && (cc === te || cic === te)) return true;
-
-    // 2. Normalized exact match
-    var ntc = normalizeClass(tc);
-    var nte = normalizeClass(te);
-    var ncc = normalizeClass(cc);
-    var ncic = normalizeClass(cic);
-
-    if (ntc && (ncc === ntc || ncic === ntc)) return true;
-    if (nte && (ncc === nte || ncic === nte)) return true;
-
-    // 3. Known exact aliases
-    if (ntc && KNOWN_ALIASES[ntc]) {
-        var al1 = KNOWN_ALIASES[ntc];
-        if (al1.indexOf(ncc) !== -1 || al1.indexOf(ncic) !== -1 || al1.indexOf(cc) !== -1) return true;
-    }
-    if (nte && KNOWN_ALIASES[nte]) {
-        var al2 = KNOWN_ALIASES[nte];
-        if (al2.indexOf(ncc) !== -1 || al2.indexOf(ncic) !== -1 || al2.indexOf(cc) !== -1) return true;
-    }
-
-    return false;
-}
-
-function togglePinItem(pinnedList, item) {
-    if (!item) return pinnedList;
-    var isPinned = false;
-
-    for (var i = 0; i < pinnedList.length; i++) {
-        var p = pinnedList[i];
-        if (isMatchingApp(p.appClass, p.exec, item.appClass, item.exec)) {
-            isPinned = true;
-            break;
-        }
-    }
-
-    var next = [];
-    if (isPinned) {
-        // UNPIN: remove all matching instances
-        for (var j = 0; j < pinnedList.length; j++) {
-            var pj = pinnedList[j];
-            if (!isMatchingApp(pj.appClass, pj.exec, item.appClass, item.exec)) {
-                next.push(pj);
+    var arr = [];
+    if (Array.isArray(parsed)) {
+        // Support legacy object format or string array format
+        for (var k = 0; k < parsed.length; k++) {
+            var item = parsed[k];
+            if (typeof item === "string") {
+                arr.push(item);
+            } else if (item && typeof item === "object") {
+                var c = item.appClass || item.id || item.exec || "";
+                c = c.replace(/^pin_/, "");
+                if (c) arr.push(c);
             }
         }
-    } else {
-        // PIN: add cleanly
-        next = pinnedList.slice();
-        var rawClass = item.appClass || item.exec || "app";
-        next.push({
-            id: "pin_" + rawClass,
-            appClass: rawClass,
-            name: item.name || item.appClass || "App",
-            icon: item.icon || item.appClass || "application-x-executable",
-            exec: item.exec || item.appClass || rawClass
-        });
+    } else if (typeof parsed === "object" && Array.isArray(parsed.pinned)) {
+        arr = parsed.pinned;
     }
-    return next;
+
+    if (arr.length === 0) return DEFAULT_PINNED.slice();
+
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < arr.length; i++) {
+        var id = stripDesktop(arr[i]);
+        if (!id || seen[id]) continue;
+        seen[id] = true;
+        out.push(id);
+    }
+    return out;
 }
 
-function reorderDockItem(pinnedList, dockItems, fromIndex, toIndex) {
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return pinnedList;
-    if (!dockItems || fromIndex >= dockItems.length || toIndex >= dockItems.length) return pinnedList;
+function serializePinned(pinnedIds) {
+    var arr = Array.isArray(pinnedIds) ? pinnedIds : [];
+    var cleaned = [];
+    var seen = {};
+    for (var i = 0; i < arr.length; i++) {
+        var id = stripDesktop(arr[i]);
+        if (!id || seen[id]) continue;
+        seen[id] = true;
+        cleaned.push(id);
+    }
+    return JSON.stringify({ pinned: cleaned }, null, 2);
+}
+
+function togglePinned(pinnedIds, appId) {
+    var arr = Array.isArray(pinnedIds) ? pinnedIds.slice() : [];
+    var id = stripDesktop(appId);
+    if (!id) return arr;
+    var idx = arr.indexOf(id);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(id);
+    return arr;
+}
+
+function isPinned(pinnedIds, appId) {
+    var arr = Array.isArray(pinnedIds) ? pinnedIds : [];
+    return arr.indexOf(stripDesktop(appId)) >= 0;
+}
+
+function reorderPinned(pinnedIds, dockItems, fromIndex, toIndex) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return pinnedIds;
+    if (!dockItems || fromIndex >= dockItems.length || toIndex >= dockItems.length) return pinnedIds;
 
     var sourceItem = dockItems[fromIndex];
-    if (!sourceItem) return pinnedList;
+    if (!sourceItem || !sourceItem.appId) return pinnedIds;
 
+    var srcId = stripDesktop(sourceItem.appId);
     var next = [];
-    for (var i = 0; i < pinnedList.length; i++) {
-        var p = pinnedList[i];
-        if (!isMatchingApp(p.appClass, p.exec, sourceItem.appClass, sourceItem.exec)) {
-            next.push(p);
-        }
+    for (var i = 0; i < pinnedIds.length; i++) {
+        var pid = stripDesktop(pinnedIds[i]);
+        if (pid !== srcId) next.push(pid);
     }
 
     var insertIdx = Math.max(0, Math.min(next.length, toIndex));
-    var rawClass = sourceItem.appClass || sourceItem.exec || "app";
-    var pinnedEntry = {
-        id: "pin_" + rawClass,
-        appClass: rawClass,
-        name: sourceItem.name || rawClass,
-        icon: sourceItem.icon || rawClass || "application-x-executable",
-        exec: sourceItem.exec || rawClass
-    };
-
-    next.splice(insertIdx, 0, pinnedEntry);
+    next.splice(insertIdx, 0, srcId);
     return next;
 }
 
-function buildDockItems(pinnedApps, rawClients) {
-    var items = [];
-    var matchedClientAddresses = {};
-    var clients = [];
-
-    if (Array.isArray(rawClients)) {
-        clients = rawClients;
-    } else if (typeof rawClients === "string" && rawClients.length > 0) {
-        try {
-            clients = JSON.parse(rawClients);
-        } catch(e) {
-            clients = [];
-        }
+function entryFor(appRows, appId) {
+    var want = stripDesktop(appId);
+    if (!want || !appRows) return null;
+    for (var i = 0; i < appRows.length; i++) {
+        var row = appRows[i];
+        var entry = row && row.entry;
+        if (!entry) continue;
+        if (stripDesktop(entry.id) === want) return entry;
     }
+    return null;
+}
 
-    // 1. Process Pinned Apps
-    for (var i = 0; i < pinnedApps.length; i++) {
-        var pinned = pinnedApps[i];
-        var item = {
-            id: pinned.id || ("pinned_" + i),
-            appClass: pinned.appClass || "",
-            name: pinned.name || "App",
-            icon: pinned.icon || pinned.appClass || "application-x-executable",
-            exec: pinned.exec || pinned.appClass || "",
-            isPinned: true,
-            isRunning: false,
-            isActive: false,
-            windowCount: 0,
-            addresses: [],
-            windows: []
-        };
+function buildDockItems(pinnedIds, toplevels, activeToplevel, appRows, appLibrary) {
+    var pinned = Array.isArray(pinnedIds) ? pinnedIds : [];
+    var list = toArray(toplevels);
 
-        for (var c = 0; c < clients.length; c++) {
-            var cl = clients[c];
-            if (!cl) continue;
-            var clClass = String(cl.class || "");
-            var clInitial = String(cl.initialClass || "");
+    var runningMap = {};
+    var runningOrder = [];
 
-            if (isMatchingApp(pinned.appClass, pinned.exec, clClass, clInitial)) {
-                item.isRunning = true;
-                item.windowCount++;
-                var wsId = (cl.workspace && cl.workspace.id !== undefined) ? cl.workspace.id : null;
-                if (cl.address) {
-                    item.addresses.push(cl.address);
-                    item.windows.push({ address: cl.address, workspaceId: wsId });
-                }
-                if (cl.focusHistoryID === 0 || cl.focusHistoryId === 0 || cl.active === true) {
-                    item.isActive = true;
-                }
-                if (cl.address) matchedClientAddresses[cl.address] = true;
-            }
-        }
-        items.push(item);
-    }
+    var activeApp = activeToplevel ? stripDesktop(activeToplevel.appId) : "";
 
-    // 2. Process Unpinned Running Apps
-    for (var j = 0; j < clients.length; j++) {
-        var client = clients[j];
-        if (!client) continue;
-        if (client.address && matchedClientAddresses[client.address]) continue;
+    for (var i = 0; i < list.length; i++) {
+        var toplevel = list[i];
+        if (!toplevel) continue;
+        var appId = stripDesktop(toplevel.appId);
+        if (!appId || appId === "quickshell" || appId === "hyprland") continue;
 
-        var clientClass = String(client.class || client.initialClass || "app");
-        if (!clientClass || clientClass === "quickshell" || clientClass === "hyprland") continue;
-
-        var clientTitle = String(client.title || clientClass);
-        var cWsId = (client.workspace && client.workspace.id !== undefined) ? client.workspace.id : null;
-
-        var existingUnpinned = null;
-        for (var k = 0; k < items.length; k++) {
-            if (!items[k].isPinned && isMatchingApp(items[k].appClass, items[k].exec, clientClass, client.initialClass)) {
-                existingUnpinned = items[k];
-                break;
-            }
-        }
-
-        if (existingUnpinned) {
-            existingUnpinned.windowCount++;
-            if (client.address) {
-                existingUnpinned.addresses.push(client.address);
-                existingUnpinned.windows.push({ address: client.address, workspaceId: cWsId });
-            }
-            if (client.focusHistoryID === 0 || client.focusHistoryId === 0 || client.active === true) {
-                existingUnpinned.isActive = true;
-            }
-        } else {
-            var newItem = {
-                id: "running_" + (client.address || j),
-                appClass: clientClass,
-                name: clientTitle.split(" — ")[0].split(" - ")[0] || clientTitle || clientClass,
-                icon: clientClass,
-                exec: clientClass.toLowerCase(),
-                isPinned: false,
-                isRunning: true,
-                isActive: (client.focusHistoryID === 0 || client.focusHistoryId === 0 || client.active === true),
-                windowCount: 1,
-                addresses: client.address ? [client.address] : [],
-                windows: client.address ? [{ address: client.address, workspaceId: cWsId }] : []
+        if (!runningMap[appId]) {
+            runningMap[appId] = {
+                toplevels: [],
+                isActive: false
             };
-            items.push(newItem);
+            runningOrder.push(appId);
         }
-        if (client.address) matchedClientAddresses[client.address] = true;
+        runningMap[appId].toplevels.push(toplevel);
+        if (activeApp === appId || toplevel === activeToplevel || toplevel.active === true) {
+            runningMap[appId].isActive = true;
+        }
+    }
+
+    function enrichItem(base) {
+        var entry = entryFor(appRows, base.appId);
+        if (entry && appLibrary) {
+            base.name = appLibrary.entryName(entry) || base.appId;
+            base.icon = appLibrary.iconSource(entry.icon) || base.appId;
+        } else {
+            base.name = base.appId;
+            base.icon = base.appId;
+        }
+        return base;
+    }
+
+    var items = [];
+    var seen = {};
+
+    // 1. Pinned Apps in specified order
+    for (var j = 0; j < pinned.length; j++) {
+        var pid = stripDesktop(pinned[j]);
+        if (!pid || seen[pid]) continue;
+        seen[pid] = true;
+
+        var runInfo = runningMap[pid];
+        var isRun = runInfo && runInfo.toplevels.length > 0;
+        var item = {
+            id: "pin_" + pid,
+            appId: pid,
+            appClass: pid,
+            exec: pid,
+            name: pid,
+            icon: pid,
+            isPinned: true,
+            isRunning: isRun,
+            isActive: isRun ? runInfo.isActive : false,
+            windowCount: isRun ? runInfo.toplevels.length : 0,
+            toplevels: isRun ? runInfo.toplevels : []
+        };
+        items.push(enrichItem(item));
+    }
+
+    // 2. Unpinned Running Apps in order of discovery
+    for (var k = 0; k < runningOrder.length; k++) {
+        var rid = runningOrder[k];
+        if (seen[rid]) continue;
+        seen[rid] = true;
+
+        var rInfo = runningMap[rid];
+        var unpinnedItem = {
+            id: "run_" + rid,
+            appId: rid,
+            appClass: rid,
+            exec: rid,
+            name: rid,
+            icon: rid,
+            isPinned: false,
+            isRunning: true,
+            isActive: rInfo.isActive,
+            windowCount: rInfo.toplevels.length,
+            toplevels: rInfo.toplevels
+        };
+        items.push(enrichItem(unpinnedItem));
     }
 
     return items;

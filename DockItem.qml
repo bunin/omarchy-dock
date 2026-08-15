@@ -170,28 +170,21 @@ Item {
                 launchBounce.restart()
                 root.itemLeftClicked(root.itemData)
                 if (root.itemData && root.itemData.isRunning) {
-                    var win = (root.itemData.windows && root.itemData.windows.length > 0)
-                        ? root.itemData.windows[0]
-                        : { address: (root.itemData.addresses && root.itemData.addresses[0]) || "", workspaceId: null }
-
-                    // If already active and multiple windows exist, cycle to next window
-                    if (root.itemData.isActive && root.itemData.windows && root.itemData.windows.length > 1) {
-                        win = root.itemData.windows[1]
-                    }
-
-                    var cmd = ""
-                    if (win.workspaceId !== null && win.workspaceId !== undefined) {
-                        cmd += "hyprctl dispatch " + Util.shellQuote("hl.dsp.focus({ workspace = \"" + win.workspaceId + "\" })") + " ; "
-                    }
-                    if (win.address) {
-                        cmd += "hyprctl dispatch " + Util.shellQuote("hl.dsp.focus({ window = \"address:" + win.address + "\" })")
-                    }
-                    if (cmd.length > 0) {
-                        Util.execDetached(cmd)
+                    var tops = root.itemData.toplevels || []
+                    if (tops.length > 0) {
+                        if (root.itemData.isActive && tops.length > 1) {
+                            if (tops[1].activate) tops[1].activate()
+                        } else {
+                            if (tops[0].activate) tops[0].activate()
+                        }
                     }
                 } else if (root.itemData) {
-                    var execTarget = root.itemData.appClass ? (root.itemData.appClass + ".desktop") : (root.itemData.exec + ".desktop")
-                    Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(execTarget) + " || uwsm-app -- " + root.itemData.exec)
+                    if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                        root.shell.appLibrary.launch(root.itemData.appId, root.itemData.name)
+                    } else {
+                        var target = root.itemData.appId ? (root.itemData.appId + ".desktop") : (root.itemData.exec + ".desktop")
+                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + root.itemData.exec)
+                    }
                 }
             } else if (mouse.button === Qt.RightButton) {
                 root.itemRightClicked(root.itemData, root)

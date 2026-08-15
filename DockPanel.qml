@@ -256,86 +256,79 @@ Item {
     }
 
     function refresh() {
-        pinnedApps = DockModel.loadPinnedApps(userPinnedFile.text() || "")
-        refreshClients()
-        refreshLayers()
-        updatePluginEnabled()
+        root.pinnedIds = DockModel.parsePinned(userPinnedFile.text() || "")
+        root.refreshLayers()
+        root.updatePluginEnabled()
+        root.updateDockItems()
         return "ok"
     }
 
     // Pinned apps persistence
     property string userPinnedPath: Quickshell.env("HOME") + "/.config/omarchy/dock-pinned.json"
-    property var pinnedApps: []
-    property var rawClients: []
+    property var pinnedIds: []
     property var dockItems: []
-    property bool pinnedLoaded: false
+    property var appRows: (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : []
 
     function updateDockItems() {
-        root.dockItems = DockModel.buildDockItems(root.pinnedApps, root.rawClients)
+        var toplevels = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+        var active = ToplevelManager.activeToplevel
+        var lib = shell ? shell.appLibrary : null
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, root.appRows, lib)
     }
 
-    onPinnedAppsChanged: updateDockItems()
-    onRawClientsChanged: updateDockItems()
+    onPinnedIdsChanged: updateDockItems()
+    onAppRowsChanged: updateDockItems()
+    onShellChanged: {
+        root.appRows = (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : []
+        root.updateDockItems()
+    }
+
+    Connections {
+        target: ToplevelManager.toplevels
+        function onValuesChanged() { root.updateDockItems() }
+    }
+
+    Connections {
+        target: ToplevelManager
+        function onActiveToplevelChanged() { root.updateDockItems() }
+    }
+
+    Connections {
+        target: shell ? shell.appLibrary : null
+        enabled: target !== null
+        function onAppsChanged() {
+            root.appRows = shell.appLibrary.sortedEntries("")
+            root.updateDockItems()
+        }
+    }
 
     FileView {
         id: userPinnedFile
         path: root.userPinnedPath
-        watchChanges: false
+        watchChanges: true
         atomicWrites: true
         printErrors: false
         onLoaded: {
-            if (!root.pinnedLoaded) {
-                root.pinnedApps = DockModel.loadPinnedApps(text())
-                root.pinnedLoaded = true
-                root.refreshClients()
-            }
+            root.pinnedIds = DockModel.parsePinned(text())
+            root.updateDockItems()
         }
         onLoadFailed: {
-            if (!root.pinnedLoaded) {
-                root.pinnedApps = DockModel.loadPinnedApps("")
-                root.pinnedLoaded = true
-                root.savePinned()
-                root.refreshClients()
-            }
+            root.pinnedIds = DockModel.DEFAULT_PINNED.slice()
+            root.savePinned()
+            root.updateDockItems()
         }
+        onFileChanged: userPinnedFile.reload()
     }
 
     function savePinned() {
-        if (!root.pinnedLoaded) return
-        var json = DockModel.savePinnedApps(root.pinnedApps)
+        var json = DockModel.serializePinned(root.pinnedIds)
         userPinnedFile.setText(json + "\n")
     }
 
-    // Fast asynchronous Hyprland clients query
-    Process {
-        id: clientsProc
-        running: true
-        command: ["hyprctl", "clients", "-j"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    root.rawClients = JSON.parse(text)
-                } catch(e) {
-                    root.rawClients = []
-                }
-            }
-        }
-    }
-
-    function refreshClients() {
-        if (!clientsProc.running) {
-            clientsProc.running = true
-        }
-    }
-
-    // Reactive bindings to window state changes in Hyprland
-    Connections {
-        target: Hyprland
-        ignoreUnknownSignals: true
-        function onRawEvent(event) { root.refreshClients(); root.refreshLayers() }
-        function onFocusedWorkspaceChanged() { root.refreshClients(); root.activeMenuItem = null }
-        function onFocusedMonitorChanged() { root.refreshClients(); root.refreshLayers() }
+    function setPinned(next) {
+        root.pinnedIds = next
+        root.savePinned()
+        root.updateDockItems()
     }
 
     readonly property var activeToplevel: ToplevelManager.activeToplevel
@@ -441,9 +434,7 @@ Item {
                         }
 
                         onMoveRequested: function(fromIdx, toIdx) {
-                            root.pinnedApps = DockModel.reorderDockItem(root.pinnedApps, root.dockItems, fromIdx, toIdx)
-                            root.savePinned()
-                            root.refreshClients()
+                            root.setPinned(DockModel.reorderPinned(root.pinnedIds, root.dockItems, fromIdx, toIdx))
                         }
                     }
                 }
@@ -522,9 +513,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (!root.activeMenuItem) return
-                            root.pinnedApps = DockModel.togglePinItem(root.pinnedApps, root.activeMenuItem)
-                            root.savePinned()
-                            root.refreshClients()
+                            root.setPinned(DockModel.togglePinned(root.pinnedIds, root.activeMenuItem.appId))
                             root.activeMenuItem = null
                         }
                     }
@@ -553,9 +542,12 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.activeMenuItem) {
-                                var item = root.activeMenuItem
-                                var target = item.appClass ? (item.appClass + ".desktop") : (item.exec + ".desktop")
-                                Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + item.exec)
+                                if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                                    root.shell.appLibrary.launch(root.activeMenuItem.appId, root.activeMenuItem.name)
+                                } else {
+                                    var target = root.activeMenuItem.appId ? (root.activeMenuItem.appId + ".desktop") : (root.activeMenuItem.exec + ".desktop")
+                                    Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + root.activeMenuItem.exec)
+                                }
                             }
                             root.activeMenuItem = null
                         }
@@ -585,13 +577,12 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (root.activeMenuItem && root.activeMenuItem.addresses && root.activeMenuItem.addresses.length > 0) {
-                                for (var a = 0; a < root.activeMenuItem.addresses.length; a++) {
-                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ window = \"address:" + root.activeMenuItem.addresses[a] + "\" })"))
+                            if (root.activeMenuItem && root.activeMenuItem.toplevels) {
+                                for (var t = 0; t < root.activeMenuItem.toplevels.length; t++) {
+                                    if (root.activeMenuItem.toplevels[t].close) root.activeMenuItem.toplevels[t].close()
                                 }
                             }
                             root.activeMenuItem = null
-                            Qt.callLater(root.refreshClients)
                         }
                     }
                 }
@@ -629,9 +620,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (!root.activeMenuItem) return
-                            root.pinnedApps = DockModel.togglePinItem(root.pinnedApps, root.activeMenuItem)
-                            root.savePinned()
-                            root.refreshClients()
+                            root.setPinned(DockModel.togglePinned(root.pinnedIds, root.activeMenuItem.appId))
                             root.activeMenuItem = null
                         }
                     }
@@ -660,9 +649,12 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.activeMenuItem) {
-                                var item = root.activeMenuItem
-                                var target = item.appClass ? (item.appClass + ".desktop") : (item.exec + ".desktop")
-                                Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + item.exec)
+                                if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                                    root.shell.appLibrary.launch(root.activeMenuItem.appId, root.activeMenuItem.name)
+                                } else {
+                                    var target = root.activeMenuItem.appId ? (root.activeMenuItem.appId + ".desktop") : (root.activeMenuItem.exec + ".desktop")
+                                    Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + root.activeMenuItem.exec)
+                                }
                             }
                             root.activeMenuItem = null
                         }
@@ -692,13 +684,12 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (root.activeMenuItem && root.activeMenuItem.addresses && root.activeMenuItem.addresses.length > 0) {
-                                for (var a = 0; a < root.activeMenuItem.addresses.length; a++) {
-                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ window = \"address:" + root.activeMenuItem.addresses[a] + "\" })"))
+                            if (root.activeMenuItem && root.activeMenuItem.toplevels) {
+                                for (var t = 0; t < root.activeMenuItem.toplevels.length; t++) {
+                                    if (root.activeMenuItem.toplevels[t].close) root.activeMenuItem.toplevels[t].close()
                                 }
                             }
                             root.activeMenuItem = null
-                            Qt.callLater(root.refreshClients)
                         }
                     }
                 }
