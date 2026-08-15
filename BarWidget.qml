@@ -6,7 +6,7 @@ BarWidget {
   id: root
   moduleName: "rosakodu.dock"
 
-  readonly property string configuredIcon: setting("iconGlyph", "󰘳")
+  readonly property string configuredIcon: setting("iconGlyph", "󰌨")
   readonly property string activeIcon: configuredIcon
 
   implicitWidth: button.implicitWidth

@@ -10,22 +10,22 @@ Popup {
     signal iconSelected(string glyph)
 
     property var iconsList: [
-        { glyph: "⊞", label: "Grid" },
-        { glyph: "❖", label: "Symbol" },
-        { glyph: "◈", label: "Diamond" },
-        { glyph: "☰", label: "Menu" },
-        { glyph: "🚀", label: "Rocket" },
+        { glyph: "󰌨", label: "Command" },
+        { glyph: "󰘳", label: "Categories" },
+        { glyph: "󰀻", label: "Dock" },
+        { glyph: "󰮔", label: "Apps" },
         { glyph: "✦", label: "Sparkle" },
         { glyph: "★", label: "Star" },
-        { glyph: "⬡", label: "Hexagon" },
+        { glyph: "❖", label: "Symbol" },
+        { glyph: "◈", label: "Diamond" },
+        { glyph: "⊞", label: "Grid" },
+        { glyph: "🚀", label: "Rocket" },
         { glyph: "⚡", label: "Bolt" },
+        { glyph: "⬡", label: "Hexagon" },
         { glyph: "⚙", label: "Gear" },
-        { glyph: "●", label: "Circle" },
-        { glyph: "📦", label: "Box" },
         { glyph: "📂", label: "Folder" },
         { glyph: "🖥", label: "Screen" },
-        { glyph: "▲", label: "Triangle" },
-        { glyph: "■", label: "Square" }
+        { glyph: "●", label: "Circle" }
     ]
 
     width: 260

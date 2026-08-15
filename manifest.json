@@ -21,7 +21,7 @@
     "allowMultiple": false,
     "defaultSection": "center",
     "defaults": {
-      "iconGlyph": "󰘳",
+      "iconGlyph": "󰌨",
       "iconSize": 18
     },
     "schema": [
@@ -29,7 +29,7 @@
         "key": "iconGlyph",
         "type": "string",
         "label": "Bar Icon Glyph",
-        "default": "󰘳"
+        "default": "󰌨"
       }
     ]
   }
