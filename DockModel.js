@@ -3,10 +3,11 @@
 .pragma library
 
 var DEFAULT_PINNED = [
-    { id: "kitty", appClass: "kitty", name: "Terminal", icon: "kitty", exec: "kitty" },
-    { id: "chrome", appClass: "google-chrome", name: "Google Chrome", icon: "google-chrome", exec: "google-chrome-stable" },
-    { id: "code", appClass: "code", name: "VS Code", icon: "com.visualstudio.code", exec: "code" },
-    { id: "files", appClass: "org.gnome.Nautilus", name: "Files", icon: "org.gnome.Nautilus", exec: "nautilus" }
+    { id: "pin_dolphin", appClass: "org.kde.dolphin", name: "Files", icon: "org.kde.dolphin", exec: "dolphin" },
+    { id: "pin_ghostty", appClass: "com.mitchellh.ghostty", name: "Terminal", icon: "com.mitchellh.ghostty", exec: "com.mitchellh.ghostty" },
+    { id: "pin_chrome", appClass: "google-chrome", name: "Google Chrome", icon: "google-chrome", exec: "google-chrome-stable" },
+    { id: "pin_code", appClass: "code", name: "VS Code", icon: "com.visualstudio.code", exec: "code" },
+    { id: "pin_steam", appClass: "steam", name: "Steam", icon: "steam", exec: "steam" }
 ];
 
 function loadPinnedApps(storedJson) {
