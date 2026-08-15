@@ -561,7 +561,7 @@ Item {
                         onClicked: {
                             if (root.activeMenuItem && root.activeMenuItem.addresses && root.activeMenuItem.addresses.length > 0) {
                                 for (var a = 0; a < root.activeMenuItem.addresses.length; a++) {
-                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ address = \"" + root.activeMenuItem.addresses[a] + "\" })"))
+                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ window = \"address:" + root.activeMenuItem.addresses[a] + "\" })"))
                                 }
                             }
                             root.activeMenuItem = null
@@ -668,7 +668,7 @@ Item {
                         onClicked: {
                             if (root.activeMenuItem && root.activeMenuItem.addresses && root.activeMenuItem.addresses.length > 0) {
                                 for (var a = 0; a < root.activeMenuItem.addresses.length; a++) {
-                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ address = \"" + root.activeMenuItem.addresses[a] + "\" })"))
+                                    Util.execDetached("hyprctl dispatch " + Util.shellQuote("hl.dsp.window.close({ window = \"address:" + root.activeMenuItem.addresses[a] + "\" })"))
                                 }
                             }
                             root.activeMenuItem = null
