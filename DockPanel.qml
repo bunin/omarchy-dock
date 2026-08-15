@@ -265,9 +265,10 @@ Item {
 
     // Pinned apps persistence
     property string userPinnedPath: Quickshell.env("HOME") + "/.config/omarchy/dock-pinned.json"
-    property var pinnedApps: DockModel.DEFAULT_PINNED.slice()
+    property var pinnedApps: []
     property var rawClients: []
     property var dockItems: []
+    property bool pinnedLoaded: false
 
     function updateDockItems() {
         root.dockItems = DockModel.buildDockItems(root.pinnedApps, root.rawClients)
@@ -279,17 +280,29 @@ Item {
     FileView {
         id: userPinnedFile
         path: root.userPinnedPath
-        watchChanges: true
+        watchChanges: false
+        atomicWrites: true
         printErrors: false
         onLoaded: {
-            root.pinnedApps = DockModel.loadPinnedApps(text())
-            root.refreshClients()
+            if (!root.pinnedLoaded) {
+                root.pinnedApps = DockModel.loadPinnedApps(text())
+                root.pinnedLoaded = true
+                root.refreshClients()
+            }
         }
-        onFileChanged: reload()
+        onLoadFailed: {
+            if (!root.pinnedLoaded) {
+                root.pinnedApps = DockModel.loadPinnedApps("")
+                root.pinnedLoaded = true
+                root.savePinned()
+                root.refreshClients()
+            }
+        }
     }
 
     function savePinned() {
-        var json = DockModel.savePinnedApps(pinnedApps)
+        if (!root.pinnedLoaded) return
+        var json = DockModel.savePinnedApps(root.pinnedApps)
         userPinnedFile.setText(json + "\n")
     }
 
