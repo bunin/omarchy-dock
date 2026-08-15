@@ -23,18 +23,6 @@ omarchy-shell shell rescanPlugins
 omarchy-restart-shell
 ```
 
-### 3. Recommended Hyprland Layer Rule
-To ensure instant, smooth geometry updates without compositor-level layer animation stretching, add this rule to your `~/.config/hypr/looknfeel.lua` (or `~/.config/hypr/hyprland.conf`):
-
-```lua
-hl.layer_rule({ match = { namespace = "^(omarchy-dock|omarchy-dock-menu)$" }, no_anim = true, animation = "none" })
-```
-
-Then reload Hyprland:
-```bash
-hyprctl reload
-```
-
 ---
 
 ## 🗑️ Uninstallation
