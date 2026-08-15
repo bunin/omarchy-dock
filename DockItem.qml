@@ -31,16 +31,6 @@ Item {
     height: 42
     z: isDragging ? 100 : (isSelected ? 60 : (mouseArea.containsMouse ? 50 : 1))
 
-    // Position animation (smooth sliding into place when other items move or when drag is released)
-    Behavior on x {
-        enabled: !root.isDragging
-        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-    }
-    Behavior on y {
-        enabled: !root.isDragging
-        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-    }
-
     // Main animated icon wrapper (strictly centered)
     Item {
         id: iconWrapper
@@ -116,6 +106,8 @@ Item {
         height: root.itemData && root.itemData.isActive ? 4 : 3
         radius: width / 2
         color: root.itemData && root.itemData.isActive ? Color.accent : Color.composed("bar.text", "bar.text-alpha", Color.bar.text, 0.75)
+        antialiasing: true
+        smooth: true
 
         // Unified positioning: ALWAYS under icon across all orientations
         anchors.top: iconWrapper.bottom

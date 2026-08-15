@@ -198,7 +198,7 @@ Item {
     // Exact geometric coordinate centering for the overlay menu
     readonly property real calculatedMenuLeft: {
         var screenW = dockWindow.screen ? dockWindow.screen.width : 1920
-        var dockW = dockWindow.width
+        var dockW = root.isVertical ? 46 : (root.itemsCount * 46 + 6)
         var dockLeft = (screenW - dockW) / 2
         var iconCenterX = dockLeft + 3 + root.activeMenuItemIndex * 46 + 23
         var menuW = menuWindow.implicitWidth
@@ -208,7 +208,7 @@ Item {
 
     readonly property real calculatedMenuTop: {
         var screenH = dockWindow.screen ? dockWindow.screen.height : 1080
-        var dockH = dockWindow.height
+        var dockH = root.isVertical ? (root.itemsCount * 46 + 6) : 46
         var dockTop = (screenH - dockH) / 2
         var iconCenterY = dockTop + 3 + root.activeMenuItemIndex * 46 + 23
         var menuH = menuWindow.implicitHeight
@@ -363,20 +363,24 @@ Item {
             left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
         }
 
-        // Exact, uncompromised dock dimensions (ZERO jitter on click)
-        implicitWidth: root.isVertical ? 46 : (root.itemsCount * 46 + 6)
-        implicitHeight: root.isVertical ? (root.itemsCount * 46 + 6) : 46
+        // Exact, uncompromised dock dimensions with 2px antialiasing buffer
+        implicitWidth: root.isVertical ? 48 : (root.itemsCount * 46 + 10)
+        implicitHeight: root.isVertical ? (root.itemsCount * 46 + 10) : 48
 
         // Main Visual Dock Card
         Rectangle {
             id: dockSurface
-            anchors.fill: parent
+            anchors.centerIn: parent
+            width: root.isVertical ? 44 : (root.itemsCount * 46 + 6)
+            height: root.isVertical ? (root.itemsCount * 46 + 6) : 44
             visible: root.opened && root.pluginEnabled && !remapTimer.running
 
             color: Color.composed("bar.background", "bar.background-alpha", Color.background, 0.94)
             border.width: root.systemBorderSize
             border.color: Color.accent
             radius: root.systemRounding
+            antialiasing: true
+            smooth: true
 
             Behavior on color { ColorAnimation { duration: 250 } }
             Behavior on border.color { ColorAnimation { duration: 250 } }
@@ -453,16 +457,20 @@ Item {
             left: (root.isVertical && root.barPosition === "right") ? ((Style.gapsOut || 5) + 52) : (!root.isVertical ? root.calculatedMenuLeft : 0)
         }
 
-        implicitWidth: root.isVertical ? 32 : (actionRow.implicitWidth + 12)
-        implicitHeight: root.isVertical ? (actionCol.implicitHeight + 12) : 32
+        implicitWidth: root.isVertical ? 36 : (actionRow.implicitWidth + 16)
+        implicitHeight: root.isVertical ? (actionCol.implicitHeight + 16) : 36
 
         // Visual Action Card
         Rectangle {
-            anchors.fill: parent
+            anchors.centerIn: parent
+            width: root.isVertical ? 32 : (actionRow.implicitWidth + 12)
+            height: root.isVertical ? (actionCol.implicitHeight + 12) : 32
             color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.96)
             border.width: root.systemBorderSize
             border.color: Color.accent
             radius: Math.min(10, root.systemRounding)
+            antialiasing: true
+            smooth: true
 
             // Horizontal layout when dock is horizontal
             RowLayout {
