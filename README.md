@@ -2,7 +2,7 @@
 
 ![Omarchy Dock](./preview.png)
 
-A native, animated application dock for Omarchy Quattro with Hyprland workspace tracking, Drag & Drop reordering, and seamless Omarchy theme integration.
+Native animated application dock for Omarchy Quattro with dynamic positioning, Hyprland window tracking, Drag & Drop, and seamless Omarchy theme integration.
 
 ---
 
