@@ -21,7 +21,7 @@ A native, animated application dock for Omarchy Quattro with Hyprland workspace 
 ## 📦 Installation
 
 ```bash
-omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
+omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable --yes
 ```
 
 ---
