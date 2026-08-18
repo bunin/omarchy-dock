@@ -1,121 +1,372 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "IconResolver.js" as IconResolver
+import "DockModel.js" as DockModel
 
 Item {
     id: root
 
-    property var shell: null
     property var itemData: null
     property int itemIndex: 0
     property int totalCount: 1
-    property string barPosition: "top"
-    readonly property bool isVertical: barPosition === "left" || barPosition === "right"
-    property int iconBaseSize: 28
-    property bool isDragging: false
-    property int systemBorderSize: 2
-    property int systemRounding: 12
+    property string barPosition: "bottom"
+    property var shell: null
+    property real slotSize: 42
+    property real iconBaseSize: 24
+    property int systemBorderSize: Style.normalBorderWidth > 0 ? Style.normalBorderWidth : 2
+    property int systemRounding: Style.cornerRadius > 0 ? Style.cornerRadius : 12
     property bool isSelected: false
+    property bool isMergeTarget: false
+    property bool isEditMode: false
+    property int dockDragActiveIndex: -1
+    readonly property bool isAnyDragging: dockDragActiveIndex >= 0 || isDragging
 
-    signal moveRequested(int fromIdx, int toIdx)
-    signal itemRightClicked(var item, var targetItem)
-    signal itemLeftClicked(var item)
+    signal itemLeftClicked(var itemData)
+    signal itemRightClicked(var itemData, var itemItem)
+    signal moveRequested(int fromIndex, int toIndex)
+    signal mergeRequested(int fromIndex, int targetIndex)
+    signal dragHoverChanged(int fromIndex, int targetIndex, bool isMergeIntent)
+    signal editModeRequested()
+    signal editModeExitRequested()
+    signal togglePinRequested(string appId)
+    signal dissolveRequested(string stackId)
 
-    implicitWidth: 42
-    implicitHeight: 42
-    width: 42
-    height: 42
+    readonly property bool isVertical: barPosition === "left" || barPosition === "right"
+
+    width: slotSize
+    height: slotSize
     z: isDragging ? 100 : (isSelected ? 60 : (mouseArea.containsMouse ? 50 : 1))
 
-    // Main animated icon wrapper (strictly centered)
-    Item {
-        id: iconWrapper
-        anchors.centerIn: parent
-        width: root.iconBaseSize
-        height: root.iconBaseSize
+    property bool isDragging: false
+    property bool isMergeActive: false
+    property int iconRevision: 0
+    property bool iconsReady: true
 
-        // Smooth subtle hover and drag zoom
-        scale: root.isDragging ? 1.22 : (mouseArea.containsMouse ? 1.12 : 1.0)
-        opacity: root.isDragging ? 0.92 : 1.0
-        Behavior on scale { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
+    // Dynamic Real-time Theme-aware Icon Resolution
+    function resolveIcon(itemObj) {
+        if (!itemObj) return Quickshell.iconPath("application-x-executable", true)
+        var raw = (typeof itemObj === "string") ? itemObj : (itemObj.rawIcon || itemObj.icon || itemObj.appId || itemObj.id || "")
+        if (!raw) return Quickshell.iconPath("application-x-executable", true)
+        if (raw.indexOf("://") >= 0) return raw
+        if (raw.indexOf("/") === 0) return "file://" + raw
 
-        // Application Icon Image
-        Image {
-            id: appIconImage
-            anchors.centerIn: parent
-            width: root.iconBaseSize
-            height: root.iconBaseSize
-            sourceSize.width: root.iconBaseSize * 2
-            sourceSize.height: root.iconBaseSize * 2
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            mipmap: true
-            asynchronous: true
+        var cands = (typeof itemObj === "string")
+            ? DockModel.getCandidates(itemObj, itemObj, itemObj)
+            : DockModel.getCandidates(itemObj.rawIcon, itemObj.icon, itemObj.appId || itemObj.id)
 
-            source: {
-                if (!root.itemData) return ""
-                var resolved = IconResolver.resolveIcon(root.itemData.appClass, root.itemData.icon)
-                if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.iconSource === "function") {
-                    var s = root.shell.appLibrary.iconSource(resolved)
-                    if (s && s.length > 0) return s
-                    s = root.shell.appLibrary.iconSource(root.itemData.appClass)
-                    if (s && s.length > 0) return s
+        for (var i = 0; i < cands.length; i++) {
+            var c = cands[i]
+            if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
+                var src = shell.appLibrary.iconSource(c)
+                if (src && src.length > 0 && src !== Quickshell.iconPath("application-x-executable", true)) {
+                    return src
                 }
-                var p = Quickshell.iconPath(resolved, true)
-                if (p && p.length > 0) return p
-                p = Quickshell.iconPath(root.itemData.appClass, true)
-                if (p && p.length > 0) return p
-                return Quickshell.iconPath("application-x-executable", true)
             }
-
-            // Fallback text glyph (no border box)
-            Text {
-                anchors.centerIn: parent
-                visible: appIconImage.status !== Image.Ready
-                text: root.itemData && root.itemData.name ? root.itemData.name.charAt(0).toUpperCase() : "★"
-                font.family: Style.font.family
-                font.bold: true
-                font.pixelSize: 14
-                color: Color.accent
+            var qs = Quickshell.iconPath(c, true)
+            if (qs && qs.length > 0 && qs !== Quickshell.iconPath("application-x-executable", true)) {
+                return qs
             }
         }
 
-        // Apple signature launch bounce animation
+        if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
+            var f = shell.appLibrary.iconSource(cands[0])
+            if (f && f.length > 0) return f
+        }
+        var f2 = Quickshell.iconPath(cands[0], true)
+        if (f2 && f2.length > 0) return f2
+        return Quickshell.iconPath("application-x-executable", true)
+    }
+
+    // Clear, steady Merge Target Halo (stays perfectly still while hovered)
+    Rectangle {
+        id: mergeTargetHalo
+        anchors.centerIn: parent
+        width: root.slotSize - 6
+        height: root.slotSize - 6
+        radius: root.systemRounding
+        color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
+        border.width: root.systemBorderSize
+        border.color: Color.accent
+        visible: opacity > 0
+        opacity: root.isMergeTarget ? 1.0 : 0.0
+        scale: root.isMergeTarget ? 1.04 : 0.92
+        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        z: 0
+    }
+
+    property real clickScaleFactor: 1.0
+    property real clickLiftY: 0
+
+    // Bouncy macOS-style physical press response
+    ParallelAnimation {
+        id: clickEffectAnim
+        running: false
+        NumberAnimation {
+            target: root
+            property: "clickScaleFactor"
+            from: 0.88
+            to: 1.0
+            duration: 220
+            easing.type: Easing.OutBack
+        }
         SequentialAnimation {
-            id: launchBounce
-            loops: 2
-            NumberAnimation { target: iconWrapper; property: "scale"; to: 1.16; duration: 110; easing.type: Easing.OutQuad }
-            NumberAnimation { target: iconWrapper; property: "scale"; to: 1.0; duration: 110; easing.type: Easing.InQuad }
+            NumberAnimation {
+                target: root
+                property: "clickLiftY"
+                to: (root.isVertical ? 0 : (root.barPosition === "bottom" ? -4 : 4))
+                duration: 90
+                easing.type: Easing.OutQuad
+            }
+            NumberAnimation {
+                target: root
+                property: "clickLiftY"
+                to: 0
+                duration: 130
+                easing.type: Easing.OutBounce
+            }
         }
     }
 
-    // Running Indicator Dot (Always strictly under icon in all orientations, fades on hover)
+    // Independent drag offset so root.x and root.y bindings are NEVER broken
+    Item {
+        id: dragOffset
+        x: 0
+        y: 0
+    }
+
+    // Main animated icon wrapper (smooth, buttery rail motion)
+    Item {
+        id: iconWrapper
+        x: (parent.width - width) / 2 + dragOffset.x
+        y: Math.round((parent.height - height) / 2) - 1 + dragOffset.y + root.clickLiftY
+        width: root.iconBaseSize
+        height: root.iconBaseSize
+        z: 1
+
+        scale: (root.isDragging ? 1.15 : (root.isEditMode ? 0.82 : (root.isMergeTarget ? 0.94 : (mouseArea.pressed ? 0.92 : (mouseArea.containsMouse ? 1.10 : 1.0))))) * root.clickScaleFactor
+        opacity: root.iconsReady ? (root.isDragging ? 0.92 : 1.0) : 0.0
+
+        Behavior on scale {
+            enabled: !clickEffectAnim.running
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+        }
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+        // Normal Single App Icon (Instantly react to rawIcon theme swaps, crisp HiDPI rasterization)
+        Image {
+            id: appIcon
+            visible: root.itemData && !root.itemData.isStack
+            anchors.centerIn: parent
+            width: root.iconBaseSize
+            height: root.iconBaseSize
+            fillMode: Image.PreserveAspectFit
+            source: (root.iconRevision, root.resolveIcon(root.itemData))
+            sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
+            asynchronous: false
+            mipmap: true
+            smooth: true
+            antialiasing: true
+        }
+
+        // Folder Custom Symbol Icon (Optically centered vector glyph with smooth anti-aliased rotation)
+        DockGlyph {
+            id: stackSymbolText
+            visible: root.itemData && root.itemData.isStack === true && root.itemData.icon && root.itemData.icon !== "grid" && root.itemData.icon !== "folder" && root.itemData.icon !== "󰕰"
+            anchors.centerIn: parent
+            width: root.iconBaseSize
+            height: root.iconBaseSize
+            text: (root.itemData && root.itemData.icon) ? root.itemData.icon : ""
+            fontFamily: Style.font.family
+            fontSize: 20
+            color: Color.accent
+        }
+
+        // Folder Mini-Grid (Shown when icon is "grid", "folder", "󰕰" or not set)
+        Grid {
+            id: stackGrid
+            visible: root.itemData && root.itemData.isStack === true && (!root.itemData.icon || root.itemData.icon === "grid" || root.itemData.icon === "folder" || root.itemData.icon === "󰕰")
+            anchors.centerIn: parent
+            readonly property int totalSubs: (root.itemData && root.itemData.subApps) ? root.itemData.subApps.length : 0
+            readonly property bool is3x3: totalSubs > 4
+            columns: is3x3 ? 3 : 2
+            spacing: is3x3 ? 1.5 : 2
+
+            readonly property int cellWidth: is3x3
+                ? Math.max(6, Math.floor((root.iconBaseSize - 4) / 3))
+                : Math.max(9, Math.floor((root.iconBaseSize - 3) / 2))
+
+            Repeater {
+                model: (root.itemData && root.itemData.subApps) ? root.itemData.subApps.slice(0, stackGrid.is3x3 ? 9 : 4) : []
+                Image {
+                    width: stackGrid.cellWidth
+                    height: stackGrid.cellWidth
+                    fillMode: Image.PreserveAspectFit
+                    source: (root.iconRevision, root.resolveIcon(modelData))
+                    sourceSize: Qt.size(Math.max(64, width * 4 * Screen.devicePixelRatio), Math.max(64, height * 4 * Screen.devicePixelRatio))
+                    mipmap: true
+                    smooth: true
+                    antialiasing: true
+                }
+            }
+        }
+
+        // Silky smooth, organic wiggle animation
+        SequentialAnimation {
+            id: jiggleAnim
+            running: root.isDragging || root.isEditMode
+            loops: Animation.Infinite
+
+            NumberAnimation {
+                target: iconWrapper
+                property: "rotation"
+                to: -3.8
+                duration: 105
+                easing.type: Easing.InOutSine
+            }
+            NumberAnimation {
+                target: iconWrapper
+                property: "rotation"
+                to: 3.8
+                duration: 105
+                easing.type: Easing.InOutSine
+            }
+        }
+
+        NumberAnimation {
+            id: resetRotation
+            target: iconWrapper
+            property: "rotation"
+            to: 0.0
+            duration: 150
+            easing.type: Easing.OutCubic
+            running: !root.isDragging && !root.isEditMode && iconWrapper.rotation !== 0.0
+        }
+    }
+
+    // Long press timer for Edit Mode activation (450ms)
+    Timer {
+        id: longPressTimer
+        interval: 450
+        repeat: false
+        onTriggered: {
+            if (!root.isDragging) {
+                mouseArea.didLongPress = true
+                root.editModeRequested()
+            }
+        }
+    }
+
+    // 1. Star Pin / Unpin Glyph (Centered directly above scaled iconWrapper, hidden while dragging)
+    Item {
+        id: pinBadge
+        visible: root.isEditMode && !root.isAnyDragging && root.itemData && !root.itemData.isStack
+        anchors.horizontalCenter: iconWrapper.horizontalCenter
+        anchors.bottom: iconWrapper.top
+        anchors.bottomMargin: -5
+        width: 16
+        height: 14
+        z: 200
+
+        DockGlyph {
+            anchors.centerIn: parent
+            width: parent.width
+            height: parent.height
+            text: "★"
+            fontFamily: Style.font.family
+            fontSize: 14
+            color: (root.itemData && root.itemData.isPinned)
+                ? Color.accent
+                : (pinBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85))
+
+            scale: pinBadgeMouse.containsMouse ? 1.25 : 1.0
+            Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        MouseArea {
+            id: pinBadgeMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            cursorShape: (root.isAnyDragging || root.isDragging || mouseArea.drag.active) ? Qt.BlankCursor : Qt.PointingHandCursor
+            onClicked: function(mouse) {
+                if (mouse.button === Qt.RightButton) {
+                    root.editModeExitRequested()
+                    return
+                }
+                if (root.itemData && !root.itemData.isStack) {
+                    root.togglePinRequested(root.itemData.appId)
+                }
+            }
+        }
+    }
+
+    // 2. Dissolve Folder Glyph (Centered directly above scaled iconWrapper, hidden while dragging)
+    Item {
+        id: dissolveBadge
+        visible: root.isEditMode && !root.isAnyDragging && root.itemData && root.itemData.isStack
+        anchors.horizontalCenter: iconWrapper.horizontalCenter
+        anchors.bottom: iconWrapper.top
+        anchors.bottomMargin: -5
+        width: 16
+        height: 14
+        z: 200
+
+        DockGlyph {
+            anchors.centerIn: parent
+            width: parent.width
+            height: parent.height
+            text: "-"
+            fontFamily: Style.font.family
+            fontSize: 16
+            color: dissolveBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85)
+
+            scale: dissolveBadgeMouse.containsMouse ? 1.25 : 1.0
+            Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+
+        MouseArea {
+            id: dissolveBadgeMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            cursorShape: (root.isAnyDragging || root.isDragging || mouseArea.drag.active) ? Qt.BlankCursor : Qt.PointingHandCursor
+            onClicked: function(mouse) {
+                if (mouse.button === Qt.RightButton) {
+                    root.editModeExitRequested()
+                    return
+                }
+                if (root.itemData && root.itemData.isStack) {
+                    root.dissolveRequested(root.itemData.id)
+                }
+            }
+        }
+    }
+
+    // Running / Active Application Indicator (Horizontally centered under icon in all dock positions, moves along during drag)
     Rectangle {
         id: runningDot
-        visible: opacity > 0
-        opacity: (root.itemData && root.itemData.isRunning && !mouseArea.containsMouse && !root.isDragging) ? 1.0 : 0.0
+        visible: root.iconsReady && !root.isEditMode && root.itemData && root.itemData.isRunning
+        opacity: visible ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
-        Behavior on opacity { NumberAnimation { duration: 130; easing.type: Easing.OutCubic } }
+        x: Math.round((parent.width - width) / 2 + dragOffset.x)
+        y: parent.height - height - 3 + dragOffset.y
+        z: root.isDragging ? 101 : 1
 
-        width: root.itemData && root.itemData.isActive ? 4 : 3
-        height: root.itemData && root.itemData.isActive ? 4 : 3
-        radius: width / 2
-        color: root.itemData && root.itemData.isActive ? Color.accent : Color.composed("bar.text", "bar.text-alpha", Color.bar.text, 0.75)
+        width: (root.itemData && root.itemData.isActive) ? 10 : 4
+        height: 2.0
+        radius: 1.0
+        color: (root.itemData && root.itemData.isActive) ? Color.accent : Color.composed("bar.text", "bar.text-alpha", Color.text, 0.75)
         antialiasing: true
         smooth: true
 
-        // Unified positioning: ALWAYS under icon across all orientations
-        anchors.top: iconWrapper.bottom
-        anchors.topMargin: 2
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        Behavior on color { ColorAnimation { duration: 180 } }
-        Behavior on width { NumberAnimation { duration: 180 } }
+        Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: 150 } }
     }
 
     MouseArea {
@@ -123,71 +374,146 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: root.isDragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+        cursorShape: (root.isDragging || mouseArea.drag.active || root.dockDragActiveIndex >= 0 || root.isAnyDragging) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
 
-        drag.target: root
+        drag.target: dragOffset
         drag.axis: root.isVertical ? Drag.YAxis : Drag.XAxis
-        drag.minimumX: root.isVertical ? 0 : 0
-        drag.maximumX: root.isVertical ? 0 : Math.max(0, (root.totalCount - 1) * 46)
-        drag.minimumY: root.isVertical ? 0 : 0
-        drag.maximumY: root.isVertical ? Math.max(0, (root.totalCount - 1) * 46) : 0
+        // Strictly confined inside dock surface boundaries (zero frame overflowing)
+        drag.minimumX: root.isVertical ? 0 : (-root.itemIndex * root.slotSize)
+        drag.maximumX: root.isVertical ? 0 : ((root.totalCount - 1 - root.itemIndex) * root.slotSize)
+        drag.minimumY: root.isVertical ? (-root.itemIndex * root.slotSize) : 0
+        drag.maximumY: root.isVertical ? ((root.totalCount - 1 - root.itemIndex) * root.slotSize) : 0
         drag.threshold: 6
 
         property bool didDrag: false
+        property bool didLongPress: false
 
         onPressed: function(mouse) {
             if (mouse.button === Qt.LeftButton) {
                 didDrag = false
+                didLongPress = false
+                longPressTimer.restart()
             }
         }
 
         onPositionChanged: function(mouse) {
             if (mouseArea.drag.active) {
+                longPressTimer.stop()
                 if (!root.isDragging) {
                     root.isDragging = true
                     didDrag = true
                 }
+                // Enforce strict 1D rail axis lock (zero orthogonal wobble)
+                if (root.isVertical) {
+                    dragOffset.x = 0
+                } else {
+                    dragOffset.y = 0
+                }
+
+                var currentOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var absolutePos = root.itemIndex * root.slotSize + currentOffset
+                var rawTarget = absolutePos / root.slotSize
+                var targetIdx = Math.round(rawTarget)
+                targetIdx = Math.max(0, Math.min(root.totalCount - 1, targetIdx))
+
+                var isMerge = false
+                var canMerge = root.itemData && !root.itemData.isStack
+                var distFromSlotCenter = (absolutePos - targetIdx * root.slotSize)
+
+                if (canMerge && targetIdx !== root.itemIndex) {
+                    if (targetIdx > root.itemIndex) {
+                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 10)
+                    } else {
+                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= -10)
+                    }
+                }
+
+                // Outer edge insert: dragging all the way to the far outer edges opens the rail slot
+                if ((targetIdx === 0 && absolutePos <= 8) || (targetIdx === root.totalCount - 1 && absolutePos >= (root.totalCount - 1) * root.slotSize - 8)) {
+                    isMerge = false
+                }
+
+                root.isMergeActive = isMerge
+                root.dragHoverChanged(root.itemIndex, targetIdx, isMerge)
             }
         }
 
         onReleased: function(mouse) {
+            longPressTimer.stop()
             if (root.isDragging) {
                 root.isDragging = false
-                var currentCoord = root.isVertical ? root.y : root.x
-                var newIdx = Math.max(0, Math.min(root.totalCount - 1, Math.round(currentCoord / 46)))
-                if (newIdx !== root.itemIndex) {
-                    root.moveRequested(root.itemIndex, newIdx)
-                } else {
-                    root.x = root.isVertical ? 0 : (root.itemIndex * 46)
-                    root.y = root.isVertical ? (root.itemIndex * 46) : 0
+                var currentOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var absolutePos = root.itemIndex * root.slotSize + currentOffset
+                var targetIdx = Math.max(0, Math.min(root.totalCount - 1, Math.round(absolutePos / root.slotSize)))
+                var slotCenter = targetIdx * root.slotSize
+                var distFromSlotCenter = absolutePos - slotCenter
+
+                var canMerge = root.itemData && !root.itemData.isStack
+                var isMerge = false
+
+                if (canMerge && targetIdx !== root.itemIndex) {
+                    if (targetIdx > root.itemIndex) {
+                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 10)
+                    } else {
+                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= -10)
+                    }
                 }
+
+                if ((targetIdx === 0 && absolutePos <= 8) || (targetIdx === root.totalCount - 1 && absolutePos >= (root.totalCount - 1) * root.slotSize - 8)) {
+                    isMerge = false
+                }
+
+                if (targetIdx !== root.itemIndex) {
+                    if (isMerge) {
+                        root.mergeRequested(root.itemIndex, targetIdx)
+                    } else {
+                        root.moveRequested(root.itemIndex, targetIdx)
+                    }
+                }
+
+                root.isMergeActive = false
+                dragOffset.x = 0
+                dragOffset.y = 0
+                root.dragHoverChanged(root.itemIndex, -1, false)
             }
         }
 
         onClicked: function(mouse) {
-            if (didDrag) return
+            if (didDrag || didLongPress) {
+                didLongPress = false
+                return
+            }
+
             if (mouse.button === Qt.LeftButton) {
-                launchBounce.restart()
-                root.itemLeftClicked(root.itemData)
-                if (root.itemData && root.itemData.isRunning) {
-                    var tops = root.itemData.toplevels || []
-                    if (tops.length > 0) {
-                        if (root.itemData.isActive && tops.length > 1) {
-                            if (tops[1].activate) tops[1].activate()
-                        } else {
-                            if (tops[0].activate) tops[0].activate()
-                        }
+                clickEffectAnim.restart()
+                if (root.isEditMode) {
+                    if (root.itemData && root.itemData.isStack) {
+                        root.itemLeftClicked(root.itemData)
                     }
-                } else if (root.itemData) {
+                    return
+                }
+                if (root.itemData && root.itemData.isStack) {
+                    root.itemLeftClicked(root.itemData)
+                    return
+                }
+                if (root.itemData) {
+                    var launchId = root.itemData.desktopId || root.itemData.appId || ""
                     if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                        root.shell.appLibrary.launch(root.itemData.appId, root.itemData.name)
+                        root.shell.appLibrary.launch(launchId, root.itemData.name)
                     } else {
-                        var target = root.itemData.appId ? (root.itemData.appId + ".desktop") : (root.itemData.exec + ".desktop")
-                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + " || uwsm-app -- " + root.itemData.exec)
+                        var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (root.itemData.exec || "")
+                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
                     }
                 }
             } else if (mouse.button === Qt.RightButton) {
-                root.itemRightClicked(root.itemData, root)
+                clickEffectAnim.restart()
+                if (root.isEditMode) {
+                    root.editModeExitRequested()
+                    return
+                }
+                if (root.itemData && (root.itemData.isStack || (root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2))) {
+                    root.itemRightClicked(root.itemData, root)
+                }
             }
         }
     }
