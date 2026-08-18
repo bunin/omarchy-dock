@@ -2,3 +2,6 @@
 *.swp
 *.bak
 .DS_Store
+.agents/
+AGENTS.md
+docs/
