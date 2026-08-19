@@ -18,8 +18,8 @@
   "barWidget": {
     "displayName": "Dock",
     "description": "Toggle application dock",
-    "category": "Launchers",
+    "category": "System",
     "allowMultiple": false,
-    "defaultSection": "center"
+    "defaultSection": "right"
   }
 }
