@@ -29,9 +29,9 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 
 | Action | Control | Description |
 | :--- | :--- | :--- |
-| **Open / Focus Window** | `Left-Click` | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
-| **Launch Duplicate** | `Middle-Click` | Instantly spawns a new duplicate instance of the application with immediate focus. |
-| **Cycle Duplicates** | `Mouse Wheel` | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
+| **Open / Focus Window** | `Left-Click` / `Enter` | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
+| **Launch Duplicate** | `Middle-Click` / `Tab` | Instantly spawns a new duplicate instance of the application with immediate focus. |
+| **Cycle Duplicates** | `Mouse Wheel` / `←` `→` Arrow Keys | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
 | **Enter Edit Mode** | `Long-Press` *(450ms)* | Activates iOS-style physical wobble mode to reorder apps, toggle pins, or dissolve folders. |
 | **Reorder & Folders** | `Drag & Drop` | Drag along the rail to reorder. Drag one icon onto another to create a folder (App Stack). |
 | **Folder Icon Picker** | `Right-Click` *(on Folder)* | Opens the Nerd Font glyph picker to customize the folder's icon. |

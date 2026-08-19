@@ -902,7 +902,7 @@ Item {
 
         WlrLayershell.namespace: "omarchy-dock"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: (root.isEditMode || root.isStackOpen) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: (root.isEditMode || root.isStackOpen || dockHoverHandler.hovered) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && (!root.autohide || root.isDockActive)) ? ExclusionMode.Auto : ExclusionMode.Ignore
         color: "transparent"
 
@@ -2192,6 +2192,19 @@ Item {
                                 }
                             }
 
+                            function cycleSubDuplicate(forward) {
+                                if (!modelData || !modelData.isRunning || !modelData.toplevels) return
+                                var len = modelData.toplevels.length
+                                if (len <= 1) return
+
+                                subItemRoot.isSubWheelScrolling = true
+                                subWheelCursorTimer.restart()
+                                subPreviewResetTimer.stop()
+                                var curIdx = subItemRoot.subEffectiveTopIndex
+                                var nextIdx = forward ? ((curIdx + 1) % len) : ((curIdx - 1 + len) % len)
+                                subItemRoot.subPreviewTopIndex = nextIdx
+                            }
+
                             MouseArea {
                                 id: subMouse
                                 anchors.fill: parent
@@ -2209,6 +2222,51 @@ Item {
 
                                 property bool isDraggingActive: false
                                 property bool didSubLongPress: false
+
+                                focus: containsMouse
+
+                                onEntered: {
+                                    subMouse.forceActiveFocus()
+                                }
+
+                                Keys.onRightPressed: function(event) {
+                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
+                                        subItemRoot.cycleSubDuplicate(true)
+                                        event.accepted = true
+                                    }
+                                }
+
+                                Keys.onLeftPressed: function(event) {
+                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
+                                        subItemRoot.cycleSubDuplicate(false)
+                                        event.accepted = true
+                                    }
+                                }
+
+                                Keys.onTabPressed: function(event) {
+                                    if (modelData) {
+                                        subClickEffectAnim.restart()
+                                        var launchMidId = modelData.desktopId || modelData.appId || ""
+                                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                                            root.shell.appLibrary.launch(launchMidId, modelData.name)
+                                        } else {
+                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
+                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
+                                        }
+                                        event.accepted = true
+                                    }
+                                }
+
+                                Keys.onReturnPressed: function(event) {
+                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2 && subItemRoot.subPreviewTopIndex >= 0) {
+                                        var top = modelData.toplevels[subItemRoot.subPreviewTopIndex]
+                                        if (top && typeof top.activate === "function") {
+                                            top.activate()
+                                            subItemRoot.subPreviewTopIndex = -1
+                                            event.accepted = true
+                                        }
+                                    }
+                                }
 
                                 onPressed: function(mouse) {
                                     if (mouse.button === Qt.LeftButton) {
@@ -2264,26 +2322,13 @@ Item {
 
                                 onWheel: function(wheel) {
                                     if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
-                                        subItemRoot.isSubWheelScrolling = true
-                                        subWheelCursorTimer.restart()
-                                        subPreviewResetTimer.stop()
-                                        var tops = modelData.toplevels
-                                        var len = tops.length
-                                        var curIdx = subItemRoot.subEffectiveTopIndex
-
-                                        var nextIdx
                                         if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
-                                            // Scroll down/forward: next duplicate (Left to Right)
-                                            nextIdx = (curIdx + 1) % len
+                                            subItemRoot.cycleSubDuplicate(true)
+                                            wheel.accepted = true
                                         } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
-                                            // Scroll up/backward: previous duplicate (Right to Left)
-                                            nextIdx = (curIdx - 1 + len) % len
-                                        } else {
-                                            return
+                                            subItemRoot.cycleSubDuplicate(false)
+                                            wheel.accepted = true
                                         }
-
-                                        subItemRoot.subPreviewTopIndex = nextIdx
-                                        wheel.accepted = true
                                     }
                                 }
 

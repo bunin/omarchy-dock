@@ -521,6 +521,19 @@ Item {
         Behavior on color { ColorAnimation { duration: 150 } }
     }
 
+    function cycleDuplicate(forward) {
+        if (!root.itemData || root.itemData.isStack || !root.itemData.isRunning || !root.itemData.toplevels) return
+        var len = root.itemData.toplevels.length
+        if (len <= 1) return
+
+        root.isWheelScrolling = true
+        wheelCursorTimer.restart()
+        previewResetTimer.stop()
+        var curIdx = root.effectiveTopIndex
+        var nextIdx = forward ? ((curIdx + 1) % len) : ((curIdx - 1 + len) % len)
+        root.previewTopIndex = nextIdx
+    }
+
     MouseArea {
         id: mouseArea
         anchors.fill: parent
@@ -539,6 +552,51 @@ Item {
 
         property bool didDrag: false
         property bool didLongPress: false
+
+        focus: containsMouse
+
+        onEntered: {
+            mouseArea.forceActiveFocus()
+        }
+
+        Keys.onRightPressed: function(event) {
+            if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
+                root.cycleDuplicate(true)
+                event.accepted = true
+            }
+        }
+
+        Keys.onLeftPressed: function(event) {
+            if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
+                root.cycleDuplicate(false)
+                event.accepted = true
+            }
+        }
+
+        Keys.onTabPressed: function(event) {
+            if (root.itemData) {
+                clickEffectAnim.restart()
+                var launchMidId = root.itemData.desktopId || root.itemData.appId || ""
+                if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                    root.shell.appLibrary.launch(launchMidId, root.itemData.name)
+                } else {
+                    var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (root.itemData.exec || "")
+                    Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
+                }
+                event.accepted = true
+            }
+        }
+
+        Keys.onReturnPressed: function(event) {
+            if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2 && root.previewTopIndex >= 0) {
+                var top = root.itemData.toplevels[root.previewTopIndex]
+                if (top && typeof top.activate === "function") {
+                    top.activate()
+                    root.previewTopIndex = -1
+                    event.accepted = true
+                }
+            }
+        }
 
         onPressed: function(mouse) {
             if (mouse.button === Qt.LeftButton) {
@@ -640,26 +698,13 @@ Item {
 
         onWheel: function(wheel) {
             if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
-                root.isWheelScrolling = true
-                wheelCursorTimer.restart()
-                previewResetTimer.stop()
-                var tops = root.itemData.toplevels
-                var len = tops.length
-                var curIdx = root.effectiveTopIndex
-
-                var nextIdx
                 if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
-                    // Scroll down/forward: next duplicate (Left to Right)
-                    nextIdx = (curIdx + 1) % len
+                    root.cycleDuplicate(true)
+                    wheel.accepted = true
                 } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
-                    // Scroll up/backward: previous duplicate (Right to Left)
-                    nextIdx = (curIdx - 1 + len) % len
-                } else {
-                    return
+                    root.cycleDuplicate(false)
+                    wheel.accepted = true
                 }
-
-                root.previewTopIndex = nextIdx
-                wheel.accepted = true
             }
         }
 
