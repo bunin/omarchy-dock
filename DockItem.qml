@@ -480,13 +480,15 @@ Item {
                 model: duplicateCapsule.winCount
                 Rectangle {
                     readonly property int targetWinIdx: duplicateCapsule.getSlotWindowIndex(index)
-                    readonly property bool isCurrent: (targetWinIdx === root.effectiveTopIndex)
+                    readonly property bool isAppActive: (root.itemData && root.itemData.isActive === true)
+                    readonly property bool isPreviewing: (root.previewTopIndex >= 0)
+                    readonly property bool isSlotHighlighted: (isAppActive || isPreviewing) && (targetWinIdx === root.effectiveTopIndex)
                     readonly property bool isOriginalApp: (targetWinIdx === 0)
 
-                    width: isOriginalApp ? 9.0 : (isCurrent ? 3.5 : 2.5)
+                    width: isOriginalApp ? 9.0 : (isSlotHighlighted ? 3.5 : 2.5)
                     height: 2.5
                     radius: 1.25
-                    color: isCurrent ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, isOriginalApp ? 0.45 : 0.28)
+                    color: isSlotHighlighted ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, isOriginalApp ? 0.45 : 0.28)
                     antialiasing: true
                     smooth: true
 
