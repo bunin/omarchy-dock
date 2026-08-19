@@ -49,12 +49,6 @@ Install and enable the dock with a single command:
 omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
 ```
 
-*(Optional)* To also place the `···` Settings Widget onto your Omarchy status bar:
-
-```bash
-omarchy bar put rosakodu.dock --after omarchy.weather
-```
-
 ---
 
 ## ⚙️ Configuration
