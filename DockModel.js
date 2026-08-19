@@ -763,7 +763,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry)) {
                         sTops.push(sTop);
                         assignedTops[stKey] = true;
-                        if (activeToplevel && sTop === activeToplevel) sActive = true;
+                        if ((activeToplevel && sTop === activeToplevel) || (sTop && (sTop.activated || sTop.active))) sActive = true;
                     }
                 }
 
@@ -827,7 +827,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
             var isAnyActive = false;
             for (var m = 0; m < matching.length; m++) {
-                if (activeToplevel && matching[m] === activeToplevel) {
+                if ((activeToplevel && matching[m] === activeToplevel) || (matching[m] && (matching[m].activated || matching[m].active))) {
                     isAnyActive = true;
                     break;
                 }
@@ -860,29 +860,26 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var topItemKey = getTopKey(topItem, j);
         if (assignedTops[topItemKey]) continue;
 
-        var rawId = stripDesktop(topItem.appId || "").trim();
-        if (!rawId) continue;
-
-        var rEntry = entryFor(rawId);
-        var rCleanId = rEntry ? stripDesktop(rEntry.id || rawId) : rawId;
-        var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : rCleanId;
-        var rIcon = resolveIcon(rEntry, rCleanId, appLibrary);
-        var rName = rEntry && rEntry.name ? rEntry.name : (rEntry && rEntry.id ? rEntry.id : (topItem.title || rawId));
+        var rAppId = topItem.appId || "";
+        var rEntry = entryFor(rAppId);
+        var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : (rAppId || "application-x-executable");
+        var rIcon = resolveIcon(rEntry, rAppId, appLibrary);
+        var rName = (rEntry && rEntry.name) ? rEntry.name : (topItem.title || rAppId || "App");
         var rIconSource = (rEntry && rEntry.iconSource) ? rEntry.iconSource : "";
-        var rDesktopId = (rEntry && rEntry.id) ? rEntry.id : (rCleanId.indexOf(".desktop") !== -1 ? rCleanId : (rCleanId + ".desktop"));
+        var rDesktopId = (rEntry && rEntry.id) ? rEntry.id : (rAppId ? (rAppId.indexOf(".desktop") !== -1 ? rAppId : (rAppId + ".desktop")) : "");
         var rExec = (rEntry && rEntry.exec) ? rEntry.exec : "";
 
         // Find all unassigned toplevels for this unpinned app
         var rMatching = [];
-        var rIsAnyActive = false;
+        var rIsActive = false;
         for (var k = 0; k < toplevels.length; k++) {
             var candidate = toplevels[k];
             var cKey = getTopKey(candidate, k);
-            if (!assignedTops[cKey] && matchToplevel(candidate, rCleanId, rEntry)) {
+            if (!assignedTops[cKey] && matchToplevel(candidate, rAppId, rEntry)) {
                 rMatching.push(candidate);
                 assignedTops[cKey] = true;
-                if (activeToplevel && candidate === activeToplevel) {
-                    rIsAnyActive = true;
+                if ((activeToplevel && candidate === activeToplevel) || (candidate && (candidate.activated || candidate.active))) {
+                    rIsActive = true;
                 }
             }
         }
@@ -890,8 +887,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         if (rMatching.length === 0) continue;
 
         items.push({
-            id: rCleanId,
-            appId: rCleanId,
+            id: rAppId,
+            appId: rAppId,
             desktopId: rDesktopId,
             exec: rExec,
             name: rName,

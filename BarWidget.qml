@@ -96,6 +96,12 @@ BarWidget {
     }
   }
 
+  onSettingsOpenChanged: {
+    if (settingsOpen) {
+      settingsCard.forceActiveFocus()
+    }
+  }
+
   // Outside-click dismissal for Settings popup
   HyprlandFocusGrab {
     id: settingsGrab
@@ -145,6 +151,15 @@ BarWidget {
 
     Rectangle {
       id: settingsCard
+      focus: true
+      Keys.onEscapePressed: function(event) {
+        root.settingsOpen = false
+        event.accepted = true
+      }
+      Keys.onBackPressed: function(event) {
+        root.settingsOpen = false
+        event.accepted = true
+      }
       width: 280
       height: cardColumn.height + 24
       color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.96)
@@ -167,10 +182,12 @@ BarWidget {
           Layout.fillWidth: true
           spacing: 8
 
-          Text {
-            text: "󰌨"
-            font.family: Style.font.family
-            font.pixelSize: 16
+          DockGlyph {
+            width: 16
+            height: 16
+            text: "⚙"
+            fontFamily: Style.font.family
+            fontSize: 14
             color: Color.accent
           }
 

@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Wayland
+import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
@@ -259,7 +261,90 @@ Item {
         }
     }
 
-    // 1. Star Pin / Unpin Glyph (Centered directly above scaled iconWrapper, hidden while dragging)
+    property int previewTopIndex: -1
+    property bool isWheelScrolling: false
+
+    Timer {
+        id: wheelCursorTimer
+        interval: 1200
+        repeat: false
+        onTriggered: {
+            root.isWheelScrolling = false
+        }
+    }
+
+    readonly property var liveActiveToplevel: ToplevelManager.activeToplevel
+    readonly property var liveHyprActiveToplevel: (typeof Hyprland !== "undefined") ? Hyprland.activeToplevel : null
+
+    readonly property int realActiveTopIndex: {
+        var activeWlr = root.liveActiveToplevel
+        var activeHypr = root.liveHyprActiveToplevel
+        if (!root.itemData || !root.itemData.toplevels || root.itemData.toplevels.length === 0) return 0
+        var tops = root.itemData.toplevels
+
+        if (activeHypr && activeHypr.address) {
+            for (var h = 0; h < tops.length; h++) {
+                if (tops[h] && tops[h].address && tops[h].address === activeHypr.address) {
+                    return h
+                }
+            }
+        }
+
+        for (var i = 0; i < tops.length; i++) {
+            var top = tops[i]
+            if (!top) continue
+            if (activeWlr && (top === activeWlr || top.activated === true || top.active === true)) return i
+            if (activeHypr && (top === activeHypr || (top.address && activeHypr.address && top.address === activeHypr.address))) return i
+        }
+
+        var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : null
+        var activeGlobalIdx = (list && activeWlr && Array.isArray(list)) ? list.indexOf(activeWlr) : -1
+        if (activeGlobalIdx !== -1 && list) {
+            for (var j = 0; j < tops.length; j++) {
+                if (tops[j] && list.indexOf(tops[j]) === activeGlobalIdx) return j
+            }
+        }
+
+        return 0
+    }
+
+    readonly property int effectiveTopIndex: {
+        var total = (root.itemData && root.itemData.toplevels) ? root.itemData.toplevels.length : 0
+        if (total === 0) return 0
+        if (root.previewTopIndex >= 0 && root.previewTopIndex < total) return root.previewTopIndex
+        return root.realActiveTopIndex
+    }
+
+    Connections {
+        target: ToplevelManager
+        function onActiveToplevelChanged() {
+            if (!mouseArea.containsMouse) {
+                root.previewTopIndex = -1
+            }
+        }
+    }
+
+    Connections {
+        target: (typeof Hyprland !== "undefined") ? Hyprland : null
+        function onActiveToplevelChanged() {
+            if (!mouseArea.containsMouse) {
+                root.previewTopIndex = -1
+            }
+        }
+    }
+
+    Timer {
+        id: previewResetTimer
+        interval: 1500
+        repeat: false
+        onTriggered: {
+            if (!mouseArea.containsMouse) {
+                root.previewTopIndex = -1
+            }
+        }
+    }
+
+    // 1. Pin / Unpin Glyph (Centered directly above scaled iconWrapper, hidden while dragging)
     Item {
         id: pinBadge
         visible: root.isEditMode && !root.isAnyDragging && root.itemData && !root.itemData.isStack
@@ -274,14 +359,14 @@ Item {
             anchors.centerIn: parent
             width: parent.width
             height: parent.height
-            text: "★"
+            text: "•"
             fontFamily: Style.font.family
-            fontSize: 14
+            fontSize: 11
             color: (root.itemData && root.itemData.isPinned)
                 ? Color.accent
                 : (pinBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85))
 
-            scale: pinBadgeMouse.containsMouse ? 1.25 : 1.0
+            scale: pinBadgeMouse.containsMouse ? 1.35 : 1.0
             Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             Behavior on color { ColorAnimation { duration: 120 } }
         }
@@ -347,10 +432,75 @@ Item {
         }
     }
 
-    // Running / Active Application Indicator (Horizontally centered under icon in all dock positions, moves along during drag)
+    // 3. Multi-instance Duplicate Status Capsule (Sliding window viewport)
+    Rectangle {
+        id: duplicateCapsule
+        visible: root.iconsReady && !root.isEditMode && root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2
+        opacity: visible ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 180 } }
+
+        readonly property int totalWindows: (root.itemData && root.itemData.toplevels) ? root.itemData.toplevels.length : 0
+        readonly property int winCount: Math.min(totalWindows, 3)
+
+        function getSlotWindowIndex(slotIdx) {
+            if (totalWindows <= 3) {
+                return slotIdx
+            }
+            var cur = root.effectiveTopIndex
+            if (cur === 0 || cur === 1) {
+                return slotIdx
+            }
+            if (cur === totalWindows - 1) {
+                if (slotIdx === 0) return totalWindows - 2
+                if (slotIdx === 1) return totalWindows - 1
+                return 0
+            }
+            if (slotIdx === 0) return cur - 1
+            if (slotIdx === 1) return cur
+            return cur + 1
+        }
+
+        x: Math.round((parent.width - width) / 2 + dragOffset.x)
+        y: parent.height - height - 2 + dragOffset.y
+        z: root.isDragging ? 101 : 1
+
+        height: 6
+        width: Math.max(18, 12 + winCount * 5)
+        radius: height / 2
+
+        color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.92)
+        antialiasing: true
+        smooth: true
+
+        Row {
+            anchors.centerIn: parent
+            spacing: 3
+
+            Repeater {
+                model: duplicateCapsule.winCount
+                Rectangle {
+                    readonly property int targetWinIdx: duplicateCapsule.getSlotWindowIndex(index)
+                    readonly property bool isCurrent: (targetWinIdx === root.effectiveTopIndex)
+                    readonly property bool isOriginalApp: (targetWinIdx === 0)
+
+                    width: isOriginalApp ? 9.0 : (isCurrent ? 3.5 : 2.5)
+                    height: 2.5
+                    radius: 1.25
+                    color: isCurrent ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, isOriginalApp ? 0.45 : 0.28)
+                    antialiasing: true
+                    smooth: true
+
+                    Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: 120 } }
+                }
+            }
+        }
+    }
+
+    // 4. Running / Active Application Indicator (Single instance)
     Rectangle {
         id: runningDot
-        visible: root.iconsReady && !root.isEditMode && root.itemData && root.itemData.isRunning
+        visible: root.iconsReady && !root.isEditMode && root.itemData && root.itemData.isRunning && (!root.itemData.toplevels || root.itemData.toplevels.length <= 1)
         opacity: visible ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
@@ -358,10 +508,10 @@ Item {
         y: parent.height - height - 3 + dragOffset.y
         z: root.isDragging ? 101 : 1
 
-        width: (root.itemData && root.itemData.isActive) ? 10 : 4
-        height: 2.0
-        radius: 1.0
-        color: (root.itemData && root.itemData.isActive) ? Color.accent : Color.composed("bar.text", "bar.text-alpha", Color.text, 0.75)
+        height: 2
+        width: root.itemData.isActive ? 10 : 4
+        radius: 1
+        color: root.itemData.isActive ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
         antialiasing: true
         smooth: true
 
@@ -373,8 +523,8 @@ Item {
         id: mouseArea
         anchors.fill: parent
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: (root.isDragging || mouseArea.drag.active || root.dockDragActiveIndex >= 0 || root.isAnyDragging) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        cursorShape: (root.isDragging || mouseArea.drag.active || root.dockDragActiveIndex >= 0 || root.isAnyDragging || root.isWheelScrolling) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
 
         drag.target: dragOffset
         drag.axis: root.isVertical ? Drag.YAxis : Drag.XAxis
@@ -397,11 +547,14 @@ Item {
         }
 
         onPositionChanged: function(mouse) {
+            if (root.isWheelScrolling) {
+                root.isWheelScrolling = false
+            }
             if (mouseArea.drag.active) {
                 longPressTimer.stop()
                 if (!root.isDragging) {
                     root.isDragging = true
-                    didDrag = true
+                    root.dragStarted(root.itemIndex)
                 }
                 // Enforce strict 1D rail axis lock (zero orthogonal wobble)
                 if (root.isVertical) {
@@ -412,13 +565,13 @@ Item {
 
                 var currentOffset = root.isVertical ? dragOffset.y : dragOffset.x
                 var absolutePos = root.itemIndex * root.slotSize + currentOffset
-                var rawTarget = absolutePos / root.slotSize
-                var targetIdx = Math.round(rawTarget)
-                targetIdx = Math.max(0, Math.min(root.totalCount - 1, targetIdx))
 
-                var isMerge = false
+                var targetIdx = Math.max(0, Math.min(root.totalCount - 1, Math.round(absolutePos / root.slotSize)))
+                var slotCenter = targetIdx * root.slotSize
+                var distFromSlotCenter = absolutePos - slotCenter
+
                 var canMerge = root.itemData && !root.itemData.isStack
-                var distFromSlotCenter = (absolutePos - targetIdx * root.slotSize)
+                var isMerge = false
 
                 if (canMerge && targetIdx !== root.itemIndex) {
                     if (targetIdx > root.itemIndex) {
@@ -478,9 +631,54 @@ Item {
             }
         }
 
+        onExited: {
+            root.isWheelScrolling = false
+            previewResetTimer.restart()
+        }
+
+        onWheel: function(wheel) {
+            if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
+                root.isWheelScrolling = true
+                wheelCursorTimer.restart()
+                previewResetTimer.stop()
+                var tops = root.itemData.toplevels
+                var len = tops.length
+                var curIdx = root.effectiveTopIndex
+
+                var nextIdx
+                if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
+                    // Scroll down/forward: next duplicate (Left to Right)
+                    nextIdx = (curIdx + 1) % len
+                } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
+                    // Scroll up/backward: previous duplicate (Right to Left)
+                    nextIdx = (curIdx - 1 + len) % len
+                } else {
+                    return
+                }
+
+                root.previewTopIndex = nextIdx
+                wheel.accepted = true
+            }
+        }
+
         onClicked: function(mouse) {
             if (didDrag || didLongPress) {
                 didLongPress = false
+                return
+            }
+
+            // Middle Click (Wheel Button click) -> Immediately launch a duplicate
+            if (mouse.button === Qt.MiddleButton) {
+                clickEffectAnim.restart()
+                if (root.itemData) {
+                    var launchMidId = root.itemData.desktopId || root.itemData.appId || ""
+                    if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                        root.shell.appLibrary.launch(launchMidId, root.itemData.name)
+                    } else {
+                        var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (root.itemData.exec || "")
+                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
+                    }
+                }
                 return
             }
 
@@ -497,13 +695,28 @@ Item {
                     return
                 }
                 if (root.itemData) {
-                    var launchId = root.itemData.desktopId || root.itemData.appId || ""
-                    if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                        root.shell.appLibrary.launch(launchId, root.itemData.name)
-                    } else {
-                        var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (root.itemData.exec || "")
-                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
+                    // 1. If not running, launch it
+                    if (!root.itemData.isRunning || !root.itemData.toplevels || root.itemData.toplevels.length === 0) {
+                        var launchId = root.itemData.desktopId || root.itemData.appId || ""
+                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                            root.shell.appLibrary.launch(launchId, root.itemData.name)
+                        } else {
+                            var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (root.itemData.exec || "")
+                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
+                        }
+                        return
                     }
+
+                    // 2. If running: activate chosen window (LMB focuses/switches, Middle Click creates duplicates)
+                    var tops = root.itemData.toplevels
+                    var targetWindowIdx = root.effectiveTopIndex
+                    if (targetWindowIdx < 0 || targetWindowIdx >= tops.length) targetWindowIdx = 0
+
+                    var chosenWindow = tops[targetWindowIdx]
+                    if (chosenWindow && typeof chosenWindow.activate === "function") {
+                        chosenWindow.activate()
+                    }
+                    root.previewTopIndex = -1
                 }
             } else if (mouse.button === Qt.RightButton) {
                 clickEffectAnim.restart()
@@ -511,7 +724,8 @@ Item {
                     root.editModeExitRequested()
                     return
                 }
-                if (root.itemData && (root.itemData.isStack || (root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2))) {
+                // Right click only opens menu for Folders (Stacks) to customize folder icon
+                if (root.itemData && root.itemData.isStack) {
                     root.itemRightClicked(root.itemData, root)
                 }
             }

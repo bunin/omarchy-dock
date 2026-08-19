@@ -8,17 +8,36 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 
 ## ✨ Features
 
-- 📁 **App Stacks (Folders)** — Organize apps into folders with multi-column grids. Create folders by simply dragging one icon onto another. Customize folder icons with built-in Nerd Font glyphs, edit titles inline, and enjoy marquee text scrolling for long names.
-- ✨ **iOS-Style Edit Mode (Wiggle)** — Long-press (450ms) any icon to enter edit mode with smooth physical wobbling ($\pm 3.8^\circ$, 105ms). Quickly toggle favorite pins (`★`), dissolve folders (`-`), or reorder apps.
+- 📁 **App Stacks (Folders)** — Organize apps into folders with multi-column grids. Create folders by simply dragging one icon onto another. Customize folder icons with built-in Nerd Font glyphs, edit titles inline, and enjoy marquee text scrolling for long names. Folders seamlessly remain open when launching or switching applications.
+- ✨ **iOS-Style Edit Mode (Wiggle)** — Long-press (450ms) any icon to enter edit mode with smooth physical wobbling ($\pm 3.8^\circ$, 105ms). Quickly toggle favorite pins (`•`), dissolve folders (`-`), or reorder apps.
 - 🔀 **Fluid 1D & 2D Drag & Drop** — Smooth rail displacement physics when dragging apps across the dock or within folder grids. Effortlessly extract apps from folders back to the main dock.
-- 🪟 **Open Windows Manager** — Right-click any running app with multiple instances to open a clean window selector card, stably ordered by creation time.
+- 🔄 **Multi-Instance Sliding Viewport (Infinite Wheel Scrolling)** — Hover over any running app with duplicate windows and scroll the mouse wheel to cycle through instances. The status capsule uses a smooth 3-slot sliding viewport: the original app is always a distinct wide dash (`━`), while duplicates are round dots (`•`). As you scroll deeper into duplicates, the original dash smoothly scrolls out of view and reappears when looping back.
+- 🎯 **Real-Time Hyprland IPC Focus Sync** — Moving the mouse cursor over any window tile on the desktop (`follow_mouse = 1`) or switching focus instantly syncs and highlights the corresponding slot on the dock in real time without lag.
+- ⚡ **Dedicated Controls (LMB & Middle-Click)** — Left-click opens closed apps or focuses/activates running windows. Middle-click (pressing the mouse wheel) instantly spawns a new duplicate instance anytime.
+- 👁️ **Smart Cursor Hiding** — The mouse cursor is automatically hidden (`Qt.BlankCursor`) during mouse wheel scrolling and folder title hover to ensure an unobstructed view of the status capsule and animations.
 - 🌐 **Full Web Apps (PWA) Support** — Automatic domain matching for Chrome/Chromium web apps (Google Maps, Google Contacts, WhatsApp, YouTube, Discord, etc.) with native GTK theme icons.
 - ⚡ **Zero-Flicker Boot & Tile Lift** — Two-phase initialization instantly reserves Hyprland exclusive space to lift tiled windows smoothly, followed by a monolithic fade-in once all vector theme icons are loaded.
 - 🧭 **Dynamic Auto-Positioning** — Automatically adapts its position opposite to the Omarchy status bar (top $\leftrightarrow$ bottom, left $\leftrightarrow$ right).
 - ⏱️ **Smart Auto-Hide** — Optional auto-hide with a 1.5-second dismissal delay and instant hover reveal.
 - 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, and Folder Titles.
-- 🎨 **100% Native Theme Sync** — Automatically reacts to Omarchy colors (`Color.accent`, `Color.bar.background`), system fonts, borders, and window corner radius tokens.
+- 🎨 **100% Native Theme Sync** — Clean borderless status capsules that automatically react to Omarchy colors (`Color.accent`, `Color.bar.background`), system fonts, and window corner radius tokens.
 - 🔤 **Subpixel Vector Glyphs (`DockGlyph`)** — GPU-accelerated vector curve rendering without font hinting distortion or pixel jitter during animations.
+
+---
+
+## 🎮 Controls & Shortcuts
+
+| Action | Control | Description |
+| :--- | :--- | :--- |
+| **Open / Focus Window** | `Left-Click` (ЛКМ) | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
+| **Launch Duplicate** | `Middle-Click` (СКМ) | Instantly spawns a new duplicate instance of the application with immediate focus. |
+| **Cycle Duplicates** | `Mouse Wheel` (Скролл) | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
+| **Enter Edit Mode** | `Long-Press` (Зажатие 450ms) | Activates iOS-style physical wobble mode to reorder apps, toggle pins, or dissolve folders. |
+| **Reorder & Folders** | `Drag & Drop` | Drag along the rail to reorder. Drag one icon onto another to create a folder (App Stack). |
+| **Folder Icon Picker** | `Right-Click` (ПКМ на папке) | Opens the Nerd Font glyph picker to customize the folder's icon. |
+| **Exit Edit Mode / Close Menus** | `Right-Click` (ПКМ) / `Escape` | Instantly exits edit mode and dismisses open menus. |
+| **Toggle Pin State** | `Click • Badge` (в режиме ред.) | Pins or unpins the application to/from favorites. |
+| **Dissolve Folder** | `Click - Badge` (в режиме ред.) | Dissolves the folder and unpacks all apps back to the main dock. |
 
 ---
 
@@ -58,6 +77,37 @@ omarchy plugin remove rosakodu.dock
 
 ---
 
+## 🇷🇺 Описание и управление на русском языке
+
+**Omarchy Dock** — нативный анимированный док-бар приложений для **Omarchy Quattro** (Hyprland + Quickshell) с поддержкой папок, бесконечной прокрутки дубликатов, анимации покачивания iOS Wiggle и синхронизации с темами.
+
+### 🎮 Управление и горячие клавиши
+
+| Действие | Кнопка / Клавиша | Описание |
+| :--- | :--- | :--- |
+| **Открыть / Активировать окно** | `ЛКМ` (Left-Click) | Запускает приложение (если закрыто) либо активирует и выводит на передний план выбранное окно/плитку на рабочем столе. |
+| **Создать дубликат** | `СКМ` (Клик колёсиком) | Мгновенно запускает новый экземпляр (дубликат) приложения с моментальным получением фокуса. |
+| **Бесконечная прокрутка дубликатов** | `Скролл колёсика` | Циклически переключает дубликаты окон через 3-местное скользящее окно (плашка оригинала `━` и точки дубликатов `•`). |
+| **Режим редактирования (Wiggle)** | `Зажатие ЛКМ` (450ms) | Активирует режим покачивания иконок ($\pm 3.8^\circ$) для изменения порядка, закрепления и расформирования папок. |
+| **Перетаскивание и папки** | `Drag & Drop` (ЛКМ) | Перетаскивание по рельсе дока. Наведение одной иконки на другую объединяет их в новую папку (Stack). |
+| **Выбор значка папки** | `ПКМ на папке` | Открывает визуальное меню выбора Nerd Font глифа для иконки папки. |
+| **Выход из режима редактирования** | `ПКМ` / `Escape` | Мгновенно закрывает режим редактирования и любые всплывающие меню. |
+| **Закрепить в избранном** | Клик по точке `•` | Переключает статус закрепления приложения на доке (в режиме редактирования). |
+| **Расформировать папку** | Клик по знаку `-` | Удаляет папку и возвращает все находящиеся в ней приложения на основной док-бар (в режиме редактирования). |
+
+### 📦 Установка и удаление
+
+```bash
+# Установка и включение:
+omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
+
+# Удаление:
+omarchy plugin remove rosakodu.dock
+```
+
+---
+
 ## 📄 License
 
 [MIT](./LICENSE) © 2026 rosakodu
+

@@ -169,50 +169,20 @@ Item {
         }
     }
 
-    // Deterministic Right-Click Menu Toggle (1st click opens, 2nd click on same item closes)
+    // Deterministic Right-Click Menu Toggle (Only for Folders / Stacks icon selection)
     function toggleMenu(item, index, fromFolder) {
-        if (!item) {
+        if (!item || !item.isStack) {
             root.activeMenuItem = null
             return
         }
         var appId = item.appId || item.id || ""
-        if (root.activeMenuItem && root.activeMenuItem.appId === appId && root.isMenuFromFolder === fromFolder) {
+        if (root.activeMenuItem && root.activeMenuItem.appId === appId) {
             root.activeMenuItem = null
         } else {
-            if (!fromFolder) root.activeStackItem = null
-            root.isMenuFromFolder = fromFolder
-            if (fromFolder) {
-                root.activeMenuItemFolderIndex = index
-            } else {
-                root.activeMenuItemIndex = index
-            }
-            if (item.isStack) {
-                root.activeMenuItem = item
-            } else {
-                root.syncKnownWindows()
-                var tops = root.knownWindows
-                var winList = []
-                for (var w = 0; w < tops.length; w++) {
-                    var top = tops[w]
-                    if (top && DockModel.matchToplevel(top, item.appId, null)) {
-                        var isActive = (ToplevelManager.activeToplevel && top === ToplevelManager.activeToplevel)
-                        winList.push({
-                            index: winList.length,
-                            title: top.title || item.name || "",
-                            isActive: !!isActive
-                        })
-                    }
-                }
-                root.activeMenuItem = {
-                    id: item.id,
-                    appId: item.appId,
-                    name: item.name,
-                    icon: item.icon,
-                    rawIcon: item.rawIcon,
-                    isStack: false,
-                    windows: winList
-                }
-            }
+            root.activeStackItem = null
+            root.isMenuFromFolder = false
+            root.activeMenuItemIndex = index
+            root.activeMenuItem = item
         }
     }
 
@@ -601,6 +571,11 @@ Item {
 
     Connections {
         target: ToplevelManager
+        function onActiveToplevelChanged() { root.updateDockItems() }
+    }
+
+    Connections {
+        target: (typeof Hyprland !== "undefined") ? Hyprland : null
         function onActiveToplevelChanged() { root.updateDockItems() }
     }
 
@@ -1188,7 +1163,7 @@ Item {
             }
         }
 
-        // Visual Action Card (Strictly centered above the dock)
+        // Visual Action Card (Strictly centered above the dock, Folder Icon Picker only)
         Rectangle {
             id: menuCard
             z: 1
@@ -1199,17 +1174,10 @@ Item {
             property bool isWheelOrKeyNav: false
 
             readonly property bool isFolderMenu: !!(root.activeMenuItem && (root.activeMenuItem.isStack === true || root.isMenuFromFolder))
-            readonly property bool isWindowMenu: !!(root.activeMenuItem && !isFolderMenu && root.activeMenuItem.windows && root.activeMenuItem.windows.length > 0)
 
             readonly property int totalMenuItems: {
                 if (!root.activeMenuItem) return 0
-                if (isFolderMenu) {
-                    return root.availableFolderIcons.length + 1
-                }
-                if (isWindowMenu) {
-                    return root.activeMenuItem.windows.length
-                }
-                return 0
+                return root.availableFolderIcons.length + 1
             }
 
             function triggerCurrentSelection() {
@@ -1223,10 +1191,6 @@ Item {
                     } else if (selectedIndex === root.availableFolderIcons.length) {
                         root.setPinned(DockModel.dissolveStack(root.pinnedIds, root.activeMenuItem.id))
                         root.activeStackItem = null
-                    }
-                } else if (isWindowMenu) {
-                    if (selectedIndex >= 0 && selectedIndex < root.activeMenuItem.windows.length) {
-                        root.activateAppWindow(root.activeMenuItem.appId, selectedIndex)
                     }
                 }
                 root.activeMenuItem = null
@@ -1284,8 +1248,8 @@ Item {
                 root.activeMenuItem = null
             }
 
-            width: root.isVertical ? 36 : Math.max(36, isFolderMenu ? ((root.availableFolderIcons.length + 1) * 30 + 10) : (isWindowMenu ? (root.activeMenuItem.windows.length * 30 + 12) : 36))
-            height: !root.isVertical ? 36 : Math.max(36, isFolderMenu ? ((root.availableFolderIcons.length + 1) * 30 + 10) : (isWindowMenu ? (root.activeMenuItem.windows.length * 30 + 12) : 36))
+            width: root.isVertical ? 36 : Math.max(36, (root.availableFolderIcons.length + 1) * 30 + 10)
+            height: !root.isVertical ? 36 : Math.max(36, (root.availableFolderIcons.length + 1) * 30 + 10)
             color: root.isBarTransparent
                 ? Util.alpha(Color.popups.background, 0.45)
                 : Color.popups.background
@@ -1467,70 +1431,7 @@ Item {
                 }
             }
 
-            // 2. Horizontal layout when dock is horizontal (Multi-Window Selector)
-            Row {
-                id: windowMenuRow
-                visible: !root.isVertical && menuCard.isWindowMenu
-                anchors.centerIn: parent
-                spacing: 4
-
-                Repeater {
-                    model: (menuCard.isWindowMenu && root.activeMenuItem && root.activeMenuItem.windows) ? root.activeMenuItem.windows : []
-
-                    Item {
-                        id: winMenuBtnH
-                        width: 26
-                        height: 24
-
-                        readonly property bool isFocused: menuCard.selectedIndex === index
-
-                        Image {
-                            anchors.centerIn: parent
-                            width: 18
-                            height: 18
-                            fillMode: Image.PreserveAspectFit
-                            source: (root.iconRevision, root.resolveIcon(root.activeMenuItem))
-                            sourceSize: Qt.size(Math.max(64, 18 * 4 * Screen.devicePixelRatio), Math.max(64, 18 * 4 * Screen.devicePixelRatio))
-                            mipmap: true
-                            smooth: true
-                            antialiasing: true
-
-                            scale: winMenuBtnH.isFocused ? 1.25 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        }
-
-                        MouseArea {
-                            id: winMenuMouseH
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                            onEntered: {
-                                if (!menuCard.isWheelOrKeyNav) {
-                                    menuCard.selectedIndex = index
-                                }
-                            }
-                            onPositionChanged: function(mouse) {
-                                menuCard.isWheelOrKeyNav = false
-                                menuCard.selectedIndex = index
-                            }
-                            onWheel: function(wheel) {
-                                menuCard.isWheelOrKeyNav = true
-                                if (menuCard.totalMenuItems > 0) {
-                                    var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                    var step = delta > 0 ? -1 : 1
-                                    menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                                }
-                            }
-                            onClicked: {
-                                root.activateAppWindow(root.activeMenuItem.appId, index)
-                                root.activeMenuItem = null
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. Vertical layout when dock is vertical (Folder Icon Picker)
+            // 2. Vertical layout when dock is vertical (Folder Icon Picker)
             Column {
                 id: actionCol
                 visible: root.isVertical && menuCard.isFolderMenu
@@ -1663,69 +1564,6 @@ Item {
                                 root.setPinned(DockModel.extractFromStackToDock(root.pinnedIds, root.activeStackItem.id, root.activeMenuItem.appId, root.activeStackItemIndex + 1))
                             }
                             root.activeMenuItem = null
-                        }
-                    }
-                }
-            }
-
-            // 4. Vertical layout when dock is vertical (Multi-Window Selector)
-            Column {
-                id: windowMenuCol
-                visible: root.isVertical && menuCard.isWindowMenu
-                anchors.centerIn: parent
-                spacing: 4
-
-                Repeater {
-                    model: (menuCard.isWindowMenu && root.activeMenuItem && root.activeMenuItem.windows) ? root.activeMenuItem.windows : []
-
-                    Item {
-                        id: winMenuBtnV
-                        width: 24
-                        height: 26
-
-                        readonly property bool isFocused: menuCard.selectedIndex === index
-
-                        Image {
-                            anchors.centerIn: parent
-                            width: 18
-                            height: 18
-                            fillMode: Image.PreserveAspectFit
-                            source: (root.iconRevision, root.resolveIcon(root.activeMenuItem))
-                            sourceSize: Qt.size(Math.max(64, 18 * 4 * Screen.devicePixelRatio), Math.max(64, 18 * 4 * Screen.devicePixelRatio))
-                            mipmap: true
-                            smooth: true
-                            antialiasing: true
-
-                            scale: winMenuBtnV.isFocused ? 1.25 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        }
-
-                        MouseArea {
-                            id: winMenuMouseV
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                            onEntered: {
-                                if (!menuCard.isWheelOrKeyNav) {
-                                    menuCard.selectedIndex = index
-                                }
-                            }
-                            onPositionChanged: function(mouse) {
-                                menuCard.isWheelOrKeyNav = false
-                                menuCard.selectedIndex = index
-                            }
-                            onWheel: function(wheel) {
-                                menuCard.isWheelOrKeyNav = true
-                                if (menuCard.totalMenuItems > 0) {
-                                    var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                    var step = delta > 0 ? -1 : 1
-                                    menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                                }
-                            }
-                            onClicked: {
-                                root.activateAppWindow(root.activeMenuItem.appId, index)
-                                root.activeMenuItem = null
-                            }
                         }
                     }
                 }
@@ -2010,6 +1848,89 @@ Item {
                             readonly property int slotCol: visualSubSlot % stackCard.gridCols
                             readonly property int slotRow: Math.floor(visualSubSlot / stackCard.gridCols)
 
+                            property int subPreviewTopIndex: -1
+                            property bool isSubWheelScrolling: false
+
+                            Timer {
+                                id: subWheelCursorTimer
+                                interval: 1200
+                                repeat: false
+                                onTriggered: {
+                                    subItemRoot.isSubWheelScrolling = false
+                                }
+                            }
+
+                            readonly property var liveActiveToplevel: ToplevelManager.activeToplevel
+                            readonly property var liveHyprActiveToplevel: (typeof Hyprland !== "undefined") ? Hyprland.activeToplevel : null
+
+                            readonly property int subRealActiveTopIndex: {
+                                var activeWlr = subItemRoot.liveActiveToplevel
+                                var activeHypr = subItemRoot.liveHyprActiveToplevel
+                                if (!modelData || !modelData.toplevels || modelData.toplevels.length === 0) return 0
+                                var tops = modelData.toplevels
+
+                                if (activeHypr && activeHypr.address) {
+                                    for (var h = 0; h < tops.length; h++) {
+                                        if (tops[h] && tops[h].address && tops[h].address === activeHypr.address) {
+                                            return h
+                                        }
+                                    }
+                                }
+
+                                for (var st = 0; st < tops.length; st++) {
+                                    var top = tops[st]
+                                    if (!top) continue
+                                    if (activeWlr && (top === activeWlr || top.activated === true || top.active === true)) return st
+                                    if (activeHypr && (top === activeHypr || (top.address && activeHypr.address && top.address === activeHypr.address))) return st
+                                }
+
+                                var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : null
+                                var activeGlobalIdx = (list && activeWlr && Array.isArray(list)) ? list.indexOf(activeWlr) : -1
+                                if (activeGlobalIdx !== -1 && list) {
+                                    for (var j = 0; j < tops.length; j++) {
+                                        if (tops[j] && list.indexOf(tops[j]) === activeGlobalIdx) return j
+                                    }
+                                }
+
+                                return 0
+                            }
+
+                            readonly property int subEffectiveTopIndex: {
+                                var total = (modelData && modelData.toplevels) ? modelData.toplevels.length : 0
+                                if (total === 0) return 0
+                                if (subItemRoot.subPreviewTopIndex >= 0 && subItemRoot.subPreviewTopIndex < total) return subItemRoot.subPreviewTopIndex
+                                return subItemRoot.subRealActiveTopIndex
+                            }
+
+                            Connections {
+                                target: ToplevelManager
+                                function onActiveToplevelChanged() {
+                                    if (!subMouse.containsMouse) {
+                                        subItemRoot.subPreviewTopIndex = -1
+                                    }
+                                }
+                            }
+
+                            Connections {
+                                target: (typeof Hyprland !== "undefined") ? Hyprland : null
+                                function onActiveToplevelChanged() {
+                                    if (!subMouse.containsMouse) {
+                                        subItemRoot.subPreviewTopIndex = -1
+                                    }
+                                }
+                            }
+
+                            Timer {
+                                id: subPreviewResetTimer
+                                interval: 1500
+                                repeat: false
+                                onTriggered: {
+                                    if (!subMouse.containsMouse) {
+                                        subItemRoot.subPreviewTopIndex = -1
+                                    }
+                                }
+                            }
+
                             x: slotCol * 50
                             y: slotRow * 50
                             width: 44
@@ -2119,11 +2040,76 @@ Item {
                                     running: root.folderDragActiveIndex !== index && !root.isEditMode && subIcon.rotation !== 0.0
                                 }
 
-                                // Running indicator dot under subApp icon
+                                // Multi-instance duplicate capsule under subApp icon (Sliding window viewport)
+                                Rectangle {
+                                    id: subDuplicateCapsule
+                                    visible: opacity > 0
+                                    opacity: (modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2 && !root.isEditMode) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 180 } }
+
+                                    readonly property int totalWindows: (modelData && modelData.toplevels) ? modelData.toplevels.length : 0
+                                    readonly property int winCount: Math.min(totalWindows, 3)
+
+                                    function getSubSlotWindowIndex(slotIdx) {
+                                        if (totalWindows <= 3) {
+                                            return slotIdx
+                                        }
+                                        var cur = subItemRoot.subEffectiveTopIndex
+                                        if (cur === 0 || cur === 1) {
+                                            return slotIdx
+                                        }
+                                        if (cur === totalWindows - 1) {
+                                            if (slotIdx === 0) return totalWindows - 2
+                                            if (slotIdx === 1) return totalWindows - 1
+                                            return 0
+                                        }
+                                        if (slotIdx === 0) return cur - 1
+                                        if (slotIdx === 1) return cur
+                                        return cur + 1
+                                    }
+
+                                    anchors.top: subIcon.bottom
+                                    anchors.topMargin: 2
+                                    anchors.horizontalCenter: parent.horizontalCenter
+
+                                    height: 6
+                                    width: Math.max(18, 12 + winCount * 5)
+                                    radius: height / 2
+
+                                    color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.92)
+                                    antialiasing: true
+                                    smooth: true
+
+                                    Row {
+                                        anchors.centerIn: parent
+                                        spacing: 3
+
+                                        Repeater {
+                                            model: subDuplicateCapsule.winCount
+                                            Rectangle {
+                                                readonly property int targetWinIdx: subDuplicateCapsule.getSubSlotWindowIndex(index)
+                                                readonly property bool isCurrent: (targetWinIdx === subItemRoot.subEffectiveTopIndex)
+                                                readonly property bool isOriginalApp: (targetWinIdx === 0)
+
+                                                width: isOriginalApp ? 9.0 : (isCurrent ? 3.5 : 2.5)
+                                                height: 2.5
+                                                radius: 1.25
+                                                color: isCurrent ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, isOriginalApp ? 0.45 : 0.28)
+                                                antialiasing: true
+                                                smooth: true
+
+                                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                                                Behavior on color { ColorAnimation { duration: 120 } }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Running indicator dot under subApp icon (Single instance)
                                 Rectangle {
                                     id: subDot
                                     visible: opacity > 0
-                                    opacity: (modelData.isRunning && !subMouse.containsMouse && !root.isEditMode) ? 1.0 : 0.0
+                                    opacity: (modelData.isRunning && (!modelData.toplevels || modelData.toplevels.length <= 1) && !subMouse.containsMouse && !root.isEditMode) ? 1.0 : 0.0
                                     Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
                                     anchors.top: subIcon.bottom
@@ -2208,8 +2194,8 @@ Item {
                                 id: subMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                cursorShape: (root.folderDragActiveIndex >= 0 || subMouse.drag.active || isDraggingActive) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                cursorShape: (root.folderDragActiveIndex >= 0 || subMouse.drag.active || isDraggingActive || subItemRoot.isSubWheelScrolling) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
 
                                 drag.target: root.activeStackItem ? subDragOffset : null
                                 drag.axis: Drag.XAndYAxis
@@ -2233,6 +2219,9 @@ Item {
                                 }
 
                                 onPositionChanged: function(mouse) {
+                                    if (subItemRoot.isSubWheelScrolling) {
+                                        subItemRoot.isSubWheelScrolling = false
+                                    }
                                     if (subMouse.drag.active) {
                                         subLongPressTimer.stop()
                                         if (!isDraggingActive) {
@@ -2266,9 +2255,52 @@ Item {
                                     }
                                 }
 
+                                onExited: {
+                                    subItemRoot.isSubWheelScrolling = false
+                                    subPreviewResetTimer.restart()
+                                }
+
+                                onWheel: function(wheel) {
+                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
+                                        subItemRoot.isSubWheelScrolling = true
+                                        subWheelCursorTimer.restart()
+                                        subPreviewResetTimer.stop()
+                                        var tops = modelData.toplevels
+                                        var len = tops.length
+                                        var curIdx = subItemRoot.subEffectiveTopIndex
+
+                                        var nextIdx
+                                        if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
+                                            // Scroll down/forward: next duplicate (Left to Right)
+                                            nextIdx = (curIdx + 1) % len
+                                        } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
+                                            // Scroll up/backward: previous duplicate (Right to Left)
+                                            nextIdx = (curIdx - 1 + len) % len
+                                        } else {
+                                            return
+                                        }
+
+                                        subItemRoot.subPreviewTopIndex = nextIdx
+                                        wheel.accepted = true
+                                    }
+                                }
+
                                 onClicked: function(mouse) {
                                     if (isDraggingActive || didSubLongPress) {
                                         didSubLongPress = false
+                                        return
+                                    }
+
+                                    // Middle Click (Wheel Button click) -> Immediately launch duplicate
+                                    if (mouse.button === Qt.MiddleButton) {
+                                        subClickEffectAnim.restart()
+                                        var launchMidId = modelData.desktopId || modelData.appId || ""
+                                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                                            root.shell.appLibrary.launch(launchMidId, modelData.name)
+                                        } else {
+                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
+                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
+                                        }
                                         return
                                     }
 
@@ -2277,21 +2309,32 @@ Item {
                                         if (root.isEditMode) {
                                             return
                                         }
-                                        var launchId = modelData.desktopId || modelData.appId || ""
-                                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                                            root.shell.appLibrary.launch(launchId, modelData.name)
-                                        } else {
-                                            var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (modelData.exec || "")
-                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
+                                        // 1. If not running, launch it (Folder stays open!)
+                                        if (!modelData.isRunning || !modelData.toplevels || modelData.toplevels.length === 0) {
+                                            var launchId = modelData.desktopId || modelData.appId || ""
+                                            if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
+                                                root.shell.appLibrary.launch(launchId, modelData.name)
+                                            } else {
+                                                var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (modelData.exec || "")
+                                                Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
+                                            }
+                                            return
                                         }
-                                        root.activeStackItem = null
+
+                                        // 2. If running: activate chosen window (LMB focuses/switches)
+                                        var tops = modelData.toplevels
+                                        var targetIdx = subItemRoot.subEffectiveTopIndex
+                                        if (targetIdx < 0 || targetIdx >= tops.length) targetIdx = 0
+
+                                        var chosenWin = tops[targetIdx]
+                                        if (chosenWin && typeof chosenWin.activate === "function") {
+                                            chosenWin.activate()
+                                        }
+                                        subItemRoot.subPreviewTopIndex = -1
                                     } else if (mouse.button === Qt.RightButton) {
                                         if (root.isEditMode) {
                                             root.isEditMode = false
                                             return
-                                        }
-                                        if (modelData && (modelData.isStack || (modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2))) {
-                                            root.toggleMenu(modelData, index, true)
                                         }
                                     }
                                 }
