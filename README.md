@@ -29,15 +29,15 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 
 | Action | Control | Description |
 | :--- | :--- | :--- |
-| **Open / Focus Window** | `Left-Click` (ЛКМ) | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
-| **Launch Duplicate** | `Middle-Click` (СКМ) | Instantly spawns a new duplicate instance of the application with immediate focus. |
-| **Cycle Duplicates** | `Mouse Wheel` (Скролл) | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
-| **Enter Edit Mode** | `Long-Press` (Зажатие 450ms) | Activates iOS-style physical wobble mode to reorder apps, toggle pins, or dissolve folders. |
+| **Open / Focus Window** | `Left-Click` | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
+| **Launch Duplicate** | `Middle-Click` | Instantly spawns a new duplicate instance of the application with immediate focus. |
+| **Cycle Duplicates** | `Mouse Wheel` | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
+| **Enter Edit Mode** | `Long-Press` *(450ms)* | Activates iOS-style physical wobble mode to reorder apps, toggle pins, or dissolve folders. |
 | **Reorder & Folders** | `Drag & Drop` | Drag along the rail to reorder. Drag one icon onto another to create a folder (App Stack). |
-| **Folder Icon Picker** | `Right-Click` (ПКМ на папке) | Opens the Nerd Font glyph picker to customize the folder's icon. |
-| **Exit Edit Mode / Close Menus** | `Right-Click` (ПКМ) / `Escape` | Instantly exits edit mode and dismisses open menus. |
-| **Toggle Pin State** | `Click • Badge` (в режиме ред.) | Pins or unpins the application to/from favorites. |
-| **Dissolve Folder** | `Click - Badge` (в режиме ред.) | Dissolves the folder and unpacks all apps back to the main dock. |
+| **Folder Icon Picker** | `Right-Click` *(on Folder)* | Opens the Nerd Font glyph picker to customize the folder's icon. |
+| **Exit Edit Mode / Close Menus** | `Right-Click` / `Escape` | Instantly exits edit mode and dismisses open menus. |
+| **Toggle Pin State** | `Click • Badge` *(in Edit Mode)* | Pins or unpins the application to/from favorites. |
+| **Dissolve Folder** | `Click - Badge` *(in Edit Mode)* | Dissolves the folder and unpacks all apps back to the main dock. |
 
 ---
 
@@ -47,6 +47,12 @@ Install and enable the dock with a single command:
 
 ```bash
 omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
+```
+
+*(Optional)* To also place the `···` Settings Widget onto your Omarchy status bar:
+
+```bash
+omarchy bar put rosakodu.dock --after omarchy.weather
 ```
 
 ---
@@ -72,36 +78,6 @@ Pinned items and folder layouts are automatically saved to `~/.config/omarchy/do
 ## 🗑️ Uninstallation
 
 ```bash
-omarchy plugin remove rosakodu.dock
-```
-
----
-
-## 🇷🇺 Описание и управление на русском языке
-
-**Omarchy Dock** — нативный анимированный док-бар приложений для **Omarchy Quattro** (Hyprland + Quickshell) с поддержкой папок, бесконечной прокрутки дубликатов, анимации покачивания iOS Wiggle и синхронизации с темами.
-
-### 🎮 Управление и горячие клавиши
-
-| Действие | Кнопка / Клавиша | Описание |
-| :--- | :--- | :--- |
-| **Открыть / Активировать окно** | `ЛКМ` (Left-Click) | Запускает приложение (если закрыто) либо активирует и выводит на передний план выбранное окно/плитку на рабочем столе. |
-| **Создать дубликат** | `СКМ` (Клик колёсиком) | Мгновенно запускает новый экземпляр (дубликат) приложения с моментальным получением фокуса. |
-| **Бесконечная прокрутка дубликатов** | `Скролл колёсика` | Циклически переключает дубликаты окон через 3-местное скользящее окно (плашка оригинала `━` и точки дубликатов `•`). |
-| **Режим редактирования (Wiggle)** | `Зажатие ЛКМ` (450ms) | Активирует режим покачивания иконок ($\pm 3.8^\circ$) для изменения порядка, закрепления и расформирования папок. |
-| **Перетаскивание и папки** | `Drag & Drop` (ЛКМ) | Перетаскивание по рельсе дока. Наведение одной иконки на другую объединяет их в новую папку (Stack). |
-| **Выбор значка папки** | `ПКМ на папке` | Открывает визуальное меню выбора Nerd Font глифа для иконки папки. |
-| **Выход из режима редактирования** | `ПКМ` / `Escape` | Мгновенно закрывает режим редактирования и любые всплывающие меню. |
-| **Закрепить в избранном** | Клик по точке `•` | Переключает статус закрепления приложения на доке (в режиме редактирования). |
-| **Расформировать папку** | Клик по знаку `-` | Удаляет папку и возвращает все находящиеся в ней приложения на основной док-бар (в режиме редактирования). |
-
-### 📦 Установка и удаление
-
-```bash
-# Установка и включение:
-omarchy plugin add https://github.com/rosakodu/omarchy-dock.git --enable
-
-# Удаление:
 omarchy plugin remove rosakodu.dock
 ```
 
