@@ -1662,8 +1662,13 @@ Item {
 
             Keys.onEscapePressed: function(event) {
                 event.accepted = true
-                if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
-                    titleInput.saveAndClose()
+                if (root.isEditingFolderTitle) {
+                    if (typeof titleInput !== "undefined") {
+                        titleInput.text = root.activeStackItem ? root.activeStackItem.name : "Folder"
+                    }
+                    root.isEditingFolderTitle = false
+                    stackCard.forceActiveFocus()
+                    return
                 }
                 if (root.isEditMode) {
                     root.isEditMode = false
@@ -1863,7 +1868,8 @@ Item {
                             event.accepted = true
                             text = root.activeStackItem ? root.activeStackItem.name : "Folder"
                             root.isEditingFolderTitle = false
-                            root.activeStackItem = null
+                            focus = false
+                            stackCard.forceActiveFocus()
                         }
                         onEditingFinished: saveAndClose()
                     }
