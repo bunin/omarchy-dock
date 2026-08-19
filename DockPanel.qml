@@ -129,6 +129,15 @@ Item {
 
     // Persistent stable chronological window registry (never reordered on focus or workspace switch)
     property var knownWindows: []
+    property string pendingFocusAppId: ""
+    property double pendingFocusTimestamp: 0
+
+    function requestFocusOnLaunch(appId) {
+        var clean = DockModel.stripDesktop(appId || "").toLowerCase()
+        if (!clean) return
+        root.pendingFocusAppId = clean
+        root.pendingFocusTimestamp = Date.now()
+    }
 
     function syncKnownWindows() {
         var live = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
@@ -577,6 +586,30 @@ Item {
     Connections {
         target: (typeof Hyprland !== "undefined") ? Hyprland : null
         function onActiveToplevelChanged() { root.updateDockItems() }
+        function onRawEvent(event) {
+            if (!event || !root.pendingFocusAppId) return
+            var name = String(event.name || "")
+            if (name === "openwindow") {
+                if (Date.now() - root.pendingFocusTimestamp > 8000) {
+                    root.pendingFocusAppId = ""
+                    return
+                }
+                var args = String(event.args || "")
+                var parts = args.split(",")
+                if (parts.length >= 3) {
+                    var addr = parts[0].trim()
+                    var winClass = parts[2].trim().toLowerCase()
+                    var pending = root.pendingFocusAppId.toLowerCase()
+                    var normClass = winClass.replace(/[^a-z0-9]/g, "")
+                    var normPending = pending.replace(/[^a-z0-9]/g, "")
+                    if (winClass === pending || (normPending.length > 0 && (normClass.indexOf(normPending) !== -1 || normPending.indexOf(normClass) !== -1))) {
+                        root.pendingFocusAppId = ""
+                        var cleanAddr = (addr.indexOf("0x") === 0) ? addr : ("0x" + addr)
+                        Util.execDetached("hyprctl dispatch focuswindow address:" + cleanAddr)
+                    }
+                }
+            }
+        }
     }
 
     Connections {
@@ -845,21 +878,6 @@ Item {
         }
     }
 
-    // 2. Outside-click dismissal for Folder Popup Card (active when folder is open and menu is NOT open)
-    HyprlandFocusGrab {
-        id: stackGrab
-        active: root.isStackOpen && !root.isMenuOpen
-        windows: [stackWindow, dockWindow]
-        onCleared: {
-            root.activeStackItem = null
-            root.folderDragActiveIndex = -1
-            root.folderDragTargetIndex = -1
-            root.dockDragActiveIndex = -1
-            root.dockDragTargetIndex = -1
-            root.currentMergeTargetIndex = -1
-        }
-    }
-
     // 3. Outside-click & Escape dismissal for Edit Mode
     HyprlandFocusGrab {
         id: editGrab
@@ -902,7 +920,7 @@ Item {
 
         WlrLayershell.namespace: "omarchy-dock"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: (root.isEditMode || root.isStackOpen || dockHoverHandler.hovered) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && (!root.autohide || root.isDockActive)) ? ExclusionMode.Auto : ExclusionMode.Ignore
         color: "transparent"
 
@@ -1063,6 +1081,10 @@ Item {
 
                         onTogglePinRequested: function(appId) {
                             root.setPinned(DockModel.togglePinned(root.pinnedIds, appId))
+                        }
+
+                        onOriginalAppLaunched: function(appId) {
+                            root.requestFocusOnLaunch(appId)
                         }
 
                         onDissolveRequested: function(stackId) {
@@ -1578,7 +1600,7 @@ Item {
 
         WlrLayershell.namespace: "omarchy-dock-stack"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
         exclusionMode: ExclusionMode.Auto
         color: "transparent"
 
@@ -1860,64 +1882,13 @@ Item {
                                 }
                             }
 
-                            readonly property var liveActiveToplevel: ToplevelManager.activeToplevel
-                            readonly property var liveHyprActiveToplevel: (typeof Hyprland !== "undefined") ? Hyprland.activeToplevel : null
-
-                            readonly property int subRealActiveTopIndex: {
-                                var activeWlr = subItemRoot.liveActiveToplevel
-                                var activeHypr = subItemRoot.liveHyprActiveToplevel
-                                if (!modelData || !modelData.toplevels || modelData.toplevels.length === 0) return 0
-                                var tops = modelData.toplevels
-
-                                if (activeHypr && activeHypr.address) {
-                                    for (var h = 0; h < tops.length; h++) {
-                                        if (tops[h] && tops[h].address && tops[h].address === activeHypr.address) {
-                                            return h
-                                        }
-                                    }
-                                }
-
-                                for (var st = 0; st < tops.length; st++) {
-                                    var top = tops[st]
-                                    if (!top) continue
-                                    if (activeWlr && (top === activeWlr || top.activated === true || top.active === true)) return st
-                                    if (activeHypr && (top === activeHypr || (top.address && activeHypr.address && top.address === activeHypr.address))) return st
-                                }
-
-                                var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : null
-                                var activeGlobalIdx = (list && activeWlr && Array.isArray(list)) ? list.indexOf(activeWlr) : -1
-                                if (activeGlobalIdx !== -1 && list) {
-                                    for (var j = 0; j < tops.length; j++) {
-                                        if (tops[j] && list.indexOf(tops[j]) === activeGlobalIdx) return j
-                                    }
-                                }
-
-                                return 0
-                            }
+                            readonly property int subRealActiveTopIndex: (modelData && typeof modelData.activeTopIndex === "number") ? modelData.activeTopIndex : 0
 
                             readonly property int subEffectiveTopIndex: {
                                 var total = (modelData && modelData.toplevels) ? modelData.toplevels.length : 0
                                 if (total === 0) return 0
                                 if (subItemRoot.subPreviewTopIndex >= 0 && subItemRoot.subPreviewTopIndex < total) return subItemRoot.subPreviewTopIndex
                                 return subItemRoot.subRealActiveTopIndex
-                            }
-
-                            Connections {
-                                target: ToplevelManager
-                                function onActiveToplevelChanged() {
-                                    if (!subMouse.containsMouse) {
-                                        subItemRoot.subPreviewTopIndex = -1
-                                    }
-                                }
-                            }
-
-                            Connections {
-                                target: (typeof Hyprland !== "undefined") ? Hyprland : null
-                                function onActiveToplevelChanged() {
-                                    if (!subMouse.containsMouse) {
-                                        subItemRoot.subPreviewTopIndex = -1
-                                    }
-                                }
                             }
 
                             Timer {
@@ -2359,6 +2330,7 @@ Item {
                                         // 1. If not running, launch it (Folder stays open!)
                                         if (!modelData.isRunning || !modelData.toplevels || modelData.toplevels.length === 0) {
                                             var launchId = modelData.desktopId || modelData.appId || ""
+                                            root.requestFocusOnLaunch(launchId)
                                             if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
                                                 root.shell.appLibrary.launch(launchId, modelData.name)
                                             } else {

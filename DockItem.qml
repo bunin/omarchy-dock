@@ -34,6 +34,7 @@ Item {
     signal editModeExitRequested()
     signal togglePinRequested(string appId)
     signal dissolveRequested(string stackId)
+    signal originalAppLaunched(string appId)
 
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
@@ -273,64 +274,13 @@ Item {
         }
     }
 
-    readonly property var liveActiveToplevel: ToplevelManager.activeToplevel
-    readonly property var liveHyprActiveToplevel: (typeof Hyprland !== "undefined") ? Hyprland.activeToplevel : null
-
-    readonly property int realActiveTopIndex: {
-        var activeWlr = root.liveActiveToplevel
-        var activeHypr = root.liveHyprActiveToplevel
-        if (!root.itemData || !root.itemData.toplevels || root.itemData.toplevels.length === 0) return 0
-        var tops = root.itemData.toplevels
-
-        if (activeHypr && activeHypr.address) {
-            for (var h = 0; h < tops.length; h++) {
-                if (tops[h] && tops[h].address && tops[h].address === activeHypr.address) {
-                    return h
-                }
-            }
-        }
-
-        for (var i = 0; i < tops.length; i++) {
-            var top = tops[i]
-            if (!top) continue
-            if (activeWlr && (top === activeWlr || top.activated === true || top.active === true)) return i
-            if (activeHypr && (top === activeHypr || (top.address && activeHypr.address && top.address === activeHypr.address))) return i
-        }
-
-        var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : null
-        var activeGlobalIdx = (list && activeWlr && Array.isArray(list)) ? list.indexOf(activeWlr) : -1
-        if (activeGlobalIdx !== -1 && list) {
-            for (var j = 0; j < tops.length; j++) {
-                if (tops[j] && list.indexOf(tops[j]) === activeGlobalIdx) return j
-            }
-        }
-
-        return 0
-    }
+    readonly property int realActiveTopIndex: (root.itemData && typeof root.itemData.activeTopIndex === "number") ? root.itemData.activeTopIndex : 0
 
     readonly property int effectiveTopIndex: {
         var total = (root.itemData && root.itemData.toplevels) ? root.itemData.toplevels.length : 0
         if (total === 0) return 0
         if (root.previewTopIndex >= 0 && root.previewTopIndex < total) return root.previewTopIndex
         return root.realActiveTopIndex
-    }
-
-    Connections {
-        target: ToplevelManager
-        function onActiveToplevelChanged() {
-            if (!mouseArea.containsMouse) {
-                root.previewTopIndex = -1
-            }
-        }
-    }
-
-    Connections {
-        target: (typeof Hyprland !== "undefined") ? Hyprland : null
-        function onActiveToplevelChanged() {
-            if (!mouseArea.containsMouse) {
-                root.previewTopIndex = -1
-            }
-        }
     }
 
     Timer {
@@ -745,6 +695,7 @@ Item {
                     // 1. If not running, launch it
                     if (!root.itemData.isRunning || !root.itemData.toplevels || root.itemData.toplevels.length === 0) {
                         var launchId = root.itemData.desktopId || root.itemData.appId || ""
+                        root.originalAppLaunched(launchId)
                         if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
                             root.shell.appLibrary.launch(launchId, root.itemData.name)
                         } else {

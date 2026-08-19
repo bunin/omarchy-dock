@@ -729,10 +729,13 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
     function getTopKey(top, idx) {
         if (!top) return "top_" + idx;
-        if (top.address) return String(top.address);
-        if (top.id !== undefined && top.id !== null) return "id_" + top.id;
-        var arrayIndex = (idx !== undefined) ? idx : toplevels.indexOf(top);
-        return (top.appId || "") + "___" + (top.title || "") + "___" + arrayIndex;
+        var app = "";
+        var title = "";
+        try {
+            app = String(top.appId || "");
+            title = String(top.title || "");
+        } catch (e) {}
+        return app + "___" + title + "___" + idx;
     }
 
     function entryFor(id) {
@@ -757,13 +760,19 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
                 var sTops = [];
                 var sActive = false;
+                var sActiveIdx = 0;
                 for (var st = 0; st < toplevels.length; st++) {
                     var sTop = toplevels[st];
                     var stKey = getTopKey(sTop, st);
                     if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry)) {
                         sTops.push(sTop);
                         assignedTops[stKey] = true;
-                        if ((activeToplevel && sTop === activeToplevel) || (sTop && (sTop.activated || sTop.active))) sActive = true;
+                        try {
+                            if ((activeToplevel && sTop === activeToplevel) || (sTop && (sTop.activated || sTop.active))) {
+                                sActive = true;
+                                sActiveIdx = sTops.length - 1;
+                            }
+                        } catch (e) {}
                     }
                 }
 
@@ -781,6 +790,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     isPinned: true,
                     isRunning: sTops.length > 0,
                     isActive: sActive,
+                    activeTopIndex: sActiveIdx,
                     windowCount: sTops.length,
                     toplevels: sTops
                 });
@@ -816,20 +826,20 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             var exec = (entry && entry.exec) ? entry.exec : "";
 
             var matching = [];
+            var isAnyActive = false;
+            var activeIdx = 0;
             for (var t = 0; t < toplevels.length; t++) {
                 var top = toplevels[t];
                 var tKey = getTopKey(top, t);
                 if (!assignedTops[tKey] && matchToplevel(top, appId, entry)) {
                     matching.push(top);
                     assignedTops[tKey] = true;
-                }
-            }
-
-            var isAnyActive = false;
-            for (var m = 0; m < matching.length; m++) {
-                if ((activeToplevel && matching[m] === activeToplevel) || (matching[m] && (matching[m].activated || matching[m].active))) {
-                    isAnyActive = true;
-                    break;
+                    try {
+                        if ((activeToplevel && top === activeToplevel) || (top && (top.activated || top.active))) {
+                            isAnyActive = true;
+                            activeIdx = matching.length - 1;
+                        }
+                    } catch (e) {}
                 }
             }
 
@@ -847,6 +857,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isDuplicate: false,
                 isRunning: matching.length > 0,
                 isActive: isAnyActive,
+                activeTopIndex: activeIdx,
                 windowCount: matching.length,
                 toplevels: matching
             });
@@ -860,11 +871,17 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var topItemKey = getTopKey(topItem, j);
         if (assignedTops[topItemKey]) continue;
 
-        var rAppId = topItem.appId || "";
+        var rAppId = "";
+        var rTitle = "";
+        try {
+            rAppId = topItem.appId || "";
+            rTitle = topItem.title || "";
+        } catch (e) {}
+
         var rEntry = entryFor(rAppId);
         var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : (rAppId || "application-x-executable");
         var rIcon = resolveIcon(rEntry, rAppId, appLibrary);
-        var rName = (rEntry && rEntry.name) ? rEntry.name : (topItem.title || rAppId || "App");
+        var rName = (rEntry && rEntry.name) ? rEntry.name : (rTitle || rAppId || "App");
         var rIconSource = (rEntry && rEntry.iconSource) ? rEntry.iconSource : "";
         var rDesktopId = (rEntry && rEntry.id) ? rEntry.id : (rAppId ? (rAppId.indexOf(".desktop") !== -1 ? rAppId : (rAppId + ".desktop")) : "");
         var rExec = (rEntry && rEntry.exec) ? rEntry.exec : "";
@@ -872,15 +889,19 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         // Find all unassigned toplevels for this unpinned app
         var rMatching = [];
         var rIsActive = false;
+        var rActiveIdx = 0;
         for (var k = 0; k < toplevels.length; k++) {
             var candidate = toplevels[k];
             var cKey = getTopKey(candidate, k);
             if (!assignedTops[cKey] && matchToplevel(candidate, rAppId, rEntry)) {
                 rMatching.push(candidate);
                 assignedTops[cKey] = true;
-                if ((activeToplevel && candidate === activeToplevel) || (candidate && (candidate.activated || candidate.active))) {
-                    rIsActive = true;
-                }
+                try {
+                    if ((activeToplevel && candidate === activeToplevel) || (candidate && (candidate.activated || candidate.active))) {
+                        rIsActive = true;
+                        rActiveIdx = rMatching.length - 1;
+                    }
+                } catch (e) {}
             }
         }
 
@@ -899,7 +920,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             isPinned: false,
             isDuplicate: false,
             isRunning: true,
-            isActive: rIsAnyActive,
+            isActive: rIsActive,
+            activeTopIndex: rActiveIdx,
             windowCount: rMatching.length,
             toplevels: rMatching
         });
