@@ -419,7 +419,16 @@ Item {
 
     property var activeStackItem: null
     property int activeStackItemIndex: 0
+    property bool isEditingFolderTitle: false
     readonly property bool isStackOpen: activeStackItem !== null
+
+    onActiveStackItemChanged: {
+        if (activeStackItem) {
+            stackCard.forceActiveFocus()
+        } else {
+            root.isEditingFolderTitle = false
+        }
+    }
 
     // Pinned apps persistence
     property string userPinnedPath: Quickshell.env("HOME") + "/.config/omarchy/dock-pinned.json"
@@ -1600,7 +1609,9 @@ Item {
 
         WlrLayershell.namespace: "omarchy-dock-stack"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: root.isEditingFolderTitle
+            ? WlrKeyboardFocus.Exclusive
+            : (root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
         exclusionMode: ExclusionMode.Auto
         color: "transparent"
 
@@ -1627,8 +1638,12 @@ Item {
             z: 0
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: function(mouse) {
+                if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
+                    titleInput.saveAndClose()
+                }
                 root.activeStackItem = null
                 root.isEditMode = false
+                root.isEditingFolderTitle = false
             }
         }
 
@@ -1639,8 +1654,17 @@ Item {
             anchors.centerIn: parent
             focus: true
 
+            onVisibleChanged: {
+                if (visible) {
+                    stackCard.forceActiveFocus()
+                }
+            }
+
             Keys.onEscapePressed: function(event) {
                 event.accepted = true
+                if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
+                    titleInput.saveAndClose()
+                }
                 if (root.isEditMode) {
                     root.isEditMode = false
                 }
@@ -1671,6 +1695,9 @@ Item {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: (root.folderDragActiveIndex >= 0) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
                 onClicked: function(mouse) {
+                    if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
+                        titleInput.saveAndClose()
+                    }
                     if (mouse.button === Qt.RightButton || mouse.button === Qt.LeftButton) {
                         root.isEditMode = false
                     }
@@ -1690,7 +1717,7 @@ Item {
                 // Silky smooth wiggle animation on hover and in edit mode
                 SequentialAnimation {
                     id: titleJiggleAnim
-                    running: (root.isEditMode || titleHoverArea.containsMouse) && !titleInput.activeFocus
+                    running: (root.isEditMode || titleHoverArea.containsMouse) && !root.isEditingFolderTitle && !titleInput.activeFocus
                     loops: Animation.Infinite
 
                     NumberAnimation {
@@ -1716,11 +1743,11 @@ Item {
                     to: 0.0
                     duration: 120
                     easing.type: Easing.OutCubic
-                    running: (!root.isEditMode && !titleHoverArea.containsMouse || titleInput.activeFocus) && titleContainer.rotation !== 0.0
+                    running: (!root.isEditMode && !titleHoverArea.containsMouse || root.isEditingFolderTitle || titleInput.activeFocus) && titleContainer.rotation !== 0.0
                 }
 
                 readonly property real availableTitleWidth: Math.max(10, width - 16)
-                readonly property bool needsMarquee: !titleInput.activeFocus && (titleLabel.implicitWidth > availableTitleWidth)
+                readonly property bool needsMarquee: !root.isEditingFolderTitle && !titleInput.activeFocus && (titleLabel.implicitWidth > availableTitleWidth)
                 readonly property real scrollDistance: Math.max(0, titleLabel.implicitWidth - availableTitleWidth)
                 property real marqueeOffset: 0
 
@@ -1737,10 +1764,10 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         radius: 6
-                        color: titleInput.activeFocus
+                        color: (root.isEditingFolderTitle || titleInput.activeFocus)
                             ? Style.hoverFillFor(Color.popups.text, Color.accent)
                             : (titleHoverArea.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent")
-                        border.width: titleInput.activeFocus ? 1 : 0
+                        border.width: (root.isEditingFolderTitle || titleInput.activeFocus) ? 1 : 0
                         border.color: Color.accent
                         Behavior on color { ColorAnimation { duration: 150 } }
                     }
@@ -1776,7 +1803,7 @@ Item {
                         width: titleContainer.availableTitleWidth
                         height: parent.height
                         clip: true
-                        visible: !titleInput.activeFocus
+                        visible: !root.isEditingFolderTitle
 
                         Text {
                             id: titleLabel
@@ -1798,7 +1825,9 @@ Item {
                         id: titleInput
                         anchors.centerIn: parent
                         width: parent.width - 12
-                        visible: activeFocus
+                        visible: root.isEditingFolderTitle
+                        enabled: root.isEditingFolderTitle
+                        focus: root.isEditingFolderTitle
                         text: root.activeStackItem ? root.activeStackItem.name : "Folder"
                         font.family: Style.font.family
                         font.pixelSize: 12
@@ -1809,10 +1838,11 @@ Item {
                         clip: true
                         horizontalAlignment: Text.AlignHCenter
 
-                        onActiveFocusChanged: {
-                            if (activeFocus && root.activeStackItem) {
+                        onVisibleChanged: {
+                            if (visible && root.activeStackItem) {
                                 text = root.activeStackItem.name
                                 selectAll()
+                                forceActiveFocus()
                             }
                         }
 
@@ -1822,6 +1852,7 @@ Item {
                                 root.setPinned(DockModel.renameStack(root.pinnedIds, root.activeStackItem.id, n))
                                 root.activeStackItem.name = n
                             }
+                            root.isEditingFolderTitle = false
                             focus = false
                             stackCard.forceActiveFocus()
                         }
@@ -1831,21 +1862,22 @@ Item {
                         Keys.onEscapePressed: function(event) {
                             event.accepted = true
                             text = root.activeStackItem ? root.activeStackItem.name : "Folder"
-                            focus = false
+                            root.isEditingFolderTitle = false
                             root.activeStackItem = null
                         }
                         onEditingFinished: saveAndClose()
-                        onFocusChanged: { if (!focus) saveAndClose() }
                     }
 
                     MouseArea {
                         id: titleHoverArea
                         anchors.fill: parent
                         hoverEnabled: true
+                        visible: !root.isEditingFolderTitle
+                        enabled: !root.isEditingFolderTitle
                         cursorShape: (root.folderDragActiveIndex >= 0 || titleHoverArea.containsMouse) ? Qt.BlankCursor : Qt.IBeamCursor
                         onClicked: {
-                            if (!titleInput.activeFocus && root.activeStackItem) {
-                                titleInput.forceActiveFocus()
+                            if (root.activeStackItem) {
+                                root.isEditingFolderTitle = true
                             }
                         }
                     }
