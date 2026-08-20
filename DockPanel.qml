@@ -519,7 +519,9 @@ Item {
         var toplevels = root.knownWindows
         var active = ToplevelManager.activeToplevel
         var lib = root.shell ? root.shell.appLibrary : null
-        var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0) ? DesktopEntries.applications.values : root.appRows
+        var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
+            ? DesktopEntries.applications.values
+            : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
         root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib)
 
         // Refresh active stack item contents if open

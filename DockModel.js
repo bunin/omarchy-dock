@@ -13,7 +13,8 @@ var DEFAULT_PINNED = [
 
 function stripDesktop(id) {
     var value = String(id == null ? "" : id).trim();
-    if (value.slice(-8) === ".desktop") value = value.slice(0, -8);
+    if (value.slice(-8).toLowerCase() === ".desktop") value = value.slice(0, -8);
+    if (value.slice(-4).toLowerCase() === ".exe") value = value.slice(0, -4);
     return value;
 }
 
@@ -453,7 +454,37 @@ var KNOWN_APP_DEFAULTS = {
     "libreoffice-writer": { id: "libreoffice-writer", icon: "libreoffice-writer", rawIcon: "libreoffice-writer", name: "LibreOffice Writer" },
     "libreoffice-impress": { id: "libreoffice-impress", icon: "libreoffice-impress", rawIcon: "libreoffice-impress", name: "LibreOffice Impress" },
     "libreoffice-calc": { id: "libreoffice-calc", icon: "libreoffice-calc", rawIcon: "libreoffice-calc", name: "LibreOffice Calc" },
-    "discord": { id: "discord", icon: "omarchy-discord", rawIcon: "omarchy-discord", name: "Discord" }
+    "discord": { id: "discord", icon: "omarchy-discord", rawIcon: "omarchy-discord", name: "Discord" },
+    "google-photos": { id: "Google Photos", icon: "google-photos", rawIcon: "google-photos", name: "Google Photos" },
+    "photos.google.com": { id: "Google Photos", icon: "google-photos", rawIcon: "google-photos", name: "Google Photos" },
+    "chrome-photos.google.com__-default": { id: "Google Photos", icon: "google-photos", rawIcon: "google-photos", name: "Google Photos" },
+    "google-contacts": { id: "Google Contacts", icon: "google-contacts", rawIcon: "google-contacts", name: "Google Contacts" },
+    "contacts.google.com": { id: "Google Contacts", icon: "google-contacts", rawIcon: "google-contacts", name: "Google Contacts" },
+    "chrome-contacts.google.com__-default": { id: "Google Contacts", icon: "google-contacts", rawIcon: "google-contacts", name: "Google Contacts" },
+    "google-messages": { id: "Google Messages", icon: "google-messages", rawIcon: "google-messages", name: "Google Messages" },
+    "messages.google.com": { id: "Google Messages", icon: "google-messages", rawIcon: "google-messages", name: "Google Messages" },
+    "chrome-messages.google.com__web_conversations-default": { id: "Google Messages", icon: "google-messages", rawIcon: "google-messages", name: "Google Messages" },
+    "google-maps": { id: "Google Maps", icon: "google-maps", rawIcon: "google-maps", name: "Google Maps" },
+    "maps.google.com": { id: "Google Maps", icon: "google-maps", rawIcon: "google-maps", name: "Google Maps" },
+    "chrome-maps.google.com__-default": { id: "Google Maps", icon: "google-maps", rawIcon: "google-maps", name: "Google Maps" },
+    "gmail": { id: "Gmail", icon: "gmail", rawIcon: "gmail", name: "Gmail" },
+    "mail.google.com": { id: "Gmail", icon: "gmail", rawIcon: "gmail", name: "Gmail" },
+    "google-calendar": { id: "Google Calendar", icon: "google-calendar", rawIcon: "google-calendar", name: "Google Calendar" },
+    "calendar.google.com": { id: "Google Calendar", icon: "google-calendar", rawIcon: "google-calendar", name: "Google Calendar" },
+    "google-drive": { id: "Google Drive", icon: "google-drive", rawIcon: "google-drive", name: "Google Drive" },
+    "drive.google.com": { id: "Google Drive", icon: "google-drive", rawIcon: "google-drive", name: "Google Drive" },
+    "google-keep": { id: "Google Keep", icon: "google-keep", rawIcon: "google-keep", name: "Google Keep" },
+    "keep.google.com": { id: "Google Keep", icon: "google-keep", rawIcon: "google-keep", name: "Google Keep" },
+    "youtube": { id: "YouTube", icon: "youtube", rawIcon: "youtube", name: "YouTube" },
+    "youtube.com": { id: "YouTube", icon: "youtube", rawIcon: "youtube", name: "YouTube" },
+    "youtube-music": { id: "YouTube Music", icon: "youtube-music", rawIcon: "youtube-music", name: "YouTube Music" },
+    "music.youtube.com": { id: "YouTube Music", icon: "youtube-music", rawIcon: "youtube-music", name: "YouTube Music" },
+    "yandex-mail": { id: "Яндекс Почта", icon: "yandex-mail", rawIcon: "yandex-mail", name: "Яндекс Почта" },
+    "mail.yandex.ru": { id: "Яндекс Почта", icon: "yandex-mail", rawIcon: "yandex-mail", name: "Яндекс Почта" },
+    "yandex-music": { id: "Яндекс Музыка", icon: "yandex-music", rawIcon: "yandex-music", name: "Яндекс Музыка" },
+    "music.yandex.ru": { id: "Яндекс Музыка", icon: "yandex-music", rawIcon: "yandex-music", name: "Яндекс Музыка" },
+    "photoshop": { id: "Photoshop 2017", icon: "Photoshop2017", rawIcon: "Photoshop2017", name: "Photoshop 2017" },
+    "photoshop 2017": { id: "Photoshop 2017", icon: "Photoshop2017", rawIcon: "Photoshop2017", name: "Photoshop 2017" }
 };
 
 var FALLBACK_ICON_CANDIDATES = {
@@ -477,7 +508,40 @@ var FALLBACK_ICON_CANDIDATES = {
     "discord": ["omarchy-discord", "discord", "com.discordapp.Discord"],
     "telegram": ["org.telegram.desktop", "telegram", "telegramdesktop"],
     "obsidian": ["obsidian", "md.obsidian.Obsidian"],
-    "spotify": ["spotify", "spotify-client"]
+    "spotify": ["spotify", "spotify-client"],
+    "google-photos": ["google-photos", "photos", "googlephotos"],
+    "photos": ["google-photos", "photos"],
+    "photos.google.com": ["google-photos", "photos"],
+    "chrome-photos.google.com__-default": ["google-photos", "photos"],
+    "google-contacts": ["google-contacts", "contacts", "googlecontacts"],
+    "contacts": ["google-contacts", "contacts"],
+    "contacts.google.com": ["google-contacts", "contacts"],
+    "chrome-contacts.google.com__-default": ["google-contacts", "contacts"],
+    "google-messages": ["google-messages", "messages", "googlemessages"],
+    "messages": ["google-messages", "messages"],
+    "messages.google.com": ["google-messages", "messages"],
+    "chrome-messages.google.com__web_conversations-default": ["google-messages", "messages"],
+    "google-maps": ["google-maps", "maps", "googlemaps"],
+    "maps.google.com": ["google-maps", "maps"],
+    "chrome-maps.google.com__-default": ["google-maps", "maps"],
+    "gmail": ["gmail", "google-gmail", "mail-google"],
+    "mail.google.com": ["gmail", "google-gmail"],
+    "google-calendar": ["google-calendar", "calendar-google"],
+    "calendar.google.com": ["google-calendar", "calendar-google"],
+    "google-drive": ["google-drive", "drive-google"],
+    "drive.google.com": ["google-drive", "drive-google"],
+    "google-keep": ["google-keep", "keep-google"],
+    "keep.google.com": ["google-keep", "keep-google"],
+    "youtube": ["youtube", "youtube-browser"],
+    "youtube.com": ["youtube", "youtube-browser"],
+    "youtube-music": ["youtube-music", "music-youtube"],
+    "music.youtube.com": ["youtube-music", "music-youtube"],
+    "yandex-mail": ["yandex-mail", "mail-yandex", "yandex-browser-mail"],
+    "mail.yandex.ru": ["yandex-mail", "mail-yandex"],
+    "yandex-music": ["yandex-music", "music-yandex"],
+    "music.yandex.ru": ["yandex-music", "music-yandex"],
+    "photoshop": ["Photoshop2017", "photoshop", "adobe-photoshop"],
+    "photoshop 2017": ["Photoshop2017", "photoshop", "adobe-photoshop"]
 };
 
 function getCandidates(rawIcon, icon, appId) {
@@ -505,6 +569,26 @@ function getCandidates(rawIcon, icon, appId) {
         var fb2 = FALLBACK_ICON_CANDIDATES[lastPart];
         for (var j = 0; j < fb2.length; j++) add(fb2[j]);
     }
+
+    var chromeDom = extractChromeDomain(clean);
+    if (chromeDom) {
+        add(chromeDom);
+        if (FALLBACK_ICON_CANDIDATES[chromeDom]) {
+            var fbc = FALLBACK_ICON_CANDIDATES[chromeDom];
+            for (var fc = 0; fc < fbc.length; fc++) add(fbc[fc]);
+        }
+        var domParts = chromeDom.split(".");
+        for (var dp = 0; dp < domParts.length; dp++) {
+            var dpart = domParts[dp];
+            if (dpart.length >= 3 && dpart !== "com" && dpart !== "org" && dpart !== "net") {
+                add(dpart);
+                if (FALLBACK_ICON_CANDIDATES[dpart]) {
+                    var fbd = FALLBACK_ICON_CANDIDATES[dpart];
+                    for (var fd = 0; fd < fbd.length; fd++) add(fbd[fd]);
+                }
+            }
+        }
+    }
     return list;
 }
 
@@ -527,6 +611,12 @@ function extractChromeDomain(appClass) {
     return "";
 }
 
+function unwrapEntry(e) {
+    if (!e) return null;
+    if (e.entry && typeof e.entry === "object") return e.entry;
+    return e;
+}
+
 function findEntry(desktopEntries, appId) {
     var id = stripDesktop(appId);
     if (!id) return null;
@@ -537,17 +627,30 @@ function findEntry(desktopEntries, appId) {
         var targetNorm = normalizeKey(target);
         var chromeDom = extractChromeDomain(id);
 
-        // 1. Exact match on entry.id (with and without .desktop)
+        // 1. Exact match on entry.id (with and without .desktop / .exe)
         for (var i = 0; i < list.length; i++) {
-            var entry = list[i];
+            var entry = unwrapEntry(list[i]);
             if (!entry) continue;
             var entryId = stripDesktop(entry.id || "").toLowerCase();
-            if (entryId === target) return entry;
+            if (entryId === target || entryId.indexOf(target) === 0) return entry;
+        }
+
+        // 1b. Exact URL / Domain match in exec or entry.id for Chrome Web Apps
+        if (chromeDom.length > 0) {
+            for (var c = 0; c < list.length; c++) {
+                var ce = unwrapEntry(list[c]);
+                if (!ce) continue;
+                var cExec = String(ce.exec || "").toLowerCase();
+                var cId = stripDesktop(ce.id || "").toLowerCase();
+                if (cExec.indexOf(chromeDom) !== -1 || cId.indexOf(chromeDom) !== -1) {
+                    return ce;
+                }
+            }
         }
 
         // 2. Normalized key match on entry.id, name, or icon
         for (var j = 0; j < list.length; j++) {
-            var e = list[j];
+            var e = unwrapEntry(list[j]);
             if (!e) continue;
             var eId = stripDesktop(e.id || "").toLowerCase();
             var eIdNorm = normalizeKey(eId);
@@ -561,42 +664,73 @@ function findEntry(desktopEntries, appId) {
             }
         }
 
-        // 3. Web App / Chrome domain matching in exec or id
+        // 2b. Name token match (e.g. "photoshop" matching "Photoshop 2017" or "Adobe Photoshop")
+        for (var n = 0; n < list.length; n++) {
+            var en = unwrapEntry(list[n]);
+            if (!en) continue;
+            var enNameTokens = String(en.name || "").toLowerCase().split(/[\s\-_\.]+/);
+            for (var nt = 0; nt < enNameTokens.length; nt++) {
+                if (enNameTokens[nt] === target) return en;
+            }
+        }
+
+        // 3. Web App / Chrome domain token word matching (matching whole words, NOT substring like photos in photoshop)
         if (chromeDom.length > 0) {
-            for (var c = 0; c < list.length; c++) {
-                var ce = list[c];
-                if (!ce) continue;
-                var cExec = String(ce.exec || "").toLowerCase();
-                var cId = String(ce.id || "").toLowerCase();
-                var cName = String(ce.name || "").toLowerCase();
-                if (cExec.indexOf(chromeDom) !== -1 || cId.indexOf(chromeDom) !== -1) {
-                    return ce;
+            var domParts = chromeDom.split(".");
+            var meaningfulParts = [];
+            for (var p = 0; p < domParts.length; p++) {
+                var part = domParts[p];
+                if (part.length >= 3 && part !== "com" && part !== "org" && part !== "net" && part !== "web" && part !== "app" && part !== "google" && part !== "yandex" && part !== "microsoft" && part !== "apple") {
+                    meaningfulParts.push(part);
                 }
-                // Check key parts of domain, e.g. "maps" from "maps.google.com"
-                var domParts = chromeDom.split(".");
-                for (var p = 0; p < domParts.length; p++) {
-                    var part = domParts[p];
-                    if (part.length >= 3 && part !== "com" && part !== "org" && part !== "net" && part !== "google" && part !== "web" && part !== "app") {
-                        if (cName.indexOf(part) !== -1 || cExec.indexOf(part) !== -1) {
-                            return ce;
+            }
+
+            if (meaningfulParts.length > 0) {
+                for (var c2 = 0; c2 < list.length; c2++) {
+                    var ce2 = unwrapEntry(list[c2]);
+                    if (!ce2) continue;
+                    var cNameTokens = String(ce2.name || "").toLowerCase().split(/[\s\-_\.]+/);
+                    var cIdTokens = stripDesktop(ce2.id || "").toLowerCase().split(/[\s\-_\.]+/);
+                    var cIconTokens = String(ce2.icon || "").toLowerCase().split(/[\s\-_\.]+/);
+                    var allTokens = cNameTokens.concat(cIdTokens).concat(cIconTokens);
+
+                    var allMatched = true;
+                    for (var mp = 0; mp < meaningfulParts.length; mp++) {
+                        var mpart = meaningfulParts[mp];
+                        var partFound = false;
+                        for (var t = 0; t < allTokens.length; t++) {
+                            var tok = allTokens[t];
+                            if (tok === mpart || (mpart.endsWith("s") && tok === mpart.slice(0, -1)) || (tok.endsWith("s") && tok.slice(0, -1) === mpart)) {
+                                partFound = true;
+                                break;
+                            }
                         }
+                        if (!partFound) {
+                            allMatched = false;
+                            break;
+                        }
+                    }
+                    if (allMatched) {
+                        return ce2;
                     }
                 }
             }
         }
 
-        // 4. Substring / Exec binary match
+        // 4. Substring / Exec binary match (exact binary name or exact name)
         for (var k = 0; k < list.length; k++) {
-            var el = list[k];
+            var el = unwrapEntry(list[k]);
             if (!el) continue;
             var exec = String(el.exec || "").toLowerCase();
+            var execBin = exec.split(/\s+/)[0].split("/").pop();
             var name = String(el.name || "").toLowerCase();
-            if (exec === target || exec.indexOf(target) !== -1 || name === target) return el;
+            if (execBin === target || name === target) return el;
         }
     }
 
     var cleanId = id.toLowerCase();
     if (KNOWN_APP_DEFAULTS[cleanId]) return KNOWN_APP_DEFAULTS[cleanId];
+    if (chromeDom && KNOWN_APP_DEFAULTS[chromeDom]) return KNOWN_APP_DEFAULTS[chromeDom];
 
     return null;
 }
@@ -606,16 +740,25 @@ function resolveIcon(entry, appId, appLibrary) {
         return entry.iconSource;
     }
     if (entry && entry.icon) {
+        var iconVal = String(entry.icon).trim();
+        if (iconVal.indexOf("file://") === 0 || iconVal.indexOf("image://") === 0) return iconVal;
+        if (iconVal.charAt(0) === "/") return "file://" + iconVal;
         if (appLibrary && typeof appLibrary.iconSource === "function") {
-            var src = appLibrary.iconSource(entry.icon);
+            var src = appLibrary.iconSource(iconVal);
             if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) return src;
         }
-        return entry.icon;
+        return iconVal;
     }
     var id = stripDesktop(appId);
     if (appLibrary && typeof appLibrary.iconSource === "function") {
-        var src2 = appLibrary.iconSource(id);
-        if (src2 && src2.length > 0 && src2.indexOf("application-x-executable") === -1) return src2;
+        var candidates = getCandidates(entry ? entry.icon : "", "", id);
+        for (var i = 0; i < candidates.length; i++) {
+            var cand = candidates[i];
+            if (cand.indexOf("file://") === 0 || cand.indexOf("image://") === 0) return cand;
+            if (cand.charAt(0) === "/") return "file://" + cand;
+            var cSrc = appLibrary.iconSource(cand);
+            if (cSrc && cSrc.length > 0 && cSrc.indexOf("application-x-executable") === -1) return cSrc;
+        }
 
         // Try hyphenated/spaced variations (e.g. "Google Maps" -> "google-maps")
         var hyp = id.toLowerCase().replace(/\s+/g, "-");
@@ -643,6 +786,8 @@ function matchToplevel(toplevel, appId, entry) {
     if (!cleanId && !entry) return false;
     if (!appClass) return false;
 
+    var appClassClean = stripDesktop(appClass);
+
     var chromeDom = extractChromeDomain(appClass);
     var isWebAppWindow = (chromeDom.length > 0);
 
@@ -652,21 +797,28 @@ function matchToplevel(toplevel, appId, entry) {
         return false;
     }
 
-    // 1. Direct class match
-    if (cleanId && (appClass === cleanId || appClass === (cleanId + ".desktop"))) return true;
+    // 1. Direct class match (with and without .desktop / .exe)
+    if (cleanId && (appClass === cleanId || appClassClean === cleanId || appClass === (cleanId + ".desktop") || appClass === (cleanId + ".exe"))) return true;
 
     // 2. Normalized match
-    var normClass = normalizeKey(appClass);
+    var normClass = normalizeKey(appClassClean);
     var normId = cleanId ? normalizeKey(cleanId) : "";
     if (normId.length > 0 && normClass === normId) return true;
 
     // 3. Entry ID, Name, Icon and Exec match
     if (entry) {
         var entryId = stripDesktop(entry.id || "").toLowerCase();
-        if (entryId && (appClass === entryId || appClass === (entryId + ".desktop") || normClass === normalizeKey(entryId))) return true;
+        if (entryId && (appClass === entryId || appClassClean === entryId || normClass === normalizeKey(entryId))) return true;
 
         var entryName = String(entry.name || "").toLowerCase();
-        if (entryName && (normClass === normalizeKey(entryName))) return true;
+        if (entryName) {
+            var normEntryName = normalizeKey(entryName);
+            if (normClass === normEntryName) return true;
+            var nameTokens = entryName.split(/[\s\-_\.]+/);
+            for (var nt = 0; nt < nameTokens.length; nt++) {
+                if (nameTokens[nt] === appClassClean) return true;
+            }
+        }
 
         var entryIcon = String(entry.icon || "").toLowerCase();
         if (entryIcon && (normClass === normalizeKey(entryIcon))) return true;
@@ -674,7 +826,7 @@ function matchToplevel(toplevel, appId, entry) {
         if (entry.exec) {
             var execStr = String(entry.exec).trim().toLowerCase();
             var execBase = execStr.split(/\s+/)[0].split("/").pop();
-            if (execBase && !isWebAppWindow && (appClass === execBase || appClass === (execBase + ".desktop"))) return true;
+            if (execBase && !isWebAppWindow && (appClass === execBase || appClassClean === execBase)) return true;
         }
     }
 
@@ -685,15 +837,23 @@ function matchToplevel(toplevel, appId, entry) {
         if (cleanId && cleanId.indexOf(chromeDom) !== -1) return true;
         if (normId.length > 0 && normId.indexOf(normalizeKey(chromeDom)) !== -1) return true;
 
-        // Check domain keywords e.g. "maps" in "maps.google.com" matching "Google Maps"
+        // Check specific service keywords (e.g. "photos" in "photos.google.com") matching candidate dock item tokens
         var domParts = chromeDom.split(".");
         for (var p = 0; p < domParts.length; p++) {
             var part = domParts[p];
-            if (part.length >= 3 && part !== "com" && part !== "org" && part !== "net" && part !== "google" && part !== "web" && part !== "app") {
-                if (entry && entry.name && entry.name.toLowerCase().indexOf(part) !== -1) return true;
-                if (entry && entry.icon && entry.icon.toLowerCase().indexOf(part) !== -1) return true;
-                if (cleanId && cleanId.indexOf(part) !== -1) return true;
-                if (entry && entry.name && title.indexOf(entry.name.toLowerCase()) !== -1) return true;
+            if (part.length >= 3 && part !== "com" && part !== "org" && part !== "net" && part !== "web" && part !== "app" && part !== "google" && part !== "yandex" && part !== "microsoft" && part !== "apple") {
+                var eNameTokens = entry && entry.name ? String(entry.name).toLowerCase().split(/[\s\-_\.]+/) : [];
+                var eIdTokens = entry && entry.id ? stripDesktop(entry.id).toLowerCase().split(/[\s\-_\.]+/) : [];
+                var eIconTokens = entry && entry.icon ? String(entry.icon).toLowerCase().split(/[\s\-_\.]+/) : [];
+                var cleanIdTokens = cleanId ? cleanId.split(/[\s\-_\.]+/) : [];
+                var allETokens = eNameTokens.concat(eIdTokens).concat(eIconTokens).concat(cleanIdTokens);
+
+                for (var t = 0; t < allETokens.length; t++) {
+                    var tok = allETokens[t];
+                    if (tok === part || (part.endsWith("s") && tok === part.slice(0, -1)) || (tok.endsWith("s") && tok.slice(0, -1) === part)) {
+                        return true;
+                    }
+                }
             }
         }
     }
