@@ -632,10 +632,18 @@ function findEntry(desktopEntries, appId) {
             var entry = unwrapEntry(list[i]);
             if (!entry) continue;
             var entryId = stripDesktop(entry.id || "").toLowerCase();
-            if (entryId === target || entryId.indexOf(target) === 0) return entry;
+            if (entryId === target) return entry;
         }
 
-        // 1b. Exact URL / Domain match in exec or entry.id for Chrome Web Apps
+        // 1b. Exact match on entry.name (case-insensitive)
+        for (var m = 0; m < list.length; m++) {
+            var em = unwrapEntry(list[m]);
+            if (!em) continue;
+            var emName = String(em.name || "").toLowerCase();
+            if (emName === target) return em;
+        }
+
+        // 1c. Exact URL / Domain match in exec or entry.id for Chrome Web Apps
         if (chromeDom.length > 0) {
             for (var c = 0; c < list.length; c++) {
                 var ce = unwrapEntry(list[c]);
@@ -664,13 +672,16 @@ function findEntry(desktopEntries, appId) {
             }
         }
 
-        // 2b. Name token match (e.g. "photoshop" matching "Photoshop 2017" or "Adobe Photoshop")
-        for (var n = 0; n < list.length; n++) {
-            var en = unwrapEntry(list[n]);
-            if (!en) continue;
-            var enNameTokens = String(en.name || "").toLowerCase().split(/[\s\-_\.]+/);
-            for (var nt = 0; nt < enNameTokens.length; nt++) {
-                if (enNameTokens[nt] === target) return en;
+        // 2b. Known App Default ID match (e.g. target "photoshop" matching "Photoshop 2017.desktop")
+        if (KNOWN_APP_DEFAULTS[target]) {
+            var defId = stripDesktop(KNOWN_APP_DEFAULTS[target].id || "").toLowerCase();
+            if (defId && defId !== target) {
+                for (var kd = 0; kd < list.length; kd++) {
+                    var kde = unwrapEntry(list[kd]);
+                    if (!kde) continue;
+                    var kdeId = stripDesktop(kde.id || "").toLowerCase();
+                    if (kdeId === defId) return kde;
+                }
             }
         }
 
