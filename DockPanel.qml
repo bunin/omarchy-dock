@@ -494,6 +494,74 @@ Item {
         return Math.round(Math.max(6, Math.min(screenH - cardH - 6, iconCenterY - cardH / 2)))
     }
 
+    function closePopups() {
+        if (root.activeStackItem !== null || root.activeMenuItem !== null || root.isEditMode || root.isEditingFolderTitle) {
+            root.activeStackItem = null
+            root.activeMenuItem = null
+            root.isEditMode = false
+            root.isFolderEditMode = false
+            root.isEditingFolderTitle = false
+            root.folderDragActiveIndex = -1
+            root.folderDragTargetIndex = -1
+            root.currentFolderMergeTargetIndex = -1
+        }
+    }
+
+    // Auto-dismiss open folders, folder icon editor and edit mode when system notifications / OSD appear
+    readonly property var notifService: (root.shell && typeof root.shell.serviceFor === "function") ? root.shell.serviceFor("omarchy.notifications") : null
+    readonly property var notifPopupModel: (root.notifService && root.notifService.popupModel) ? root.notifService.popupModel : null
+    readonly property int notifPopupCount: notifPopupModel ? notifPopupModel.count : 0
+
+    onNotifPopupCountChanged: {
+        if (notifPopupCount > 0) {
+            root.closePopups()
+        }
+    }
+
+    readonly property bool isOsdOpen: {
+        if (!root.shell) return false
+        if (root.shell.openPanelIds && root.shell.openPanelIds["omarchy.osd"]) return true
+        if (root.shell.appLibrary && root.shell.appLibrary.launchOsdOpen) return true
+        if (typeof root.shell.isPluginOpen === "function" && root.shell.isPluginOpen("omarchy.osd")) return true
+        return false
+    }
+
+    onIsOsdOpenChanged: {
+        if (isOsdOpen) {
+            root.closePopups()
+        }
+    }
+
+    readonly property var osdLoader: (root.shell && root.shell.panelLoaders) ? root.shell.panelLoaders["omarchy.osd"] : null
+    readonly property var osdItem: (osdLoader && osdLoader.item) ? osdLoader.item : null
+    readonly property bool osdItemOpened: (osdItem && osdItem.opened !== undefined) ? osdItem.opened : false
+
+    onOsdItemOpenedChanged: {
+        if (osdItemOpened) {
+            root.closePopups()
+        }
+    }
+
+    Connections {
+        target: root.shell ? root.shell : null
+        function onOpenPanelIdsChanged() {
+            if (root.shell && root.shell.openPanelIds) {
+                if (root.shell.openPanelIds["omarchy.osd"] || root.shell.openPanelIds["omarchy.notifications"]) {
+                    root.closePopups()
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: (root.shell && root.shell.appLibrary) ? root.shell.appLibrary : null
+        function onLaunchOsdOpenChanged() {
+            if (root.shell && root.shell.appLibrary && root.shell.appLibrary.launchOsdOpen) {
+                root.closePopups()
+            }
+        }
+    }
+
     function refresh() {
         root.pinnedIds = DockModel.parsePinned(userPinnedFile.text() || "")
         root.refreshLayers()
