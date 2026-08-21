@@ -103,7 +103,7 @@ function serializePinned(pinnedList) {
     return JSON.stringify({ pinned: cleaned }, null, 2);
 }
 
-function togglePinned(pinnedList, appId) {
+function togglePinned(pinnedList, appId, maxItems) {
     var arr = Array.isArray(pinnedList) ? pinnedList.slice() : [];
     var id = stripDesktop(appId);
     if (!id) return arr;
@@ -119,6 +119,10 @@ function togglePinned(pinnedList, appId) {
                 return arr;
             }
         }
+    }
+
+    if (maxItems && maxItems > 0 && arr.length >= maxItems) {
+        return arr;
     }
 
     arr.push(id);

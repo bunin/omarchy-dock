@@ -569,12 +569,13 @@ BarWidget {
             onClicked: {
               root.settingsOpen = false
               var sh = root.shell || (root.bar ? root.bar.shell : null)
-              if (sh && typeof sh.summon === "function") {
-                sh.summon("rosakodu.dock", { action: "openWidgetPicker" })
+              var dockSvc = (sh && typeof sh.serviceFor === "function") ? sh.serviceFor("rosakodu.dock") : null
+              if (dockSvc && typeof dockSvc.openWidgetPicker === "function") {
+                dockSvc.openWidgetPicker()
               } else if (root.bar && typeof root.bar.run === "function") {
-                root.bar.run("omarchy-shell shell summon rosakodu.dock '{\"action\":\"openWidgetPicker\"}'")
+                root.bar.run("omarchy-shell rosakodu.dock openWidgetPicker")
               } else {
-                Util.execDetached("omarchy-shell shell summon rosakodu.dock '{\"action\":\"openWidgetPicker\"}'")
+                Util.execDetached("omarchy-shell rosakodu.dock openWidgetPicker")
               }
             }
           }

@@ -102,10 +102,18 @@ Item {
         function removeWidget(widgetId: string): string { root.removeDockWidget(widgetId, ""); return "ok" }
         function setWidgetsEnabled(val: string): string { root.setWidgetsEnabled(val === "true" || val === "1"); return "ok" }
         function setWidgetPosition(pos: string): string { root.setWidgetPosition(pos); return "ok" }
+        function setEditMode(val: string): string { root.isEditMode = (val === "true" || val === "1"); return "ok" }
         function setDockEnabled(val: string): string { root.dockEnabled = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setAutohide(val: string): string { root.autohide = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setShowFolderTitles(val: string): string { root.showFolderTitles = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function ping(): string { return "ok" }
+    }
+
+    function openWidgetPicker() {
+        root.opened = true
+        if (widgetPicker) {
+            widgetPicker.opened = true
+        }
     }
 
     // Methods called by shell.summon / shell.hide / shell.toggle
@@ -307,8 +315,8 @@ Item {
     property bool autohide: false
     property bool showFolderTitles: true
     property bool widgetsEnabled: true
-    property string widgetPosition: "right"
-    property var dockWidgets: []
+    property string widgetPosition: "left"
+    property var dockWidgets: ["omarchy.apps"]
     property var widgetSavedPositions: ({})
     property bool isDockHovered: false
     property bool isStackHovered: false
@@ -372,7 +380,7 @@ Item {
 
     readonly property int activeWidgetsCount: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.length : 0
     readonly property bool hasWidgets: root.activeWidgetsCount > 0
-    readonly property real separatorSize: root.hasWidgets ? 12 : 0
+    readonly property real separatorSize: root.hasWidgets ? 8 : 0
     readonly property real itemsWidth: (root.dockItems.length * root.slotSize)
 
     property string clockDisplayText: ""
@@ -393,6 +401,13 @@ Item {
     readonly property real widgetsWidth: (root.hasClockWidget && !root.isVertical)
         ? ((root.activeWidgetsCount - 1) * root.slotSize + root.clockSlotWidth)
         : (root.activeWidgetsCount * root.slotSize)
+    // Dynamic max items limit for dock bar based on logical screen dimensions & scale (15 items on 1080p @ 1.6x, scales dynamically for Ultrawide 21:9 / 32:9)
+    readonly property real logicalScreenWidth: (screen && screen.width > 0) ? screen.width : 1200
+    readonly property real logicalScreenHeight: (screen && screen.height > 0) ? screen.height : 675
+    readonly property int maxDockItems: root.isVertical
+        ? Math.max(5, Math.round(15 * (logicalScreenHeight / 675)))
+        : Math.max(15, Math.round(15 * (logicalScreenWidth / 1200)))
+
     readonly property real totalDockDimension: Math.max(root.slotSize, itemsWidth + (root.hasWidgets ? (separatorSize + widgetsWidth) : 0))
 
     onDockEnabledChanged: {
@@ -454,6 +469,11 @@ Item {
                 if (s && s.widgetSavedPositions !== undefined && typeof s.widgetSavedPositions === "object") {
                     root.widgetSavedPositions = s.widgetSavedPositions
                 }
+            } else {
+                root.dockWidgets = ["omarchy.apps"]
+                root.widgetPosition = "left"
+                root.widgetsEnabled = true
+                saveSettings()
             }
         } catch(e) {}
     }
@@ -482,8 +502,8 @@ Item {
                 var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
                 for (var i = 0; i < root.dockWidgets.length; i++) {
                     var wId = root.dockWidgets[i]
-                    if (wId) {
-                        var defReg = (wId === "omarchy.menu") ? "left" : ((wId === "omarchy.weather" || wId === "omarchy.clock" || wId === "omarchy.system-update" || wId === "omarchy.indicators") ? "center" : "right")
+                    if (wId && wId !== "omarchy.apps") {
+                        var defReg = ((wId === "omarchy.weather" || wId === "omarchy.clock" || wId === "omarchy.system-update" || wId === "omarchy.indicators") ? "center" : "right")
                         currentSaved = DockModel.returnWidgetToBar(root.shell, wId, currentSaved, defReg, shellConfigFile)
                     }
                 }
@@ -506,30 +526,34 @@ Item {
         if (root.dockWidgets && root.dockWidgets.length > 0) {
             for (var i = 0; i < root.dockWidgets.length; i++) {
                 var prevId = root.dockWidgets[i]
-                if (prevId && prevId !== widgetId) {
-                    var prevDefRegion = (prevId === "omarchy.menu") ? "left" : ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
+                if (prevId && prevId !== widgetId && prevId !== "omarchy.apps") {
+                    var prevDefRegion = ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
                     currentSaved = DockModel.returnWidgetToBar(root.shell, prevId, currentSaved, prevDefRegion, shellConfigFile)
                 }
             }
         }
         root.dockWidgets = [widgetId]
-        currentSaved = DockModel.removeWidgetFromBar(root.shell, widgetId, currentSaved, shellConfigFile)
+        if (widgetId !== "omarchy.apps") {
+            currentSaved = DockModel.removeWidgetFromBar(root.shell, widgetId, currentSaved, shellConfigFile)
+        }
         root.widgetSavedPositions = currentSaved
         saveSettings()
     }
 
     function removeDockWidget(widgetId, targetRegion) {
-        var defRegion = targetRegion || ((widgetId === "omarchy.menu") ? "left" : ((widgetId === "omarchy.weather" || widgetId === "omarchy.clock" || widgetId === "omarchy.system-update" || widgetId === "omarchy.indicators") ? "center" : "right"))
+        var defRegion = targetRegion || ((widgetId === "omarchy.weather" || widgetId === "omarchy.clock" || widgetId === "omarchy.system-update" || widgetId === "omarchy.indicators") ? "center" : "right")
         var next = DockModel.removeWidgetFromDockList(root.dockWidgets, widgetId)
         root.dockWidgets = next.slice()
-        var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
-        currentSaved = DockModel.returnWidgetToBar(root.shell, widgetId, currentSaved, defRegion, shellConfigFile)
-        root.widgetSavedPositions = currentSaved
+        if (widgetId !== "omarchy.apps") {
+            var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
+            currentSaved = DockModel.returnWidgetToBar(root.shell, widgetId, currentSaved, defRegion, shellConfigFile)
+            root.widgetSavedPositions = currentSaved
+        }
         saveSettings()
     }
 
     function getWidgetSource(widgetId) {
-        if (!widgetId) return ""
+        if (!widgetId || widgetId === "omarchy.apps") return ""
         var manifest = (root.shell && root.shell.pluginRegistry && root.shell.pluginRegistry.installedPlugins) ? root.shell.pluginRegistry.installedPlugins[widgetId] : null
         if (manifest && root.shell && root.shell.pluginRegistry) {
             var ep = root.shell.pluginRegistry.entryPointUrl(manifest, "barWidget")
@@ -547,7 +571,7 @@ Item {
 
     function getWidgetIcon(widgetId, item) {
         if (!widgetId) return "󰒓"
-        if (widgetId === "omarchy.menu") return "\ue900"
+        if (widgetId === "omarchy.apps") return "󰀻"
         if (widgetId === "omarchy.monitor") {
             return (Quickshell.screens && Quickshell.screens.length > 1) ? "󰍺" : "󰍹"
         }
@@ -771,7 +795,7 @@ Item {
         root.isEditingFolderTitle = false
         root.folderDragActiveIndex = -1
         root.folderDragTargetIndex = -1
-        root.currentFolderMergeTargetIndex = -1
+        root.currentMergeTargetIndex = -1
         if (widgetPicker) widgetPicker.opened = false
         root.closeAllWidgetPanels()
     }
@@ -1044,7 +1068,9 @@ Item {
             root.checkAndApplyTheme()
         }
         onFileChanged: {
+            reload()
             root.isGtkSettingsLoaded = true
+            root.iconsReady = false
             root.checkAndApplyTheme()
         }
     }
@@ -1065,9 +1091,9 @@ Item {
     property bool iconsReady: false
     property bool isDockVisualReady: false
 
-    function checkAndApplyTheme() {
-        if (root.iconsReady) return
+    property string activeThemeName: ""
 
+    function checkAndApplyTheme() {
         var txt = gtkSettingsFile.text()
         if (!txt || txt.trim().length === 0) {
             return
@@ -1096,6 +1122,7 @@ Item {
                         }
                     }
                     if (hasThemeIcons) {
+                        root.activeThemeName = themeName
                         root.iconRevision++
                         root.doUpdateDockItems()
                         root.iconsReady = true
@@ -1107,6 +1134,7 @@ Item {
         }
 
         // 2. Если сторонней темы нет — отображаем стандартные системные иконки
+        root.activeThemeName = themeName
         root.doUpdateDockItems()
         root.iconsReady = true
     }
@@ -1119,10 +1147,10 @@ Item {
         onTriggered: root.checkAndApplyTheme()
     }
 
-    // Защитный таймер: если поиск сторонней темы затянулся (экстремальный сбой), показываем стандартные
+    // Защитный таймер: если фоновый поиск темы затянулся, показываем доступные иконки
     Timer {
         id: iconsSafetyTimer
-        interval: 15000
+        interval: 10000
         running: !root.iconsReady
         repeat: false
         onTriggered: {
@@ -1148,7 +1176,12 @@ Item {
     Connections {
         target: (shell && shell.appLibrary) ? shell.appLibrary : null
         function onIconIndexChanged() {
-            root.checkAndApplyTheme()
+            if (!root.iconsReady) {
+                root.checkAndApplyTheme()
+            } else {
+                root.iconRevision++
+                root.doUpdateDockItems()
+            }
         }
         function onAppsChanged() {
             root.iconRevision++
@@ -1428,7 +1461,7 @@ Item {
                         }
 
                         onTogglePinRequested: function(appId) {
-                            root.setPinned(DockModel.togglePinned(root.pinnedIds, appId))
+                            root.setPinned(DockModel.togglePinned(root.pinnedIds, appId, root.maxDockItems))
                         }
 
                         onOriginalAppLaunched: function(appId) {
@@ -1529,7 +1562,7 @@ Item {
                             y: Math.round((parent.height - height) / 2) - 1
                             width: (modelData === "omarchy.clock" && !root.isVertical) ? (widgetSlotRoot.width - 10) : root.iconBaseSize
                             height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
-                            scale: root.isEditMode ? 0.82 : (widgetSlotMouse.containsMouse ? 1.10 : 1.0)
+                            scale: widgetSlotMouse.containsMouse ? 1.10 : 1.0
                             Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
                             // 1. Live Clock Horizontal Text Display (Matches status bar exactly)
@@ -1580,9 +1613,9 @@ Item {
                                 anchors.centerIn: parent
                                 width: root.iconBaseSize
                                 height: root.iconBaseSize
-                                text: (modelData === "omarchy.menu") ? "\ue900" : root.getWidgetIcon(modelData, widgetLoader.item)
-                                fontFamily: (modelData === "omarchy.menu") ? "omarchy" : Style.font.family
-                                fontSize: (modelData === "omarchy.menu") ? 18 : 22
+                                text: root.getWidgetIcon(modelData, widgetLoader.item)
+                                fontFamily: Style.font.family
+                                fontSize: 22
                                 color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
@@ -1609,27 +1642,25 @@ Item {
                             }
                         }
 
-                        // MouseArea for Click to Open Widget Panel / Cycle Format / Timezone / Remove in Edit Mode
+                        // MouseArea for Click to Open Widget Panel / Cycle Format / Timezone
                         MouseArea {
                             id: widgetSlotMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                            cursorShape: root.isEditMode ? Qt.PointingHandCursor : Qt.PointingHandCursor
+                            cursorShape: root.isEditMode ? Qt.ArrowCursor : Qt.PointingHandCursor
                             onClicked: function(mouse) {
                                 if (root.isEditMode) {
                                     if (mouse.button === Qt.RightButton) {
                                         root.isEditMode = false
-                                        return
                                     }
-                                    root.removeDockWidget(modelData, "")
                                     return
                                 }
-                                if (modelData === "omarchy.menu") {
-                                    if (root.shell && typeof root.shell.summon === "function") {
-                                        root.shell.summon("omarchy.menu")
+                                if (modelData === "omarchy.apps") {
+                                    if (mouse.button === Qt.RightButton) {
+                                        Util.execDetached("omarchy-menu toggle root")
                                     } else {
-                                        Util.execDetached("omarchy-menu")
+                                        Util.execDetached("omarchy-menu toggle apps")
                                     }
                                     return
                                 }
@@ -1656,40 +1687,6 @@ Item {
                                             else target.open()
                                         }
                                     }
-                                }
-                            }
-                        }
-
-                        // Remove from Dock Badge ("-") in Edit Mode
-                        Item {
-                            id: removeWidgetBadge
-                            visible: root.isEditMode && !root.isAnyDragging
-                            anchors.horizontalCenter: widgetWrapper.horizontalCenter
-                            anchors.bottom: widgetWrapper.top
-                            anchors.bottomMargin: -5
-                            width: 20
-                            height: 20
-                            z: 200
-
-                            DockGlyph {
-                                anchors.centerIn: parent
-                                width: parent.width
-                                height: parent.height
-                                text: "-"
-                                fontFamily: Style.font.family
-                                fontSize: 16
-                                color: removeBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85)
-                                scale: removeBadgeMouse.containsMouse ? 1.25 : 1.0
-                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                            }
-
-                            MouseArea {
-                                id: removeBadgeMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.removeDockWidget(modelData, "")
                                 }
                             }
                         }

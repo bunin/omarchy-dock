@@ -206,7 +206,7 @@ PanelWindow {
                 spacing: 4
 
                 readonly property var standardWidgets: [
-                    { id: "omarchy.menu", name: "Omarchy Menu", icon: "\ue900", fontFamily: "omarchy", defaultRegion: "left" },
+                    { id: "omarchy.apps", name: "Apps", icon: "󰀻", defaultRegion: "" },
                     { id: "omarchy.clock", name: "Clock & Calendar", icon: "󰥔", defaultRegion: "center" },
                     { id: "omarchy.weather", name: "Weather", icon: "󰖐", defaultRegion: "center" },
                     { id: "omarchy.audio", name: "Volume & Audio", icon: "󰕾", defaultRegion: "right" },
@@ -223,7 +223,7 @@ PanelWindow {
                         var w = standardWidgets[i]
                         // Only show installed widgets
                         var isInstalled = true
-                        if (pickerWindow.shell && pickerWindow.shell.pluginRegistry && pickerWindow.shell.pluginRegistry.installedPlugins) {
+                        if (w.id !== "omarchy.apps" && pickerWindow.shell && pickerWindow.shell.pluginRegistry && pickerWindow.shell.pluginRegistry.installedPlugins) {
                             isInstalled = (pickerWindow.shell.pluginRegistry.installedPlugins[w.id] !== undefined)
                         }
                         if (!isInstalled) continue
@@ -267,7 +267,7 @@ PanelWindow {
                                 height: 16
                                 text: modelData.icon
                                 fontFamily: modelData.fontFamily ? modelData.fontFamily : Style.font.family
-                                fontSize: (modelData.id === "omarchy.menu") ? 14 : 14
+                                fontSize: 14
                                 color: rowItem.isInDock ? Color.accent : Color.menu.text
                             }
                         }

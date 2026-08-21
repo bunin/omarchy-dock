@@ -65,7 +65,10 @@ You can customize options directly via the `···` status bar widget or in `~/.
   "autohide": false,
   "showFolderTitles": true,
   "widgetsEnabled": true,
-  "widgetPosition": "right"
+  "widgetPosition": "left",
+  "dockWidgets": [
+    "omarchy.apps"
+  ]
 }
 ```
 
