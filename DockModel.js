@@ -323,47 +323,78 @@ function extractFromStackToDock(pinnedList, stackId, appId, targetDockIndex) {
     var cleanApp = stripDesktop(appId);
     if (!cleanApp) return arr;
 
-    var insertIdx = (targetDockIndex !== undefined && targetDockIndex >= 0) ? targetDockIndex : arr.length;
-
-    // 1. Remove from stack
     for (var i = 0; i < arr.length; i++) {
         var item = arr[i];
         if (item && typeof item === "object" && item.isStack && (item.id === stackId || !stackId)) {
-            var apps = [];
+            var origApps = [];
             for (var a = 0; a < item.apps.length; a++) {
-                if (stripDesktop(item.apps[a]) !== cleanApp) {
-                    apps.push(stripDesktop(item.apps[a]));
+                origApps.push(stripDesktop(item.apps[a]));
+            }
+
+            var appIdx = -1;
+            for (var a = 0; a < origApps.length; a++) {
+                if (origApps[a].toLowerCase() === cleanApp.toLowerCase()) {
+                    appIdx = a;
+                    break;
                 }
             }
-            if (apps.length <= 1) {
-                arr.splice(i, 1);
-                if (apps.length === 1) {
-                    arr.splice(i, 0, apps[0]);
+            if (appIdx < 0) appIdx = 0;
+
+            var remainingApps = [];
+            for (var a = 0; a < origApps.length; a++) {
+                if (a !== appIdx) {
+                    remainingApps.push(origApps[a]);
                 }
-                insertIdx = i + 1;
+            }
+
+            if (remainingApps.length <= 1) {
+                // Dissolve folder: replace stack in dock with original ordered apps
+                arr.splice(i, 1);
+                for (var k = 0; k < origApps.length; k++) {
+                    arr.splice(i + k, 0, origApps[k]);
+                }
             } else {
-                arr[i] = {
-                    id: item.id,
-                    name: item.name,
-                    isStack: true,
-                    icon: item.icon,
-                    apps: apps
-                };
-                insertIdx = i + 1;
+                if (appIdx === 0) {
+                    // Extracting the first app: place it before the stack so sequential extraction preserves left-to-right order
+                    arr[i] = cleanApp;
+                    arr.splice(i + 1, 0, {
+                        id: item.id,
+                        name: item.name,
+                        isStack: true,
+                        icon: item.icon,
+                        apps: remainingApps
+                    });
+                } else {
+                    // Extracting subsequent app: place it after the stack
+                    arr[i] = {
+                        id: item.id,
+                        name: item.name,
+                        isStack: true,
+                        icon: item.icon,
+                        apps: remainingApps
+                    };
+                    arr.splice(i + 1, 0, cleanApp);
+                }
             }
             break;
         }
     }
 
-    // 2. Insert into dock at target position (preventing duplicates)
+    // Clean any duplicates while strictly preserving order
     var cleanList = [];
+    var seen = {};
     for (var k = 0; k < arr.length; k++) {
         var el = arr[k];
-        if (typeof el === "string" && stripDesktop(el) === cleanApp) continue;
-        cleanList.push(el);
+        if (typeof el === "string") {
+            var s = stripDesktop(el);
+            if (!seen[s]) {
+                seen[s] = true;
+                cleanList.push(s);
+            }
+        } else {
+            cleanList.push(el);
+        }
     }
-    var safeIdx = Math.max(0, Math.min(cleanList.length, insertIdx));
-    cleanList.splice(safeIdx, 0, cleanApp);
     return cleanList;
 }
 
@@ -1099,4 +1130,249 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
     }
 
     return items;
+}
+
+function removeWidgetFromBar(shell, widgetId, savedPositions, shellConfigFile) {
+    if (!savedPositions) savedPositions = {};
+    
+    var mutator = function(config) {
+        if (!config || !config.bar || !config.bar.layout) return;
+        var regions = ["left", "center", "right"];
+        for (var r = 0; r < regions.length; r++) {
+            var regionName = regions[r];
+            var list = config.bar.layout[regionName];
+            if (Array.isArray(list)) {
+                for (var i = list.length - 1; i >= 0; i--) {
+                    var entry = list[i];
+                    var id = (typeof entry === "string") ? entry : (entry && entry.id);
+                    if (id === widgetId) {
+                        var fullSectionOrder = [];
+                        for (var s = 0; s < list.length; s++) {
+                            var sid = (typeof list[s] === "string") ? list[s] : (list[s] && list[s].id);
+                            if (sid) fullSectionOrder.push(sid);
+                        }
+
+                        var neighborsBefore = [];
+                        for (var b = i - 1; b >= 0; b--) {
+                            var bid = (typeof list[b] === "string") ? list[b] : (list[b] && list[b].id);
+                            if (bid) neighborsBefore.push(bid);
+                        }
+                        var neighborsAfter = [];
+                        for (var a = i + 1; a < list.length; a++) {
+                            var aid = (typeof list[a] === "string") ? list[a] : (list[a] && list[a].id);
+                            if (aid) neighborsAfter.push(aid);
+                        }
+                        savedPositions[widgetId] = {
+                            region: regionName,
+                            index: i,
+                            fullSectionOrder: fullSectionOrder,
+                            neighborsBefore: neighborsBefore,
+                            neighborsAfter: neighborsAfter,
+                            entry: JSON.parse(JSON.stringify(entry))
+                        };
+                        list.splice(i, 1);
+                    }
+                }
+            }
+        }
+    };
+
+    if (shell && typeof shell.mutateShellConfig === "function") {
+        shell.mutateShellConfig(mutator);
+    }
+    if (shellConfigFile && typeof shellConfigFile.text === "function" && typeof shellConfigFile.setText === "function") {
+        try {
+            var raw = shellConfigFile.text();
+            if (raw) {
+                var config = JSON.parse(raw);
+                mutator(config);
+                shellConfigFile.setText(JSON.stringify(config, null, 2) + "\n");
+            }
+        } catch(e) {}
+    }
+    return savedPositions;
+}
+
+function returnWidgetToBar(shell, widgetId, savedPositions, defaultRegion, shellConfigFile) {
+    if (!defaultRegion) defaultRegion = "right";
+    if (!savedPositions) savedPositions = {};
+
+    var defaultRegions = {
+        "omarchy.menu": "left",
+        "omarchy.clock": "center",
+        "omarchy.weather": "center",
+        "omarchy.system-update": "center",
+        "omarchy.indicators": "center",
+        "omarchy.audio": "right",
+        "omarchy.bluetooth": "right",
+        "omarchy.network": "right",
+        "omarchy.power": "right",
+        "omarchy.monitor": "right",
+        "omarchy.tailscale": "right"
+    };
+
+    var canonicalSectionOrders = {
+        "left": [
+            "omarchy.menu",
+            "omarchy.workspaces"
+        ],
+        "center": [
+            "omarchy.indicators",
+            "rosakodu.dock",
+            "omarchy.system-update",
+            "omarchy.clock",
+            "omarchy.weather"
+        ],
+        "right": [
+            "omarchy.agents",
+            "omarchy.tray",
+            "glafeara.languages",
+            "silvaio.gamemode",
+            "lgse.sandman",
+            "omarchy.network",
+            "omarchy.bluetooth",
+            "omarchy.monitor",
+            "omarchy.power",
+            "omarchy.audio",
+            "omarchy.tailscale"
+        ]
+    };
+
+    var savedInfo = savedPositions[widgetId];
+    var targetRegion = (savedInfo && savedInfo.region) ? savedInfo.region : (defaultRegions[widgetId] || defaultRegion);
+    var targetIndex = (savedInfo && savedInfo.index !== undefined) ? savedInfo.index : 999;
+    var targetEntry = (savedInfo && savedInfo.entry) ? savedInfo.entry : { id: widgetId };
+    var fullSectionOrder = (savedInfo && Array.isArray(savedInfo.fullSectionOrder) && savedInfo.fullSectionOrder.length > 0)
+        ? savedInfo.fullSectionOrder
+        : (canonicalSectionOrders[targetRegion] || []);
+    var nBeforeList = (savedInfo && Array.isArray(savedInfo.neighborsBefore))
+        ? savedInfo.neighborsBefore
+        : (savedInfo && savedInfo.neighborBefore ? [savedInfo.neighborBefore] : []);
+    var nAfterList = (savedInfo && Array.isArray(savedInfo.neighborsAfter))
+        ? savedInfo.neighborsAfter
+        : (savedInfo && savedInfo.neighborAfter ? [savedInfo.neighborAfter] : []);
+
+    var mutator = function(config) {
+        if (!config) config = {};
+        if (!config.bar) config.bar = {};
+        if (!config.bar.layout) config.bar.layout = {};
+        if (!Array.isArray(config.bar.layout[targetRegion])) config.bar.layout[targetRegion] = [];
+
+        var regions = ["left", "center", "right"];
+
+        // 1. Remove if already anywhere in layout so we can re-place it with 100% precision
+        for (var r = 0; r < regions.length; r++) {
+            var list = config.bar.layout[regions[r]];
+            if (Array.isArray(list)) {
+                for (var i = list.length - 1; i >= 0; i--) {
+                    var id = (typeof list[i] === "string") ? list[i] : (list[i] && list[i].id);
+                    if (id === widgetId) {
+                        list.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        var targetList = config.bar.layout[targetRegion];
+        var insertAt = -1;
+
+        // Snapshot-driven placement:
+        if (fullSectionOrder.length > 0) {
+            var selfOrderIdx = fullSectionOrder.indexOf(widgetId);
+            if (selfOrderIdx !== -1) {
+                // Check following items in snapshot order
+                for (var f = selfOrderIdx + 1; f < fullSectionOrder.length; f++) {
+                    var fId = fullSectionOrder[f];
+                    for (var m = 0; m < targetList.length; m++) {
+                        var mId = (typeof targetList[m] === "string") ? targetList[m] : (targetList[m] && targetList[m].id);
+                        if (mId === fId) {
+                            insertAt = m;
+                            break;
+                        }
+                    }
+                    if (insertAt !== -1) break;
+                }
+
+                // If not found after, check preceding items in snapshot order
+                if (insertAt === -1) {
+                    for (var p = selfOrderIdx - 1; p >= 0; p--) {
+                        var pId = fullSectionOrder[p];
+                        for (var n = 0; n < targetList.length; n++) {
+                            var nId = (typeof targetList[n] === "string") ? targetList[n] : (targetList[n] && targetList[n].id);
+                            if (nId === pId) {
+                                insertAt = n + 1;
+                                break;
+                            }
+                        }
+                        if (insertAt !== -1) break;
+                    }
+                }
+            }
+        }
+
+        // Fallback to neighbor arrays
+        if (insertAt === -1) {
+            for (var a = 0; a < nAfterList.length; a++) {
+                var na = nAfterList[a];
+                for (var k = 0; k < targetList.length; k++) {
+                    var kid = (typeof targetList[k] === "string") ? targetList[k] : (targetList[k] && targetList[k].id);
+                    if (kid === na) {
+                        insertAt = k;
+                        break;
+                    }
+                }
+                if (insertAt !== -1) break;
+            }
+        }
+
+        if (insertAt === -1) {
+            for (var b = 0; b < nBeforeList.length; b++) {
+                var nb = nBeforeList[b];
+                for (var j = 0; j < targetList.length; j++) {
+                    var jid = (typeof targetList[j] === "string") ? targetList[j] : (targetList[j] && targetList[j].id);
+                    if (jid === nb) {
+                        insertAt = j + 1;
+                        break;
+                    }
+                }
+                if (insertAt !== -1) break;
+            }
+        }
+
+        if (insertAt === -1) {
+            insertAt = Math.min(Math.max(0, targetIndex), targetList.length);
+        }
+
+        targetList.splice(insertAt, 0, targetEntry);
+    };
+
+    if (shell && typeof shell.mutateShellConfig === "function") {
+        shell.mutateShellConfig(mutator);
+    }
+    if (shellConfigFile && typeof shellConfigFile.text === "function" && typeof shellConfigFile.setText === "function") {
+        try {
+            var raw = shellConfigFile.text();
+            if (raw) {
+                var config = JSON.parse(raw);
+                mutator(config);
+                shellConfigFile.setText(JSON.stringify(config, null, 2) + "\n");
+            }
+        } catch(e) {}
+    }
+
+    delete savedPositions[widgetId];
+    return savedPositions;
+}
+
+function addWidgetToDockList(dockWidgetsList, widgetId) {
+    return [widgetId];
+}
+
+function removeWidgetFromDockList(dockWidgetsList, widgetId) {
+    var arr = Array.isArray(dockWidgetsList) ? dockWidgetsList.slice() : [];
+    var idx = arr.indexOf(widgetId);
+    if (idx !== -1) {
+        arr.splice(idx, 1);
+    }
+    return arr;
 }

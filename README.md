@@ -8,8 +8,9 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 
 ## ✨ Features
 
+- 🧩 **Integrated Dock Widgets** — Move native system widgets (Weather, Volume & Audio, Bluetooth, Network, Power/Battery, Display, Clock/Calendar, Tailscale VPN) directly into the dock. Choose widget placement (Left or Right) via the dedicated widget configuration popup. When clicked, all widget panels appear centered on screen with clean system spacing.
 - 📁 **App Stacks (Folders)** — Organize apps into folders with multi-column grids. Create folders by simply dragging one icon onto another. Customize folder icons with built-in Nerd Font glyphs, edit titles inline, and enjoy marquee text scrolling for long names. Folders seamlessly remain open when launching or switching applications.
-- ✨ **iOS-Style Edit Mode (Wiggle)** — Long-press (450ms) any icon to enter edit mode with smooth physical wobbling ($\pm 3.8^\circ$, 105ms). Quickly toggle favorite pins (`•`), dissolve folders (`-`), or reorder apps.
+- ✨ **iOS-Style Edit Mode (Wiggle)** — Long-press (450ms) any icon to enter edit mode with smooth physical wobbling ($\pm 3.8^\circ$, 105ms). Quickly toggle favorite pins (`•`), dissolve folders (`-`), remove dock widgets (`-`), or reorder apps.
 - 🔀 **Fluid 1D & 2D Drag & Drop** — Smooth rail displacement physics when dragging apps across the dock or within folder grids. Effortlessly extract apps from folders back to the main dock.
 - 🔄 **Multi-Instance Sliding Viewport (Infinite Wheel Scrolling)** — Hover over any running app with duplicate windows and scroll the mouse wheel to cycle through instances. The status capsule uses a smooth 3-slot sliding viewport: the original app is always a distinct wide dash (`━`), while duplicates are round dots (`•`). As you scroll deeper into duplicates, the original dash smoothly scrolls out of view and reappears when looping back.
 - 🎯 **Real-Time Hyprland IPC Focus Sync** — Moving the mouse cursor over any window tile on the desktop (`follow_mouse = 1`) or switching focus instantly syncs and highlights the corresponding slot on the dock in real time without lag.
@@ -19,7 +20,7 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 - ⚡ **Zero-Flicker Boot & Tile Lift** — Two-phase initialization instantly reserves Hyprland exclusive space to lift tiled windows smoothly, followed by a monolithic fade-in once all vector theme icons are loaded.
 - 🧭 **Dynamic Auto-Positioning** — Automatically adapts its position opposite to the Omarchy status bar (top $\leftrightarrow$ bottom, left $\leftrightarrow$ right).
 - ⏱️ **Smart Auto-Hide** — Optional auto-hide with a 1.5-second dismissal delay and instant hover reveal.
-- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, and Folder Titles.
+- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, Folder Titles, and Dock Widgets configuration.
 - 🎨 **100% Native Theme Sync** — Clean borderless status capsules that automatically react to Omarchy colors (`Color.accent`, `Color.bar.background`), system fonts, and window corner radius tokens.
 - 🔤 **Subpixel Vector Glyphs (`DockGlyph`)** — GPU-accelerated vector curve rendering without font hinting distortion or pixel jitter during animations.
 
@@ -32,12 +33,13 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 | **Open / Focus Window** | `Left-Click` / `Enter` | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
 | **Launch Duplicate** | `Middle-Click` / `Tab` | Instantly spawns a new duplicate instance of the application with immediate focus. |
 | **Cycle Duplicates** | `Mouse Wheel` / `←` `→` Arrow Keys | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
-| **Enter Edit Mode** | `Long-Press` *(450ms)* | Activates iOS-style physical wobble mode to reorder apps, toggle pins, or dissolve folders. |
+| **Open Widget Panel** | `Left-Click` *(on Widget)* | Opens the hosted system widget panel (Audio, Wi-Fi, BT, Power, Monitor, etc.) centered on screen. |
+| **Enter Edit Mode** | `Long-Press` *(450ms)* | Activates iOS-style physical wobble mode to reorder apps, toggle pins, remove widgets, or dissolve folders. |
 | **Reorder & Folders** | `Drag & Drop` | Drag along the rail to reorder. Drag one icon onto another to create a folder (App Stack). |
 | **Folder Icon Picker** | `Right-Click` *(on Folder)* | Opens the Nerd Font glyph picker to customize the folder's icon. |
 | **Exit Edit Mode / Close Menus** | `Right-Click` / `Escape` | Instantly exits edit mode and dismisses open menus. |
 | **Toggle Pin State** | `Click • Badge` *(in Edit Mode)* | Pins or unpins the application to/from favorites. |
-| **Dissolve Folder** | `Click - Badge` *(in Edit Mode)* | Dissolves the folder and unpacks all apps back to the main dock. |
+| **Dissolve Folder / Remove Widget**| `Click - Badge` *(in Edit Mode)* | Dissolves folder back to dock, or returns widget back to system status bar tray. |
 
 ---
 
@@ -61,7 +63,9 @@ You can customize options directly via the `···` status bar widget or in `~/.
 {
   "dockEnabled": true,
   "autohide": false,
-  "showFolderTitles": true
+  "showFolderTitles": true,
+  "widgetsEnabled": true,
+  "widgetPosition": "right"
 }
 ```
 

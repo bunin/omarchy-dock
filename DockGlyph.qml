@@ -11,7 +11,9 @@ Item {
 
     readonly property int renderedFontSize: Math.max(1, Math.round(fontSize))
     readonly property real tightWidth: Math.max(1, glyphMetrics.tightBoundingRect.width)
+    readonly property real tightHeight: Math.max(1, glyphMetrics.tightBoundingRect.height)
     readonly property real horizontalCorrection: glyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
+    readonly property real verticalCorrection: (glyph.implicitHeight / 2) - (glyph.baselineOffset + glyphMetrics.tightBoundingRect.y + tightHeight / 2)
 
     TextMetrics {
         id: glyphMetrics
@@ -25,6 +27,7 @@ Item {
         id: glyph
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root.horizontalCorrection
+        anchors.verticalCenterOffset: root.verticalCorrection
         text: root.text
         color: root.color
         font.family: root.fontFamily

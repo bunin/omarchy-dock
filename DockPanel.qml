@@ -7,6 +7,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
+import "components"
 
 Item {
     id: root
@@ -31,6 +32,15 @@ Item {
         return detectedBarPosition
     }
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
+
+    // Live dock edge on screen (opposite to system status bar)
+    readonly property string dockScreenPosition: {
+        if (root.barPosition === "top") return "bottom"
+        if (root.barPosition === "bottom") return "top"
+        if (root.barPosition === "left") return "right"
+        if (root.barPosition === "right") return "left"
+        return "bottom"
+    }
 
     // Live Bar & Tray Transparency Tracking (Auto-syncs dock with bar & tray glassmorphism)
     readonly property bool isBarTransparent: {
@@ -77,15 +87,40 @@ Item {
     // Direct IPC handler for rosakodu.dock target
     IpcHandler {
         target: "rosakodu.dock"
-        function open() { root.open(""); return "ok" }
-        function close() { root.close(); return "ok" }
-        function toggle() { root.toggle(); return "ok" }
-        function refresh() { return root.refresh() }
+        function open(): string { root.open(""); return "ok" }
+        function close(): string { root.close(); return "ok" }
+        function toggle(): string { root.toggle(); return "ok" }
+        function refresh(): string { return root.refresh() }
+        function openWidgetPicker(): string {
+            root.opened = true
+            if (widgetPicker) {
+                widgetPicker.opened = true
+            }
+            return "ok"
+        }
+        function addWidget(widgetId: string): string { root.addDockWidget(widgetId); return "ok" }
+        function removeWidget(widgetId: string): string { root.removeDockWidget(widgetId, ""); return "ok" }
+        function setWidgetsEnabled(val: string): string { root.setWidgetsEnabled(val === "true" || val === "1"); return "ok" }
+        function setWidgetPosition(pos: string): string { root.setWidgetPosition(pos); return "ok" }
+        function setDockEnabled(val: string): string { root.dockEnabled = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setAutohide(val: string): string { root.autohide = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setShowFolderTitles(val: string): string { root.showFolderTitles = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function ping(): string { return "ok" }
     }
 
     // Methods called by shell.summon / shell.hide / shell.toggle
     function open(payloadJson) {
         root.opened = true
+        if (payloadJson) {
+            try {
+                var p = (typeof payloadJson === "string") ? JSON.parse(payloadJson) : payloadJson
+                if (p && p.action === "openWidgetPicker") {
+                    if (widgetPicker) widgetPicker.opened = true
+                } else if (p && p.action === "closeWidgetPicker") {
+                    if (widgetPicker) widgetPicker.opened = false
+                }
+            } catch(e) {}
+        }
     }
 
     function close() {
@@ -271,9 +306,94 @@ Item {
     property bool dockEnabled: true
     property bool autohide: false
     property bool showFolderTitles: true
+    property bool widgetsEnabled: true
+    property string widgetPosition: "right"
+    property var dockWidgets: []
+    property var widgetSavedPositions: ({})
     property bool isDockHovered: false
-    readonly property bool isDockActive: root.isDockHovered || root.isStackOpen || root.isMenuOpen || (root.dockDragActiveIndex >= 0)
+    property bool isStackHovered: false
+    property bool isMenuHovered: false
+    property bool isWidgetPanelHovered: false
+
+    property var loadedWidgetItems: []
+
+    function checkWidgetPanelsOpen() {
+        for (var i = 0; i < root.loadedWidgetItems.length; i++) {
+            var w = root.loadedWidgetItems[i]
+            if (w) {
+                if (w.opened === true) return true
+                if (w.panelLoader && w.panelLoader.item && w.panelLoader.item.opened === true) return true
+                if (w.panel && w.panel.open === true) return true
+            }
+        }
+        return false
+    }
+
+    function evaluateHoverState() {
+        var anyOpenWidget = checkWidgetPanelsOpen()
+        var anyHover = (dockHoverHandler && dockHoverHandler.hovered) || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+        if (anyHover) {
+            autohideLeaveTimer.stop()
+            root.isDockHovered = true
+        } else {
+            autohideLeaveTimer.restart()
+        }
+    }
+
+    readonly property bool isDockActive: root.isDockHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || root.checkWidgetPanelsOpen() || (root.dockDragActiveIndex >= 0)
     readonly property bool shouldSlideOut: root.autohide && !root.isDockActive
+
+    function closeAllWidgetPanels() {
+        for (var i = 0; i < root.loadedWidgetItems.length; i++) {
+            var w = root.loadedWidgetItems[i]
+            if (w) {
+                if (typeof w.close === "function") {
+                    w.close()
+                }
+                if (w.panelLoader && w.panelLoader.item && typeof w.panelLoader.item.close === "function") {
+                    w.panelLoader.item.close()
+                }
+                if (w.panel && typeof w.panel.close === "function") {
+                    w.panel.close()
+                }
+            }
+        }
+    }
+
+    onShouldSlideOutChanged: {
+        if (shouldSlideOut) {
+            root.activeStackItem = null
+            root.activeMenuItem = null
+            root.isEditingFolderTitle = false
+            root.isEditMode = false
+            root.closeAllWidgetPanels()
+        }
+    }
+
+    readonly property int activeWidgetsCount: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.length : 0
+    readonly property bool hasWidgets: root.activeWidgetsCount > 0
+    readonly property real separatorSize: root.hasWidgets ? 12 : 0
+    readonly property real itemsWidth: (root.dockItems.length * root.slotSize)
+
+    property string clockDisplayText: ""
+
+    TextMetrics {
+        id: clockMetrics
+        font.family: Style.font.family
+        font.pixelSize: 12
+        font.weight: Font.Medium
+        text: root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm")
+    }
+
+    readonly property bool hasClockWidget: root.hasWidgets && root.dockWidgets && root.dockWidgets.indexOf("omarchy.clock") !== -1
+    readonly property real clockSlotWidth: (root.hasClockWidget && !root.isVertical)
+        ? Math.max(root.slotSize, clockMetrics.advanceWidth + 24)
+        : root.slotSize
+
+    readonly property real widgetsWidth: (root.hasClockWidget && !root.isVertical)
+        ? ((root.activeWidgetsCount - 1) * root.slotSize + root.clockSlotWidth)
+        : (root.activeWidgetsCount * root.slotSize)
+    readonly property real totalDockDimension: Math.max(root.slotSize, itemsWidth + (root.hasWidgets ? (separatorSize + widgetsWidth) : 0))
 
     onDockEnabledChanged: {
         if (!dockEnabled) {
@@ -283,6 +403,8 @@ Item {
         }
     }
 
+    property bool isSavingSettings: false
+
     FileView {
         id: settingsFile
         path: root.settingsPath
@@ -290,10 +412,23 @@ Item {
         atomicWrites: true
         printErrors: false
         onLoaded: root.readSettings()
-        onFileChanged: { reload(); root.readSettings() }
+        onFileChanged: {
+            if (!root.isSavingSettings) {
+                reload()
+                root.readSettings()
+            }
+        }
+    }
+
+    Timer {
+        id: saveSettingsTimer
+        interval: 300
+        repeat: false
+        onTriggered: root.isSavingSettings = false
     }
 
     function readSettings() {
+        if (root.isSavingSettings) return
         try {
             var txt = settingsFile.text()
             if (txt && txt.trim().length > 0) {
@@ -307,19 +442,153 @@ Item {
                 if (s && s.showFolderTitles !== undefined) {
                     root.showFolderTitles = (s.showFolderTitles === true)
                 }
+                if (s && s.widgetPosition !== undefined) {
+                    root.widgetPosition = s.widgetPosition
+                }
+                if (s && s.widgetsEnabled !== undefined) {
+                    root.widgetsEnabled = (s.widgetsEnabled === true)
+                }
+                if (s && s.dockWidgets !== undefined && Array.isArray(s.dockWidgets)) {
+                    root.dockWidgets = root.widgetsEnabled ? s.dockWidgets.slice(0, 1) : []
+                }
+                if (s && s.widgetSavedPositions !== undefined && typeof s.widgetSavedPositions === "object") {
+                    root.widgetSavedPositions = s.widgetSavedPositions
+                }
             }
         } catch(e) {}
     }
 
-    Timer {
-        id: settingsWatcher
-        interval: 500
-        running: true
-        repeat: true
-        onTriggered: {
-            settingsFile.reload()
-            root.readSettings()
+    function saveSettings() {
+        root.isSavingSettings = true
+        saveSettingsTimer.restart()
+        var jsonStr = JSON.stringify({
+            dockEnabled: root.dockEnabled,
+            autohide: root.autohide,
+            showFolderTitles: root.showFolderTitles,
+            widgetsEnabled: root.widgetsEnabled,
+            widgetPosition: root.widgetPosition,
+            dockWidgets: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.slice(0, 1) : [],
+            widgetSavedPositions: root.widgetSavedPositions || {}
+        }, null, 2)
+        settingsFile.setText(jsonStr + "\n")
+    }
+
+    function setWidgetsEnabled(val) {
+        var boolVal = (val === true || val === "true")
+        if (root.widgetsEnabled === boolVal && (!boolVal || (root.dockWidgets && root.dockWidgets.length === 0))) return
+        root.widgetsEnabled = boolVal
+        if (!root.widgetsEnabled) {
+            if (root.dockWidgets && root.dockWidgets.length > 0) {
+                var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
+                for (var i = 0; i < root.dockWidgets.length; i++) {
+                    var wId = root.dockWidgets[i]
+                    if (wId) {
+                        var defReg = (wId === "omarchy.menu") ? "left" : ((wId === "omarchy.weather" || wId === "omarchy.clock" || wId === "omarchy.system-update" || wId === "omarchy.indicators") ? "center" : "right")
+                        currentSaved = DockModel.returnWidgetToBar(root.shell, wId, currentSaved, defReg, shellConfigFile)
+                    }
+                }
+                root.dockWidgets = []
+                root.widgetSavedPositions = currentSaved
+            }
         }
+        saveSettings()
+    }
+
+    function setWidgetPosition(pos) {
+        root.widgetPosition = (pos === "left") ? "left" : "right"
+        saveSettings()
+    }
+
+    function addDockWidget(widgetId) {
+        root.widgetsEnabled = true
+        // Enforce maximum 1 widget: return any previous dock widget to the tray/bar
+        var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
+        if (root.dockWidgets && root.dockWidgets.length > 0) {
+            for (var i = 0; i < root.dockWidgets.length; i++) {
+                var prevId = root.dockWidgets[i]
+                if (prevId && prevId !== widgetId) {
+                    var prevDefRegion = (prevId === "omarchy.menu") ? "left" : ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
+                    currentSaved = DockModel.returnWidgetToBar(root.shell, prevId, currentSaved, prevDefRegion, shellConfigFile)
+                }
+            }
+        }
+        root.dockWidgets = [widgetId]
+        currentSaved = DockModel.removeWidgetFromBar(root.shell, widgetId, currentSaved, shellConfigFile)
+        root.widgetSavedPositions = currentSaved
+        saveSettings()
+    }
+
+    function removeDockWidget(widgetId, targetRegion) {
+        var defRegion = targetRegion || ((widgetId === "omarchy.menu") ? "left" : ((widgetId === "omarchy.weather" || widgetId === "omarchy.clock" || widgetId === "omarchy.system-update" || widgetId === "omarchy.indicators") ? "center" : "right"))
+        var next = DockModel.removeWidgetFromDockList(root.dockWidgets, widgetId)
+        root.dockWidgets = next.slice()
+        var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
+        currentSaved = DockModel.returnWidgetToBar(root.shell, widgetId, currentSaved, defRegion, shellConfigFile)
+        root.widgetSavedPositions = currentSaved
+        saveSettings()
+    }
+
+    function getWidgetSource(widgetId) {
+        if (!widgetId) return ""
+        var manifest = (root.shell && root.shell.pluginRegistry && root.shell.pluginRegistry.installedPlugins) ? root.shell.pluginRegistry.installedPlugins[widgetId] : null
+        if (manifest && root.shell && root.shell.pluginRegistry) {
+            var ep = root.shell.pluginRegistry.entryPointUrl(manifest, "barWidget")
+            if (ep && ep.length > 0) return ep
+            var epPanel = root.shell.pluginRegistry.entryPointUrl(manifest, "panel")
+            if (epPanel && epPanel.length > 0) return epPanel
+        }
+        var parts = widgetId.split(".")
+        var name = parts.length > 1 ? parts[1] : parts[0]
+        if (name === "audio" || name === "bluetooth" || name === "network" || name === "power" || name === "monitor" || name === "tailscale") {
+            return "file:///usr/share/omarchy/shell/plugins/panels/" + name + "/Panel.qml"
+        }
+        return "file:///usr/share/omarchy/shell/plugins/panels/" + name + "/BarWidget.qml"
+    }
+
+    function getWidgetIcon(widgetId, item) {
+        if (!widgetId) return "󰒓"
+        if (widgetId === "omarchy.menu") return "\ue900"
+        if (widgetId === "omarchy.monitor") {
+            return (Quickshell.screens && Quickshell.screens.length > 1) ? "󰍺" : "󰍹"
+        }
+        if (widgetId === "omarchy.clock") return "󰥔"
+        if (widgetId === "omarchy.tailscale") return "󰖂"
+        if (widgetId === "omarchy.network") {
+            if (item && item.icon) return item.icon
+            return "󰖩"
+        }
+        if (widgetId === "omarchy.audio") {
+            if (item && typeof item.outputIcon === "function") {
+                var _snk = item.sink
+                var _vol = item.outputVolume
+                var _mut = item.outputMuted
+                return item.outputIcon()
+            }
+            return "󰕾"
+        }
+        if (widgetId === "omarchy.power") {
+            if (item && typeof item.batteryIcon === "function") {
+                var _chg = item.charging
+                var _dis = item.discharging
+                var _bf = item.batteryFraction
+                return item.batteryIcon()
+            }
+            return "󰁹"
+        }
+        if (widgetId === "omarchy.bluetooth") {
+            if (item && item.icon) return item.icon
+            return "󰂯"
+        }
+        if (widgetId === "omarchy.weather") {
+            if (item) {
+                if (item.panelLoader && item.panelLoader.item && item.panelLoader.item.label) return item.panelLoader.item.label
+                if (item.label) return item.label
+                if (item.symbol) return item.symbol
+            }
+            return "󰖐"
+        }
+        if (item && item.icon) return item.icon
+        return "󰒓"
     }
 
     Connections {
@@ -424,7 +693,7 @@ Item {
 
     onActiveStackItemChanged: {
         if (activeStackItem) {
-            stackCard.forceActiveFocus()
+            if (stackWindow && stackWindow.stackCard) stackWindow.stackCard.forceActiveFocus()
         } else {
             root.isEditingFolderTitle = false
         }
@@ -436,7 +705,6 @@ Item {
     property var pinnedIds: []
     property var dockItems: []
     property var appRows: (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : []
-    readonly property real itemsCount: Math.max(1, root.dockItems.length)
 
     // Curated available symbols for folder icon personalization (Clean monochrome vector glyphs)
     readonly property var availableFolderIcons: ["󰉋", "󰒓", "󰞷", "󰝚", "󰊴", "󰏘", "󰭹", "󰖟", "󰕧", "󰈔", "󰍹", "󰖩", "󰌾", "♥"]
@@ -477,37 +745,38 @@ Item {
 
     // Exact Geometric Horizontal Center for Stack Popup Card (100% centered over folder icon in dock)
     readonly property real calculatedStackLeft: {
-        var screenW = dockWindow.screen ? dockWindow.screen.width : 1920
-        var dockW = root.isVertical ? (root.slotSize + 4) : Math.max(root.slotSize + 4, root.itemsCount * root.slotSize + 8)
+        var screenW = (dockWindow && dockWindow.screen) ? dockWindow.screen.width : 1920
+        var dockW = root.isVertical ? (root.slotSize + 4) : (root.totalDockDimension + 8)
         var dockLeft = (screenW - dockW) / 2
-        var iconCenterX = dockLeft + 4 + root.activeStackItemIndex * root.slotSize + (root.slotSize / 2)
-        var cardW = stackCard.width
+        var appBaseOffset = (root.widgetPosition === "left" && root.hasWidgets) ? (root.widgetsWidth + root.separatorSize) : 0
+        var iconCenterX = dockLeft + 4 + appBaseOffset + root.activeStackItemIndex * root.slotSize + (root.slotSize / 2)
+        var cardW = (stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width : 180
         return Math.round(Math.max(6, Math.min(screenW - cardW - 6, iconCenterX - cardW / 2)))
     }
 
     readonly property real calculatedStackTop: {
-        var screenH = dockWindow.screen ? dockWindow.screen.height : 1080
-        var dockH = root.isVertical ? Math.max(root.slotSize + 4, root.itemsCount * root.slotSize + 8) : (root.slotSize + 4)
+        var screenH = (dockWindow && dockWindow.screen) ? dockWindow.screen.height : 1080
+        var dockH = root.isVertical ? (root.totalDockDimension + 8) : (root.slotSize + 4)
         var dockTop = (screenH - dockH) / 2
-        var iconCenterY = dockTop + 4 + root.activeStackItemIndex * root.slotSize + (root.slotSize / 2)
-        var cardH = stackCard.height
+        var appBaseOffset = (root.widgetPosition === "left" && root.hasWidgets) ? (root.widgetsWidth + root.separatorSize) : 0
+        var iconCenterY = dockTop + 4 + appBaseOffset + root.activeStackItemIndex * root.slotSize + (root.slotSize / 2)
+        var cardH = (stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.height : 180
         return Math.round(Math.max(6, Math.min(screenH - cardH - 6, iconCenterY - cardH / 2)))
     }
 
     function closePopups() {
-        if (root.activeStackItem !== null || root.activeMenuItem !== null || root.isEditMode || root.isEditingFolderTitle) {
-            root.activeStackItem = null
-            root.activeMenuItem = null
-            root.isEditMode = false
-            root.isFolderEditMode = false
-            root.isEditingFolderTitle = false
-            root.folderDragActiveIndex = -1
-            root.folderDragTargetIndex = -1
-            root.currentFolderMergeTargetIndex = -1
-        }
+        root.activeStackItem = null
+        root.activeMenuItem = null
+        root.isEditMode = false
+        root.isEditingFolderTitle = false
+        root.folderDragActiveIndex = -1
+        root.folderDragTargetIndex = -1
+        root.currentFolderMergeTargetIndex = -1
+        if (widgetPicker) widgetPicker.opened = false
+        root.closeAllWidgetPanels()
     }
 
-    // Auto-dismiss open folders, folder icon editor and edit mode when system notifications / OSD appear
+    // Auto-dismiss open folders, folder icon editor, widget panels and edit mode when system notifications / OSD appear
     readonly property var notifService: (root.shell && typeof root.shell.serviceFor === "function") ? root.shell.serviceFor("omarchy.notifications") : null
     readonly property var notifPopupModel: (root.notifService && root.notifService.popupModel) ? root.notifService.popupModel : null
     readonly property int notifPopupCount: notifPopupModel ? notifPopupModel.count : 0
@@ -515,6 +784,19 @@ Item {
     onNotifPopupCountChanged: {
         if (notifPopupCount > 0) {
             root.closePopups()
+        }
+    }
+
+    Connections {
+        target: root.notifPopupModel ? root.notifPopupModel : null
+        ignoreUnknownSignals: true
+        function onRowsInserted() {
+            root.closePopups()
+        }
+        function onCountChanged() {
+            if (root.notifPopupCount > 0) {
+                root.closePopups()
+            }
         }
     }
 
@@ -895,15 +1177,7 @@ Item {
                 }
             }
         } catch(e) {}
-        try {
-            var stxt = settingsFile.text()
-            if (stxt && stxt.trim().length > 0) {
-                var s = JSON.parse(stxt)
-                if (s && s.dockEnabled !== undefined) root.dockEnabled = (s.dockEnabled === true)
-                if (s && s.autohide !== undefined) root.autohide = (s.autohide === true)
-                if (s && s.showFolderTitles !== undefined) root.showFolderTitles = (s.showFolderTitles === true)
-            }
-        } catch(e) {}
+        root.readSettings()
         if (shell && shell.appLibrary && typeof shell.appLibrary.refreshIcons === "function") {
             shell.appLibrary.refreshIcons()
         }
@@ -975,19 +1249,21 @@ Item {
 
     onIsStackOpenChanged: {
         if (isStackOpen) {
-            stackCard.forceActiveFocus()
+            if (stackWindow && stackWindow.stackCard) stackWindow.stackCard.forceActiveFocus()
         }
     }
 
     onIsMenuOpenChanged: {
         if (isMenuOpen) {
-            menuCard.forceActiveFocus()
-            if (root.activeMenuItem && root.activeMenuItem.isStack) {
-                var curIcon = root.activeMenuItem.icon || "grid"
-                var foundIdx = root.availableFolderIcons.indexOf(curIcon)
-                menuCard.selectedIndex = (foundIdx >= 0) ? foundIdx : 0
-            } else {
-                menuCard.selectedIndex = -1
+            if (menuWindow && menuWindow.menuCard) {
+                menuWindow.menuCard.forceActiveFocus()
+                if (root.activeMenuItem && root.activeMenuItem.isStack) {
+                    var curIcon = root.activeMenuItem.icon || "grid"
+                    var foundIdx = root.availableFolderIcons.indexOf(curIcon)
+                    menuWindow.menuCard.selectedIndex = (foundIdx >= 0) ? foundIdx : 0
+                } else {
+                    menuWindow.menuCard.selectedIndex = -1
+                }
             }
         }
     }
@@ -1017,28 +1293,25 @@ Item {
             left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
         }
 
-        implicitWidth: root.isVertical ? (root.slotSize + 8) : Math.max(root.slotSize + 8, root.itemsCount * root.slotSize + 14)
-        implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.itemsCount * root.slotSize + 14) : (root.slotSize + 8)
+        implicitWidth: root.isVertical ? (root.slotSize + 8) : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
+        implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : (root.slotSize + 8)
 
         HoverHandler {
             id: dockHoverHandler
             onHoveredChanged: {
-                if (hovered) {
-                    autohideLeaveTimer.stop()
-                    root.isDockHovered = true
-                } else {
-                    autohideLeaveTimer.restart()
-                }
+                root.evaluateHoverState()
             }
         }
 
-        // 1.5-second delay before dock autohides when cursor leaves
+        // 1.5-second delay before dock autohides when cursor leaves all dock/folder/widget elements
         Timer {
             id: autohideLeaveTimer
             interval: 1500
             repeat: false
             onTriggered: {
-                if (!dockHoverHandler.hovered) {
+                var anyOpenWidget = root.checkWidgetPanelsOpen()
+                var anyHover = (dockHoverHandler && dockHoverHandler.hovered) || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+                if (!anyHover) {
                     root.isDockHovered = false
                 }
             }
@@ -1048,8 +1321,8 @@ Item {
         Rectangle {
             id: dockSurface
             anchors.centerIn: parent
-            width: root.isVertical ? (root.slotSize + 4) : Math.max(root.slotSize + 4, root.itemsCount * root.slotSize + 8)
-            height: root.isVertical ? Math.max(root.slotSize + 4, root.itemsCount * root.slotSize + 8) : (root.slotSize + 4)
+            width: root.isVertical ? (root.slotSize + 4) : Math.max(root.slotSize + 4, root.totalDockDimension + 8)
+            height: root.isVertical ? Math.max(root.slotSize + 4, root.totalDockDimension + 8) : (root.slotSize + 4)
             visible: root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && !remapTimer.running
             opacity: root.isDockVisualReady ? 1.0 : 0.0
             Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
@@ -1111,16 +1384,17 @@ Item {
             Item {
                 id: dockContent
                 anchors.centerIn: parent
-                width: root.isVertical ? root.slotSize : (root.itemsCount * root.slotSize)
-                height: root.isVertical ? (root.itemsCount * root.slotSize) : root.slotSize
+                width: root.isVertical ? root.slotSize : root.totalDockDimension
+                height: root.isVertical ? root.totalDockDimension : root.slotSize
 
+                // 1. Applications & Folders
                 Repeater {
                     model: root.dockItems
 
                     DockItem {
                         itemData: modelData
                         itemIndex: index
-                        totalCount: root.itemsCount
+                        totalCount: root.dockItems.length
                         barPosition: root.barPosition
                         shell: root.shell
                         slotSize: root.slotSize
@@ -1132,19 +1406,14 @@ Item {
                         isSelected: (!root.isMenuFromFolder && root.activeMenuItem && (root.activeMenuItem.appId === modelData.appId || root.activeMenuItem.id === modelData.id)) || (root.activeStackItem && (root.activeStackItem.id === modelData.id || root.activeStackItem.appId === modelData.appId))
                         isMergeTarget: (root.currentMergeTargetIndex === index)
 
-                        // 1D Live Rail Displacement (Smooth, buttery glide along the track)
+                        // 1D Live Rail Displacement (with Left/Right widget offset)
+                        readonly property real appBaseOffset: (root.widgetPosition === "left" && root.hasWidgets) ? (root.widgetsWidth + root.separatorSize) : 0
                         readonly property int visualSlot: (root.dockDragActiveIndex === index) ? index : root.getDockVisualSlot(index, root.dockDragActiveIndex, root.dockDragTargetIndex)
-                        x: root.isVertical ? 0 : (visualSlot * root.slotSize)
-                        y: root.isVertical ? (visualSlot * root.slotSize) : 0
+                        x: root.isVertical ? 0 : (appBaseOffset + visualSlot * root.slotSize)
+                        y: root.isVertical ? (appBaseOffset + visualSlot * root.slotSize) : 0
 
-                        Behavior on x {
-                            enabled: root.dockDragActiveIndex >= 0 && root.dockDragActiveIndex !== index
-                            NumberAnimation { duration: 380; easing.type: Easing.OutQuint }
-                        }
-                        Behavior on y {
-                            enabled: root.dockDragActiveIndex >= 0 && root.dockDragActiveIndex !== index
-                            NumberAnimation { duration: 380; easing.type: Easing.OutQuint }
-                        }
+                        Behavior on x { enabled: root.dockDragActiveIndex >= 0; NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+                        Behavior on y { enabled: root.dockDragActiveIndex >= 0; NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
                         isEditMode: root.isEditMode
                         dockDragActiveIndex: root.dockDragActiveIndex
@@ -1191,6 +1460,10 @@ Item {
                             }
                         }
 
+                        onDragStarted: function(fromIdx) {
+                            root.dockDragActiveIndex = fromIdx
+                        }
+
                         onDragHoverChanged: function(fromIdx, targetIdx, isMergeIntent) {
                             root.dockDragActiveIndex = (targetIdx >= 0) ? fromIdx : -1
                             root.dockDragTargetIndex = isMergeIntent ? -1 : targetIdx
@@ -1212,1264 +1485,344 @@ Item {
                         }
                     }
                 }
-            }
-        }
-    }
 
-    // 2. The Isolated Action Card Popup Overlay Window (Strictly centered above Dock, lifts tiles)
-    PanelWindow {
-        id: menuWindow
-        visible: root.isMenuOpen && root.opened && root.pluginEnabled && root.dockEnabled
-
-        readonly property bool isDirectDockPopup: !root.isMenuFromFolder
-
-        WlrLayershell.namespace: "omarchy-dock-menu"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: root.isMenuOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-        exclusionMode: ExclusionMode.Auto
-        color: "transparent"
-
-        anchors {
-            top: (!root.isVertical && root.barPosition === "bottom") ? true : (root.isVertical ? true : false)
-            bottom: (!root.isVertical && root.barPosition === "top") ? true : (root.isVertical ? true : false)
-            left: (root.isVertical && root.barPosition === "right") ? true : (!root.isVertical ? true : false)
-            right: (root.isVertical && root.barPosition === "left") ? true : (!root.isVertical ? true : false)
-        }
-
-        margins {
-            bottom: (!root.isVertical && root.barPosition === "top")
-                ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + stackCard.height + 6))
-                : 0
-            top: (!root.isVertical && root.barPosition === "bottom")
-                ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + stackCard.height + 6))
-                : 0
-            right: (root.isVertical && root.barPosition === "left")
-                ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + stackCard.width + 6))
-                : 0
-            left: (root.isVertical && root.barPosition === "right")
-                ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + stackCard.width + 6))
-                : 0
-        }
-
-        implicitWidth: root.isVertical ? menuCard.width : (dockWindow.screen ? dockWindow.screen.width : 1920)
-        implicitHeight: root.isVertical ? (dockWindow.screen ? dockWindow.screen.height : 1080) : menuCard.height
-
-        // Dismissal MouseArea covering the entire transparent overlay area of menuWindow outside menuCard
-        MouseArea {
-            anchors.fill: parent
-            z: 0
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            onClicked: function(mouse) {
-                root.activeMenuItem = null
-            }
-        }
-
-        // Visual Action Card (Strictly centered above the dock, Folder Icon Picker only)
-        Rectangle {
-            id: menuCard
-            z: 1
-            anchors.centerIn: parent
-            focus: true
-
-            property int selectedIndex: -1
-            property bool isWheelOrKeyNav: false
-
-            readonly property bool isFolderMenu: !!(root.activeMenuItem && (root.activeMenuItem.isStack === true || root.isMenuFromFolder))
-
-            readonly property int totalMenuItems: {
-                if (!root.activeMenuItem) return 0
-                return root.availableFolderIcons.length + 1
-            }
-
-            function triggerCurrentSelection() {
-                if (!root.activeMenuItem) return
-                if (isFolderMenu) {
-                    if (selectedIndex >= 0 && selectedIndex < root.availableFolderIcons.length) {
-                        var chosenIcon = root.availableFolderIcons[selectedIndex]
-                        var cur = root.activeMenuItem.icon || "grid"
-                        var targetIcon = (cur === chosenIcon) ? "grid" : chosenIcon
-                        root.setPinned(DockModel.setStackIcon(root.pinnedIds, root.activeMenuItem.id, targetIcon))
-                    } else if (selectedIndex === root.availableFolderIcons.length) {
-                        root.setPinned(DockModel.dissolveStack(root.pinnedIds, root.activeMenuItem.id))
-                        root.activeStackItem = null
-                    }
-                }
-                root.activeMenuItem = null
-            }
-
-            Keys.onLeftPressed: function(event) {
-                event.accepted = true
-                isWheelOrKeyNav = true
-                if (totalMenuItems > 0) {
-                    selectedIndex = (selectedIndex <= 0) ? (totalMenuItems - 1) : (selectedIndex - 1)
-                }
-            }
-
-            Keys.onRightPressed: function(event) {
-                event.accepted = true
-                isWheelOrKeyNav = true
-                if (totalMenuItems > 0) {
-                    selectedIndex = (selectedIndex + 1) % totalMenuItems
-                }
-            }
-
-            Keys.onUpPressed: function(event) {
-                event.accepted = true
-                isWheelOrKeyNav = true
-                if (totalMenuItems > 0) {
-                    selectedIndex = (selectedIndex <= 0) ? (totalMenuItems - 1) : (selectedIndex - 1)
-                }
-            }
-
-            Keys.onDownPressed: function(event) {
-                event.accepted = true
-                isWheelOrKeyNav = true
-                if (totalMenuItems > 0) {
-                    selectedIndex = (selectedIndex + 1) % totalMenuItems
-                }
-            }
-
-            Keys.onReturnPressed: function(event) {
-                event.accepted = true
-                triggerCurrentSelection()
-            }
-
-            Keys.onEnterPressed: function(event) {
-                event.accepted = true
-                triggerCurrentSelection()
-            }
-
-            Keys.onSpacePressed: function(event) {
-                event.accepted = true
-                triggerCurrentSelection()
-            }
-
-            Keys.onEscapePressed: function(event) {
-                event.accepted = true
-                root.activeMenuItem = null
-            }
-
-            width: root.isVertical ? 36 : Math.max(36, (root.availableFolderIcons.length + 1) * 30 + 10)
-            height: !root.isVertical ? 36 : Math.max(36, (root.availableFolderIcons.length + 1) * 30 + 10)
-            color: root.isBarTransparent
-                ? Util.alpha(Color.popups.background, 0.45)
-                : Color.popups.background
-            border.width: root.isBarTransparent ? 0 : root.systemBorderSize
-            border.color: root.isBarTransparent ? "transparent" : Color.accent
-            radius: Math.min(10, root.systemRounding)
-            antialiasing: true
-            smooth: true
-
-            Behavior on color { ColorAnimation { duration: 300; easing.type: Easing.InOutCubic } }
-            Behavior on border.color { ColorAnimation { duration: 300; easing.type: Easing.InOutCubic } }
-            Behavior on border.width { NumberAnimation { duration: 250; easing.type: Easing.InOutCubic } }
-
-            WheelHandler {
-                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                onWheel: function(event) {
-                    menuCard.isWheelOrKeyNav = true
-                    if (menuCard.totalMenuItems > 0) {
-                        var delta = (event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x)
-                        var step = delta > 0 ? -1 : 1
-                        menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                    }
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                z: -1
-                hoverEnabled: true
-                cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.ArrowCursor
-                onPositionChanged: function(mouse) {
-                    menuCard.isWheelOrKeyNav = false
-                }
-                onWheel: function(wheel) {
-                    menuCard.isWheelOrKeyNav = true
-                    if (menuCard.totalMenuItems > 0) {
-                        var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                        var step = delta > 0 ? -1 : 1
-                        menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                    }
-                }
-            }
-
-            // 1. Horizontal layout when dock is horizontal (Folder Icon Picker)
-            Row {
-                id: actionRow
-                visible: !root.isVertical && menuCard.isFolderMenu
-                anchors.centerIn: parent
-                spacing: 4
-
-                // Folder Symbols Picker List (Monochrome vector glyphs with optical centering)
-                Repeater {
-                    model: (!root.isMenuFromFolder && root.activeMenuItem && root.activeMenuItem.isStack) ? root.availableFolderIcons : []
-
-                    Item {
-                        id: iconChoiceBtnH
-                        width: 26
-                        height: 24
-
-                        readonly property bool isCurrentIcon: {
-                            if (!root.activeMenuItem) return false
-                            return root.activeMenuItem.icon === modelData
-                        }
-                        readonly property bool isFocused: menuCard.selectedIndex === index
-
-                        DockGlyph {
-                            anchors.centerIn: parent
-                            width: parent.width
-                            height: parent.height
-                            text: modelData
-                            fontFamily: Style.font.family
-                            fontSize: 16
-                            color: (iconChoiceBtnH.isFocused || iconChoiceBtnH.isCurrentIcon) ? Color.accent : Color.popups.text
-
-                            scale: iconChoiceBtnH.isFocused ? 1.25 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                        }
-
-                        MouseArea {
-                            id: iconChoiceMouseH
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                            onEntered: {
-                                if (!menuCard.isWheelOrKeyNav) {
-                                    menuCard.selectedIndex = index
-                                }
-                            }
-                            onPositionChanged: function(mouse) {
-                                menuCard.isWheelOrKeyNav = false
-                                menuCard.selectedIndex = index
-                            }
-                            onWheel: function(wheel) {
-                                menuCard.isWheelOrKeyNav = true
-                                if (menuCard.totalMenuItems > 0) {
-                                    var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                    var step = delta > 0 ? -1 : 1
-                                    menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                                }
-                            }
-                            onClicked: {
-                                if (root.activeMenuItem && root.activeMenuItem.isStack) {
-                                    var cur = root.activeMenuItem.icon || "grid"
-                                    var targetIcon = (cur === modelData) ? "grid" : modelData
-                                    root.setPinned(DockModel.setStackIcon(root.pinnedIds, root.activeMenuItem.id, targetIcon))
-                                }
-                                root.activeMenuItem = null
-                            }
-                        }
-                    }
-                }
-
-                // Divider before action buttons for folder
-                Rectangle {
-                    visible: !root.isMenuFromFolder && (root.activeMenuItem && root.activeMenuItem.isStack)
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 1
-                    height: 14
-                    color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.35)
-                }
-
-                // 3. Minus Button: Extract app from folder OR Delete entire folder at the end of the bar
+                // 2. Sleek Separator between Apps and Widgets
                 Item {
-                    id: minusBtnH
-                    visible: root.isMenuFromFolder || (root.activeMenuItem && root.activeMenuItem.isStack)
-                    width: 26
-                    height: 24
+                    id: dockSeparator
+                    visible: root.hasWidgets
+                    opacity: root.hasWidgets ? 1.0 : 0.0
+                    readonly property real sepOffset: (root.widgetPosition === "left") ? root.widgetsWidth : root.itemsWidth
+                    x: root.isVertical ? 0 : sepOffset
+                    y: root.isVertical ? sepOffset : 0
+                    width: root.isVertical ? root.slotSize : root.separatorSize
+                    height: root.isVertical ? root.separatorSize : root.slotSize
+                    z: 0
 
-                    readonly property bool isFocused: menuCard.selectedIndex === root.availableFolderIcons.length
-
-                    DockGlyph {
-                        anchors.centerIn: parent
-                        width: parent.width
-                        height: parent.height
-                        text: "-"
-                        fontFamily: Style.font.family
-                        fontSize: 16
-                        color: minusBtnH.isFocused ? Color.accent : Color.popups.text
-
-                        scale: minusBtnH.isFocused ? 1.25 : 1.0
-                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                    }
-
-                    MouseArea {
-                        id: minusMouseH
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                        onEntered: {
-                            if (!menuCard.isWheelOrKeyNav) {
-                                menuCard.selectedIndex = root.availableFolderIcons.length
-                            }
-                        }
-                        onPositionChanged: function(mouse) {
-                            menuCard.isWheelOrKeyNav = false
-                            menuCard.selectedIndex = root.availableFolderIcons.length
-                        }
-                        onWheel: function(wheel) {
-                            menuCard.isWheelOrKeyNav = true
-                            if (menuCard.totalMenuItems > 0) {
-                                var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                var step = delta > 0 ? -1 : 1
-                                menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                            }
-                        }
-                        onClicked: {
-                            if (!root.activeMenuItem) return
-                            if (root.activeMenuItem.isStack) {
-                                root.setPinned(DockModel.dissolveStack(root.pinnedIds, root.activeMenuItem.id))
-                                root.activeStackItem = null
-                            } else if (root.isMenuFromFolder && root.activeStackItem) {
-                                root.setPinned(DockModel.extractFromStackToDock(root.pinnedIds, root.activeStackItem.id, root.activeMenuItem.appId, root.activeStackItemIndex + 1))
-                            }
-                            root.activeMenuItem = null
-                        }
-                    }
-                }
-            }
-
-            // 2. Vertical layout when dock is vertical (Folder Icon Picker)
-            Column {
-                id: actionCol
-                visible: root.isVertical && menuCard.isFolderMenu
-                anchors.centerIn: parent
-                spacing: 4
-
-                // Folder Symbols Picker List (Monochrome vector glyphs with optical centering)
-                Repeater {
-                    model: (!root.isMenuFromFolder && root.activeMenuItem && root.activeMenuItem.isStack) ? root.availableFolderIcons : []
-
-                    Item {
-                        id: iconChoiceBtnV
-                        width: 24
-                        height: 26
-
-                        readonly property bool isCurrentIcon: {
-                            if (!root.activeMenuItem) return false
-                            return root.activeMenuItem.icon === modelData
-                        }
-                        readonly property bool isFocused: menuCard.selectedIndex === index
-
-                        DockGlyph {
-                            anchors.centerIn: parent
-                            width: parent.width
-                            height: parent.height
-                            text: modelData
-                            fontFamily: Style.font.family
-                            fontSize: 16
-                            color: (iconChoiceBtnV.isFocused || iconChoiceBtnV.isCurrentIcon) ? Color.accent : Color.popups.text
-
-                            scale: iconChoiceBtnV.isFocused ? 1.25 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                        }
-
-                        MouseArea {
-                            id: iconChoiceMouseV
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                            onEntered: {
-                                if (!menuCard.isWheelOrKeyNav) {
-                                    menuCard.selectedIndex = index
-                                }
-                            }
-                            onPositionChanged: function(mouse) {
-                                menuCard.isWheelOrKeyNav = false
-                                menuCard.selectedIndex = index
-                            }
-                            onWheel: function(wheel) {
-                                menuCard.isWheelOrKeyNav = true
-                                if (menuCard.totalMenuItems > 0) {
-                                    var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                    var step = delta > 0 ? -1 : 1
-                                    menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                                }
-                            }
-                            onClicked: {
-                                if (root.activeMenuItem && root.activeMenuItem.isStack) {
-                                    var cur = root.activeMenuItem.icon || "grid"
-                                    var targetIcon = (cur === modelData) ? "grid" : modelData
-                                    root.setPinned(DockModel.setStackIcon(root.pinnedIds, root.activeMenuItem.id, targetIcon))
-                                }
-                                root.activeMenuItem = null
-                            }
-                        }
-                    }
-                }
-
-                // Divider before action buttons for folder
-                Rectangle {
-                    visible: !root.isMenuFromFolder && (root.activeMenuItem && root.activeMenuItem.isStack)
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 14
-                    height: 1
-                    color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.35)
-                }
-
-                // 3. Minus Button: Extract app from folder OR Delete entire folder at the bottom of the column
-                Item {
-                    id: minusBtnV
-                    visible: root.isMenuFromFolder || (root.activeMenuItem && root.activeMenuItem.isStack)
-                    width: 24
-                    height: 26
-
-                    readonly property bool isFocused: menuCard.selectedIndex === root.availableFolderIcons.length
-
-                    DockGlyph {
-                        anchors.centerIn: parent
-                        width: parent.width
-                        height: parent.height
-                        text: "-"
-                        fontFamily: Style.font.family
-                        fontSize: 16
-                        color: minusBtnV.isFocused ? Color.accent : Color.popups.text
-
-                        scale: minusBtnV.isFocused ? 1.25 : 1.0
-                        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                    }
-
-                    MouseArea {
-                        id: minusMouseV
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: menuCard.isWheelOrKeyNav ? Qt.BlankCursor : Qt.PointingHandCursor
-                        onEntered: {
-                            if (!menuCard.isWheelOrKeyNav) {
-                                menuCard.selectedIndex = root.availableFolderIcons.length
-                            }
-                        }
-                        onPositionChanged: function(mouse) {
-                            menuCard.isWheelOrKeyNav = false
-                            menuCard.selectedIndex = root.availableFolderIcons.length
-                        }
-                        onWheel: function(wheel) {
-                            menuCard.isWheelOrKeyNav = true
-                            if (menuCard.totalMenuItems > 0) {
-                                var delta = (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x)
-                                var step = delta > 0 ? -1 : 1
-                                menuCard.selectedIndex = (menuCard.selectedIndex + step + menuCard.totalMenuItems) % menuCard.totalMenuItems
-                            }
-                        }
-                        onClicked: {
-                            if (!root.activeMenuItem) return
-                            if (root.activeMenuItem.isStack) {
-                                root.setPinned(DockModel.dissolveStack(root.pinnedIds, root.activeMenuItem.id))
-                                root.activeStackItem = null
-                            } else if (root.isMenuFromFolder && root.activeStackItem) {
-                                root.setPinned(DockModel.extractFromStackToDock(root.pinnedIds, root.activeStackItem.id, root.activeMenuItem.appId, root.activeStackItemIndex + 1))
-                            }
-                            root.activeMenuItem = null
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. macOS Stacks Folder Grid Overlay Window (Strictly Centered & Sized to Folder Card, lifts tiles)
-    PanelWindow {
-        id: stackWindow
-        visible: root.isStackOpen && root.opened && root.pluginEnabled && root.dockEnabled
-
-        WlrLayershell.namespace: "omarchy-dock-stack"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: root.isEditingFolderTitle
-            ? WlrKeyboardFocus.Exclusive
-            : (root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
-        exclusionMode: ExclusionMode.Auto
-        color: "transparent"
-
-        anchors {
-            top: (!root.isVertical && root.barPosition === "bottom") ? true : (root.isVertical ? true : false)
-            bottom: (!root.isVertical && root.barPosition === "top") ? true : (root.isVertical ? true : false)
-            left: (root.isVertical && root.barPosition === "right") ? true : (!root.isVertical ? true : false)
-            right: (root.isVertical && root.barPosition === "left") ? true : (!root.isVertical ? true : false)
-        }
-
-        margins {
-            bottom: (!root.isVertical && root.barPosition === "top") ? (Style.gapsOut || 5) : 0
-            top: (!root.isVertical && root.barPosition === "bottom") ? (Style.gapsOut || 5) : 0
-            right: (root.isVertical && root.barPosition === "left") ? (Style.gapsOut || 5) : 0
-            left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
-        }
-
-        implicitWidth: root.isVertical ? stackCard.width : (dockWindow.screen ? dockWindow.screen.width : 1920)
-        implicitHeight: root.isVertical ? (dockWindow.screen ? dockWindow.screen.height : 1080) : stackCard.height
-
-        // Dismissal MouseArea covering the entire transparent overlay area of stackWindow outside stackCard
-        MouseArea {
-            anchors.fill: parent
-            z: 0
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            onClicked: function(mouse) {
-                if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
-                    titleInput.saveAndClose()
-                }
-                root.activeStackItem = null
-                root.isEditMode = false
-                root.isEditingFolderTitle = false
-            }
-        }
-
-        // Frosted Card for Folder Contents
-        Rectangle {
-            id: stackCard
-            z: 1
-            anchors.centerIn: parent
-            focus: true
-
-            onVisibleChanged: {
-                if (visible) {
-                    stackCard.forceActiveFocus()
-                }
-            }
-
-            Keys.onEscapePressed: function(event) {
-                event.accepted = true
-                if (root.isEditingFolderTitle) {
-                    if (typeof titleInput !== "undefined") {
-                        titleInput.text = root.activeStackItem ? root.activeStackItem.name : "Folder"
-                    }
-                    root.isEditingFolderTitle = false
-                    stackCard.forceActiveFocus()
-                    return
-                }
-                if (root.isEditMode) {
-                    root.isEditMode = false
-                }
-                root.activeStackItem = null
-            }
-
-            readonly property int totalApps: (root.activeStackItem && root.activeStackItem.subApps) ? root.activeStackItem.subApps.length : 0
-            readonly property int gridCols: totalApps <= 4 ? 2 : 3
-            readonly property int gridRows: Math.max(1, Math.ceil(totalApps / gridCols))
-
-            readonly property int baseGridWidth: gridCols * 50 - 6 + 24
-
-            width: baseGridWidth
-            height: (root.showFolderTitles ? 36 : 0) + (gridRows * 50 - 6) + 24
-
-            color: root.isBarTransparent
-                ? Util.alpha(Color.popups.background, 0.45)
-                : Color.popups.background
-            border.width: root.isBarTransparent ? 0 : root.systemBorderSize
-            border.color: root.isBarTransparent ? "transparent" : Color.accent
-            radius: root.systemRounding
-            antialiasing: true
-            smooth: true
-
-            MouseArea {
-                anchors.fill: parent
-                z: -1
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                cursorShape: (root.folderDragActiveIndex >= 0) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
-                onClicked: function(mouse) {
-                    if (root.isEditingFolderTitle && typeof titleInput !== "undefined") {
-                        titleInput.saveAndClose()
-                    }
-                    if (mouse.button === Qt.RightButton || mouse.button === Qt.LeftButton) {
-                        root.isEditMode = false
-                    }
-                }
-            }
-
-            // Folder Title Header (shown when root.showFolderTitles is true)
-            Item {
-                id: titleContainer
-                visible: root.showFolderTitles
-                anchors.top: parent.top
-                anchors.topMargin: 10
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: parent.width - 24
-                height: 28
-
-                // Silky smooth wiggle animation on hover and in edit mode
-                SequentialAnimation {
-                    id: titleJiggleAnim
-                    running: (root.isEditMode || titleHoverArea.containsMouse) && !root.isEditingFolderTitle && !titleInput.activeFocus
-                    loops: Animation.Infinite
-
-                    NumberAnimation {
-                        target: titleContainer
-                        property: "rotation"
-                        to: -3.8
-                        duration: 105
-                        easing.type: Easing.InOutSine
-                    }
-                    NumberAnimation {
-                        target: titleContainer
-                        property: "rotation"
-                        to: 3.8
-                        duration: 105
-                        easing.type: Easing.InOutSine
-                    }
-                }
-
-                NumberAnimation {
-                    id: resetTitleRotation
-                    target: titleContainer
-                    property: "rotation"
-                    to: 0.0
-                    duration: 120
-                    easing.type: Easing.OutCubic
-                    running: (!root.isEditMode && !titleHoverArea.containsMouse || root.isEditingFolderTitle || titleInput.activeFocus) && titleContainer.rotation !== 0.0
-                }
-
-                readonly property real availableTitleWidth: Math.max(10, width - 16)
-                readonly property bool needsMarquee: !root.isEditingFolderTitle && !titleInput.activeFocus && (titleLabel.implicitWidth > availableTitleWidth)
-                readonly property real scrollDistance: Math.max(0, titleLabel.implicitWidth - availableTitleWidth)
-                property real marqueeOffset: 0
-
-                onNeedsMarqueeChanged: {
-                    if (!needsMarquee) {
-                        marqueeOffset = 0
-                        marqueeAnim.stop()
-                    } else {
-                        marqueeAnim.restart()
-                    }
-                }
-
-                    // Background pill (hover / edit)
                     Rectangle {
-                        anchors.fill: parent
-                        radius: 6
-                        color: (root.isEditingFolderTitle || titleInput.activeFocus)
-                            ? Style.hoverFillFor(Color.popups.text, Color.accent)
-                            : (titleHoverArea.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent")
-                        border.width: (root.isEditingFolderTitle || titleInput.activeFocus) ? 1 : 0
-                        border.color: Color.accent
-                        Behavior on color { ColorAnimation { duration: 150 } }
-                    }
-
-                    // Marquee Animation: smooth ticker for long folder names
-                    SequentialAnimation {
-                        id: marqueeAnim
-                        running: titleContainer.needsMarquee && stackWindow.visible
-                        loops: Animation.Infinite
-
-                        PauseAnimation { duration: 1200 }
-                        NumberAnimation {
-                            target: titleContainer
-                            property: "marqueeOffset"
-                            to: -titleContainer.scrollDistance
-                            duration: Math.max(1600, titleContainer.scrollDistance * 32)
-                            easing.type: Easing.InOutQuad
-                        }
-                        PauseAnimation { duration: 1200 }
-                        NumberAnimation {
-                            target: titleContainer
-                            property: "marqueeOffset"
-                            to: 0
-                            duration: Math.max(1600, titleContainer.scrollDistance * 32)
-                            easing.type: Easing.InOutQuad
-                        }
-                    }
-
-                    // === DISPLAY: Text Viewport with smooth marquee / ticker ===
-                    Item {
-                        id: titleViewport
                         anchors.centerIn: parent
-                        width: titleContainer.availableTitleWidth
-                        height: parent.height
-                        clip: true
-                        visible: !root.isEditingFolderTitle
-
-                        Text {
-                            id: titleLabel
-                            x: titleContainer.needsMarquee ? titleContainer.marqueeOffset : Math.round((parent.width - implicitWidth) / 2)
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: root.activeStackItem ? root.activeStackItem.name : "Folder"
-                            font.family: Style.font.family
-                            font.pixelSize: 12
-                            font.bold: true
-                            color: Color.popups.text
-                            elide: Text.ElideNone
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-
-                    // === EDIT: TextInput с прокруткой, виден только при фокусе ===
-                    TextInput {
-                        id: titleInput
-                        anchors.centerIn: parent
-                        width: parent.width - 12
-                        visible: root.isEditingFolderTitle
-                        enabled: root.isEditingFolderTitle
-                        focus: root.isEditingFolderTitle
-                        text: root.activeStackItem ? root.activeStackItem.name : "Folder"
-                        font.family: Style.font.family
-                        font.pixelSize: 12
-                        font.bold: true
-                        color: Color.popups.text
-                        selectByMouse: true
-                        cursorVisible: true
-                        clip: true
-                        horizontalAlignment: Text.AlignHCenter
-
-                        onVisibleChanged: {
-                            if (visible && root.activeStackItem) {
-                                text = root.activeStackItem.name
-                                selectAll()
-                                forceActiveFocus()
-                            }
-                        }
-
-                        function saveAndClose() {
-                            var n = text.trim() || "Folder"
-                            if (root.activeStackItem) {
-                                root.setPinned(DockModel.renameStack(root.pinnedIds, root.activeStackItem.id, n))
-                                root.activeStackItem.name = n
-                            }
-                            root.isEditingFolderTitle = false
-                            focus = false
-                            stackCard.forceActiveFocus()
-                        }
-
-                        Keys.onReturnPressed: function(event) { event.accepted = true; saveAndClose() }
-                        Keys.onEnterPressed:  function(event) { event.accepted = true; saveAndClose() }
-                        Keys.onEscapePressed: function(event) {
-                            event.accepted = true
-                            text = root.activeStackItem ? root.activeStackItem.name : "Folder"
-                            root.isEditingFolderTitle = false
-                            focus = false
-                            stackCard.forceActiveFocus()
-                        }
-                        onEditingFinished: saveAndClose()
-                    }
-
-                    MouseArea {
-                        id: titleHoverArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        visible: !root.isEditingFolderTitle
-                        enabled: !root.isEditingFolderTitle
-                        cursorShape: (root.folderDragActiveIndex >= 0 || titleHoverArea.containsMouse) ? Qt.BlankCursor : Qt.IBeamCursor
-                        onClicked: {
-                            if (root.activeStackItem) {
-                                root.isEditingFolderTitle = true
-                            }
-                        }
+                        width: root.isVertical ? (root.slotSize - 18) : 1.5
+                        height: root.isVertical ? 1.5 : (root.slotSize - 18)
+                        radius: 0.75
+                        color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.45)
                     }
                 }
 
-            // Grid of App Icons inside the Folder (Reordering restricted to 2D grid rails)
-            Item {
-                id: gridContainer
-                anchors.top: root.showFolderTitles ? titleContainer.bottom : parent.top
-                anchors.topMargin: root.showFolderTitles ? 6 : 12
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: stackCard.gridCols * 50 - 6
-                height: stackCard.gridRows * 50 - 6
+                // 3. Dock Active Bar/Tray Widgets
+                Repeater {
+                    model: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets : []
 
-                    Repeater {
-                        model: (root.activeStackItem && root.activeStackItem.subApps) ? root.activeStackItem.subApps : []
+                    Item {
+                        id: widgetSlotRoot
+
+                        readonly property real widgetBaseOffset: (root.widgetPosition === "left") ? 0 : (root.itemsWidth + root.separatorSize)
+                        readonly property real widgetSlotDimension: (modelData === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+                        readonly property real widgetPos: widgetBaseOffset + (index * root.slotSize)
+                        x: root.isVertical ? 0 : widgetPos
+                        y: root.isVertical ? widgetPos : 0
+                        width: root.isVertical ? root.slotSize : widgetSlotDimension
+                        height: root.isVertical ? widgetSlotDimension : root.slotSize
+                        z: 1
 
                         Item {
-                            id: subItemRoot
-                            readonly property int totalSub: (root.activeStackItem && root.activeStackItem.subApps) ? root.activeStackItem.subApps.length : 0
-                            readonly property int visualSubSlot: (root.folderDragActiveIndex === index) ? index : root.getFolderVisualSlot(index, root.folderDragActiveIndex, root.folderDragTargetIndex)
-                            readonly property int slotCol: visualSubSlot % stackCard.gridCols
-                            readonly property int slotRow: Math.floor(visualSubSlot / stackCard.gridCols)
+                            id: widgetWrapper
+                            x: Math.round((parent.width - width) / 2)
+                            y: Math.round((parent.height - height) / 2) - 1
+                            width: (modelData === "omarchy.clock" && !root.isVertical) ? (widgetSlotRoot.width - 10) : root.iconBaseSize
+                            height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
+                            scale: root.isEditMode ? 0.82 : (widgetSlotMouse.containsMouse ? 1.10 : 1.0)
+                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
-                            property int subPreviewTopIndex: -1
-                            property bool isSubWheelScrolling: false
-
-                            Timer {
-                                id: subWheelCursorTimer
-                                interval: 1200
-                                repeat: false
-                                onTriggered: {
-                                    subItemRoot.isSubWheelScrolling = false
-                                }
+                            // 1. Live Clock Horizontal Text Display (Matches status bar exactly)
+                            Text {
+                                id: clockHorizontalLabel
+                                visible: modelData === "omarchy.clock" && !root.isVertical
+                                anchors.centerIn: parent
+                                text: (widgetLoader.item && widgetLoader.item.displayText) ? widgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
+                                font.family: Style.font.family
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                                color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                renderType: Text.CurveRendering
+                                font.hintingPreference: Font.PreferNoHinting
+                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
 
-                            readonly property int subRealActiveTopIndex: (modelData && typeof modelData.activeTopIndex === "number") ? modelData.activeTopIndex : 0
+                            // 2. Live Clock Vertical Stack Display
+                            Column {
+                                id: clockVerticalCol
+                                visible: modelData === "omarchy.clock" && root.isVertical
+                                anchors.centerIn: parent
+                                spacing: 1
 
-                            readonly property int subEffectiveTopIndex: {
-                                var total = (modelData && modelData.toplevels) ? modelData.toplevels.length : 0
-                                if (total === 0) return 0
-                                if (subItemRoot.subPreviewTopIndex >= 0 && subItemRoot.subPreviewTopIndex < total) return subItemRoot.subPreviewTopIndex
-                                return subItemRoot.subRealActiveTopIndex
-                            }
+                                Repeater {
+                                    model: (widgetLoader.item && widgetLoader.item.verticalLines && widgetLoader.item.verticalLines.length > 0)
+                                           ? widgetLoader.item.verticalLines
+                                           : [Qt.formatDateTime(new Date(), "HH"), Qt.formatDateTime(new Date(), "mm")]
 
-                            Timer {
-                                id: subPreviewResetTimer
-                                interval: 1500
-                                repeat: false
-                                onTriggered: {
-                                    if (!subMouse.containsMouse) {
-                                        subItemRoot.subPreviewTopIndex = -1
+                                    Text {
+                                        required property string modelData
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: modelData
+                                        font.family: Style.font.family
+                                        font.pixelSize: modelData.length > 3 ? 9 : 10
+                                        font.weight: Font.Medium
+                                        color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                        renderType: Text.CurveRendering
+                                        font.hintingPreference: Font.PreferNoHinting
                                     }
                                 }
                             }
 
-                            x: slotCol * 50
-                            y: slotRow * 50
-                            width: 44
-                            height: 44
-                            z: (root.folderDragActiveIndex === index) ? 100 : (subMouse.containsMouse ? 50 : 1)
-
-                            Behavior on x {
-                                enabled: root.folderDragActiveIndex >= 0 && root.folderDragActiveIndex !== index
-                                NumberAnimation { duration: 320; easing.type: Easing.OutQuint }
+                            // 3. Standard Vector Glyph (All other widgets)
+                            DockGlyph {
+                                id: widgetGlyph
+                                visible: modelData !== "omarchy.clock"
+                                anchors.centerIn: parent
+                                width: root.iconBaseSize
+                                height: root.iconBaseSize
+                                text: (modelData === "omarchy.menu") ? "\ue900" : root.getWidgetIcon(modelData, widgetLoader.item)
+                                fontFamily: (modelData === "omarchy.menu") ? "omarchy" : Style.font.family
+                                fontSize: (modelData === "omarchy.menu") ? 18 : 22
+                                color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
-                            Behavior on y {
-                                enabled: root.folderDragActiveIndex >= 0 && root.folderDragActiveIndex !== index
-                                NumberAnimation { duration: 320; easing.type: Easing.OutQuint }
+
+                            // Headless Widget Backend Loader (Invisible but active so panels/services stay alive and anchored to dock)
+                            Loader {
+                                id: widgetLoader
+                                anchors.fill: parent
+                                opacity: 0.0
+                                source: root.getWidgetSource(modelData)
+                                onLoaded: {
+                                    if (item) {
+                                        root.configureHostedWidget(item, modelData)
+                                        if (modelData === "omarchy.clock") {
+                                            if (item.displayText !== undefined) root.clockDisplayText = item.displayText
+                                            if (item.displayTextChanged) {
+                                                item.displayTextChanged.connect(function() {
+                                                    root.clockDisplayText = item.displayText
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                        }
 
-                            property real subClickScaleFactor: 1.0
+                        // MouseArea for Click to Open Widget Panel / Cycle Format / Timezone / Remove in Edit Mode
+                        MouseArea {
+                            id: widgetSlotMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                            cursorShape: root.isEditMode ? Qt.PointingHandCursor : Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (root.isEditMode) {
+                                    if (mouse.button === Qt.RightButton) {
+                                        root.isEditMode = false
+                                        return
+                                    }
+                                    root.removeDockWidget(modelData, "")
+                                    return
+                                }
+                                if (modelData === "omarchy.menu") {
+                                    if (root.shell && typeof root.shell.summon === "function") {
+                                        root.shell.summon("omarchy.menu")
+                                    } else {
+                                        Util.execDetached("omarchy-menu")
+                                    }
+                                    return
+                                }
+                                var target = widgetLoader.item
+                                if (target) {
+                                    root.configureHostedWidget(target, modelData)
+                                    if (mouse.button === Qt.RightButton) {
+                                        if (typeof target.cycleFormat === "function") {
+                                            target.cycleFormat()
+                                        }
+                                    } else if (mouse.button === Qt.MiddleButton) {
+                                        if (target.bar && typeof target.bar.run === "function") {
+                                            target.bar.run("omarchy-menu-timezone")
+                                        } else {
+                                            Util.execDetached("omarchy-menu-timezone")
+                                        }
+                                    } else {
+                                        if (typeof target.togglePanel === "function") {
+                                            target.togglePanel()
+                                        } else if (typeof target.toggle === "function") {
+                                            target.toggle()
+                                        } else if (typeof target.open === "function") {
+                                            if (target.opened) target.close()
+                                            else target.open()
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                            Rectangle {
-                                id: subClickRipple
+                        // Remove from Dock Badge ("-") in Edit Mode
+                        Item {
+                            id: removeWidgetBadge
+                            visible: root.isEditMode && !root.isAnyDragging
+                            anchors.horizontalCenter: widgetWrapper.horizontalCenter
+                            anchors.bottom: widgetWrapper.top
+                            anchors.bottomMargin: -5
+                            width: 20
+                            height: 20
+                            z: 200
+
+                            DockGlyph {
                                 anchors.centerIn: parent
                                 width: parent.width
                                 height: parent.height
-                                radius: width / 2
-                                color: "transparent"
-                                border.width: 2
-                                border.color: Color.accent
-                                opacity: 0.0
-                                scale: 0.5
-                                z: 0
-                            }
-
-                            SequentialAnimation {
-                                id: subClickEffectAnim
-                                alwaysRunToEnd: true
-
-                                ParallelAnimation {
-                                    NumberAnimation { target: subItemRoot; property: "subClickScaleFactor"; from: 0.92; to: 1.07; duration: 130; easing.type: Easing.OutCubic }
-                                    NumberAnimation { target: subClickRipple; property: "scale"; from: 0.5; to: 1.35; duration: 240; easing.type: Easing.OutCubic }
-                                    NumberAnimation { target: subClickRipple; property: "opacity"; from: 0.65; to: 0.0; duration: 240; easing.type: Easing.OutCubic }
-                                }
-                                NumberAnimation { target: subItemRoot; property: "subClickScaleFactor"; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
-                            }
-
-                            // Independent Drag Offset for folder items
-                            Item {
-                                id: subDragOffset
-                                x: 0
-                                y: 0
-                            }
-
-                            Item {
-                                id: subItemWrapper
-                                x: (parent.width - width) / 2 + subDragOffset.x
-                                y: (parent.height - height) / 2 + subDragOffset.y
-                                width: 34
-                                height: 34
-                                scale: ((root.folderDragActiveIndex === index) ? 1.15 : (root.isEditMode ? 0.82 : (subMouse.pressed ? 0.92 : (subMouse.containsMouse ? 1.10 : 1.0)))) * subItemRoot.subClickScaleFactor
-                                opacity: (root.folderDragActiveIndex === index) ? 0.92 : 1.0
-                                Behavior on scale {
-                                    enabled: !subClickEffectAnim.running && (subMouse.containsMouse || subMouse.pressed || root.isEditMode || root.folderDragActiveIndex >= 0)
-                                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-                                }
-
-                                Image {
-                                    id: subIcon
-                                    anchors.centerIn: parent
-                                    width: 28
-                                    height: 28
-                                    fillMode: Image.PreserveAspectFit
-                                    source: (root.iconRevision, root.resolveIcon(modelData))
-                                    sourceSize: Qt.size(Math.max(128, 28 * 4 * Screen.devicePixelRatio), Math.max(128, 28 * 4 * Screen.devicePixelRatio))
-                                    asynchronous: false
-                                    mipmap: true
-                                    smooth: true
-                                    antialiasing: true
-                                }
-
-                                // Silky smooth, organic wiggle animation
-                                SequentialAnimation {
-                                    id: subJiggleAnim
-                                    running: (root.folderDragActiveIndex === index) || root.isEditMode
-                                    loops: Animation.Infinite
-
-                                    NumberAnimation {
-                                        target: subIcon
-                                        property: "rotation"
-                                        to: -3.8
-                                        duration: 105
-                                        easing.type: Easing.InOutSine
-                                    }
-                                    NumberAnimation {
-                                        target: subIcon
-                                        property: "rotation"
-                                        to: 3.8
-                                        duration: 105
-                                        easing.type: Easing.InOutSine
-                                    }
-                                }
-
-                                NumberAnimation {
-                                    id: resetSubRotation
-                                    target: subIcon
-                                    property: "rotation"
-                                    to: 0.0
-                                    duration: 150
-                                    easing.type: Easing.OutCubic
-                                    running: root.folderDragActiveIndex !== index && !root.isEditMode && subIcon.rotation !== 0.0
-                                }
-
-                                // Multi-instance duplicate capsule under subApp icon (Sliding window viewport)
-                                Rectangle {
-                                    id: subDuplicateCapsule
-                                    visible: opacity > 0
-                                    opacity: (modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2 && !root.isEditMode) ? 1.0 : 0.0
-                                    Behavior on opacity { NumberAnimation { duration: 180 } }
-
-                                    readonly property int totalWindows: (modelData && modelData.toplevels) ? modelData.toplevels.length : 0
-                                    readonly property int winCount: Math.min(totalWindows, 3)
-
-                                    function getSubSlotWindowIndex(slotIdx) {
-                                        if (totalWindows <= 3) {
-                                            return slotIdx
-                                        }
-                                        var cur = subItemRoot.subEffectiveTopIndex
-                                        if (cur === 0 || cur === 1) {
-                                            return slotIdx
-                                        }
-                                        if (cur === totalWindows - 1) {
-                                            if (slotIdx === 0) return totalWindows - 2
-                                            if (slotIdx === 1) return totalWindows - 1
-                                            return 0
-                                        }
-                                        if (slotIdx === 0) return cur - 1
-                                        if (slotIdx === 1) return cur
-                                        return cur + 1
-                                    }
-
-                                    anchors.top: subIcon.bottom
-                                    anchors.topMargin: 2
-                                    anchors.horizontalCenter: parent.horizontalCenter
-
-                                    height: 6
-                                    width: Math.max(18, 12 + winCount * 5)
-                                    radius: height / 2
-
-                                    color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.92)
-                                    antialiasing: true
-                                    smooth: true
-
-                                    Row {
-                                        anchors.centerIn: parent
-                                        spacing: 3
-
-                                        Repeater {
-                                            model: subDuplicateCapsule.winCount
-                                            Rectangle {
-                                                readonly property int targetWinIdx: subDuplicateCapsule.getSubSlotWindowIndex(index)
-                                                readonly property bool isAppActive: (modelData && modelData.isActive === true)
-                                                readonly property bool isPreviewing: (subItemRoot.subPreviewTopIndex >= 0)
-                                                readonly property bool isSlotHighlighted: (isAppActive || isPreviewing) && (targetWinIdx === subItemRoot.subEffectiveTopIndex)
-                                                readonly property bool isOriginalApp: (targetWinIdx === 0)
-
-                                                width: isOriginalApp ? 9.0 : (isSlotHighlighted ? 3.5 : 2.5)
-                                                height: 2.5
-                                                radius: 1.25
-                                                color: isSlotHighlighted ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, isOriginalApp ? 0.45 : 0.28)
-                                                antialiasing: true
-                                                smooth: true
-
-                                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                                Behavior on color { ColorAnimation { duration: 120 } }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Running indicator dot under subApp icon (Single instance)
-                                Rectangle {
-                                    id: subDot
-                                    visible: opacity > 0
-                                    opacity: (modelData.isRunning && (!modelData.toplevels || modelData.toplevels.length <= 1) && !subMouse.containsMouse && !root.isEditMode) ? 1.0 : 0.0
-                                    Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-
-                                    anchors.top: subIcon.bottom
-                                    anchors.topMargin: 2
-                                    anchors.horizontalCenter: parent.horizontalCenter
-
-                                    width: modelData.isActive ? 10 : 4
-                                    height: 2
-                                    radius: 1
-                                    color: modelData.isActive ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
-                                    antialiasing: true
-                                    smooth: true
-
-                                    Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 150 } }
-                                }
-                            }
-
-                            // Long press timer for Edit Mode (450ms, folder only)
-                            Timer {
-                                id: subLongPressTimer
-                                interval: 450
-                                repeat: false
-                                onTriggered: {
-                                    if (root.activeStackItem && root.folderDragActiveIndex < 0) {
-                                        subMouse.didSubLongPress = true
-                                        root.isEditMode = true
-                                    }
-                                }
-                            }
-
-                            // Extract Glyph (Centered directly above subItemWrapper, folder only)
-                            Item {
-                                id: subExtractBadge
-                                visible: root.activeStackItem && root.isEditMode && (root.folderDragActiveIndex < 0)
-                                anchors.horizontalCenter: subItemWrapper.horizontalCenter
-                                anchors.bottom: subItemWrapper.top
-                                anchors.bottomMargin: -5
-                                width: 16
-                                height: 14
-                                z: 200
-
-                                DockGlyph {
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-                                    text: "-"
-                                    fontFamily: Style.font.family
-                                    fontSize: 16
-                                    color: subExtractMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85)
-
-                                    scale: subExtractMouse.containsMouse ? 1.25 : 1.0
-                                    Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-                                }
-
-                                MouseArea {
-                                    id: subExtractMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    cursorShape: (root.folderDragActiveIndex >= 0) ? Qt.BlankCursor : Qt.PointingHandCursor
-                                    onClicked: function(mouse) {
-                                        if (mouse.button === Qt.RightButton) {
-                                            root.isEditMode = false
-                                            return
-                                        }
-                                        if (root.activeStackItem) {
-                                            var stackId = root.activeStackItem.id
-                                            var remaining = (root.activeStackItem.subApps ? root.activeStackItem.subApps.length : 0) - 1
-                                            root.setPinned(DockModel.extractFromStackToDock(root.pinnedIds, stackId, modelData.appId, root.activeStackItemIndex + 1))
-                                            if (remaining <= 1) {
-                                                root.activeStackItem = null
-                                                root.isEditMode = false
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            function cycleSubDuplicate(forward) {
-                                if (!modelData || !modelData.isRunning || !modelData.toplevels) return
-                                var len = modelData.toplevels.length
-                                if (len <= 1) return
-
-                                subItemRoot.isSubWheelScrolling = true
-                                subWheelCursorTimer.restart()
-                                subPreviewResetTimer.stop()
-                                var curIdx = subItemRoot.subEffectiveTopIndex
-                                var nextIdx = forward ? ((curIdx + 1) % len) : ((curIdx - 1 + len) % len)
-                                subItemRoot.subPreviewTopIndex = nextIdx
+                                text: "-"
+                                fontFamily: Style.font.family
+                                fontSize: 16
+                                color: removeBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85)
+                                scale: removeBadgeMouse.containsMouse ? 1.25 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                             }
 
                             MouseArea {
-                                id: subMouse
+                                id: removeBadgeMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                cursorShape: (root.folderDragActiveIndex >= 0 || subMouse.drag.active || isDraggingActive || subItemRoot.isSubWheelScrolling) ? Qt.BlankCursor : (root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
-
-                                drag.target: root.activeStackItem ? subDragOffset : null
-                                drag.axis: Drag.XAndYAxis
-                                drag.minimumX: - (index % stackCard.gridCols) * 50
-                                drag.maximumX: (stackCard.gridCols - 1 - (index % stackCard.gridCols)) * 50
-                                drag.minimumY: - Math.floor(index / stackCard.gridCols) * 50
-                                drag.maximumY: (stackCard.gridRows - 1 - Math.floor(index / stackCard.gridCols)) * 50
-                                drag.threshold: 6
-
-                                property bool isDraggingActive: false
-                                property bool didSubLongPress: false
-
-                                focus: containsMouse
-
-                                onEntered: {
-                                    subMouse.forceActiveFocus()
-                                }
-
-                                Keys.onRightPressed: function(event) {
-                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
-                                        subItemRoot.cycleSubDuplicate(true)
-                                        event.accepted = true
-                                    }
-                                }
-
-                                Keys.onLeftPressed: function(event) {
-                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
-                                        subItemRoot.cycleSubDuplicate(false)
-                                        event.accepted = true
-                                    }
-                                }
-
-                                Keys.onTabPressed: function(event) {
-                                    if (modelData) {
-                                        subClickEffectAnim.restart()
-                                        var launchMidId = modelData.desktopId || modelData.appId || ""
-                                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                                            root.shell.appLibrary.launch(launchMidId, modelData.name)
-                                        } else {
-                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
-                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                        }
-                                        event.accepted = true
-                                    }
-                                }
-
-                                Keys.onReturnPressed: function(event) {
-                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2 && subItemRoot.subPreviewTopIndex >= 0) {
-                                        var top = modelData.toplevels[subItemRoot.subPreviewTopIndex]
-                                        if (top && typeof top.activate === "function") {
-                                            top.activate()
-                                            subItemRoot.subPreviewTopIndex = -1
-                                            event.accepted = true
-                                        }
-                                    }
-                                }
-
-                                onPressed: function(mouse) {
-                                    if (mouse.button === Qt.LeftButton) {
-                                        isDraggingActive = false
-                                        didSubLongPress = false
-                                        if (root.activeStackItem) {
-                                            subLongPressTimer.restart()
-                                        }
-                                    }
-                                }
-
-                                onPositionChanged: function(mouse) {
-                                    if (subItemRoot.isSubWheelScrolling) {
-                                        subItemRoot.isSubWheelScrolling = false
-                                    }
-                                    if (subMouse.drag.active) {
-                                        subLongPressTimer.stop()
-                                        if (!isDraggingActive) {
-                                            isDraggingActive = true
-                                            root.folderDragActiveIndex = index
-                                        }
-
-                                        var currentPosX = (index % stackCard.gridCols) * 50 + subDragOffset.x
-                                        var currentPosY = Math.floor(index / stackCard.gridCols) * 50 + subDragOffset.y
-
-                                        var col = Math.max(0, Math.min(stackCard.gridCols - 1, Math.round(currentPosX / 50)))
-                                        var row = Math.max(0, Math.min(stackCard.gridRows - 1, Math.round(currentPosY / 50)))
-                                        var targetIdx = Math.max(0, Math.min(totalSub - 1, row * stackCard.gridCols + col))
-                                        root.folderDragTargetIndex = targetIdx
-                                    }
-                                }
-
-                                onReleased: function(mouse) {
-                                    subLongPressTimer.stop()
-                                    if (isDraggingActive && root.activeStackItem) {
-                                        isDraggingActive = false
-                                        var finalTarget = root.folderDragTargetIndex
-                                        root.folderDragActiveIndex = -1
-                                        root.folderDragTargetIndex = -1
-                                        subDragOffset.x = 0
-                                        subDragOffset.y = 0
-
-                                        if (finalTarget >= 0 && finalTarget !== index) {
-                                            root.setPinned(DockModel.reorderInStack(root.pinnedIds, root.activeStackItem.id, index, finalTarget))
-                                        }
-                                    }
-                                }
-
-                                onExited: {
-                                    subItemRoot.isSubWheelScrolling = false
-                                    subPreviewResetTimer.restart()
-                                }
-
-                                onWheel: function(wheel) {
-                                    if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
-                                        if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
-                                            subItemRoot.cycleSubDuplicate(true)
-                                            wheel.accepted = true
-                                        } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
-                                            subItemRoot.cycleSubDuplicate(false)
-                                            wheel.accepted = true
-                                        }
-                                    }
-                                }
-
-                                onClicked: function(mouse) {
-                                    if (isDraggingActive || didSubLongPress) {
-                                        didSubLongPress = false
-                                        return
-                                    }
-
-                                    // Middle Click (Wheel Button click) -> Immediately launch duplicate
-                                    if (mouse.button === Qt.MiddleButton) {
-                                        subClickEffectAnim.restart()
-                                        var launchMidId = modelData.desktopId || modelData.appId || ""
-                                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                                            root.shell.appLibrary.launch(launchMidId, modelData.name)
-                                        } else {
-                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
-                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                        }
-                                        return
-                                    }
-
-                                    if (mouse.button === Qt.LeftButton) {
-                                        subClickEffectAnim.restart()
-                                        if (root.isEditMode) {
-                                            return
-                                        }
-                                        // 1. If not running, launch it (Folder stays open!)
-                                        if (!modelData.isRunning || !modelData.toplevels || modelData.toplevels.length === 0) {
-                                            var launchId = modelData.desktopId || modelData.appId || ""
-                                            root.requestFocusOnLaunch(launchId)
-                                            if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                                                root.shell.appLibrary.launch(launchId, modelData.name)
-                                            } else {
-                                                var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (modelData.exec || "")
-                                                Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                            }
-                                            return
-                                        }
-
-                                        // 2. If running: activate chosen window (LMB focuses/switches)
-                                        var tops = modelData.toplevels
-                                        var targetIdx = subItemRoot.subEffectiveTopIndex
-                                        if (targetIdx < 0 || targetIdx >= tops.length) targetIdx = 0
-
-                                        var chosenWin = tops[targetIdx]
-                                        if (chosenWin && typeof chosenWin.activate === "function") {
-                                            chosenWin.activate()
-                                        }
-                                        subItemRoot.subPreviewTopIndex = -1
-                                    } else if (mouse.button === Qt.RightButton) {
-                                        if (root.isEditMode) {
-                                            root.isEditMode = false
-                                            return
-                                        }
-                                    }
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.removeDockWidget(modelData, "")
                                 }
                             }
                         }
                     }
                 }
             }
+
+            // Invisible anchor for strictly center-of-screen popup panels
+            Item {
+                id: screenCenterAnchor
+                anchors.centerIn: parent
+                width: root.slotSize
+                height: root.slotSize
+                visible: false
+            }
         }
     }
 
+    function configureHostedWidget(item, widgetId) {
+        if (!item) return
+        if (root.loadedWidgetItems.indexOf(item) === -1) root.loadedWidgetItems.push(item)
+        if ("bar" in item) item.bar = dockBarContext
+        if ("moduleName" in item) item.moduleName = widgetId
+
+        function applyToPanel(p) {
+            if (!p) return
+            if ("centerOnBar" in p) {
+                p.centerOnBar = true
+            }
+            if ("bar" in p) {
+                p.bar = dockBarContext
+            }
+            if ("anchorItem" in p) {
+                p.anchorItem = screenCenterAnchor
+            }
+            if ("opened" in p && p.openedChanged) {
+                p.openedChanged.connect(function() {
+                    root.evaluateHoverState()
+                })
+            }
+            if ("open" in p && p.openChanged) {
+                p.openChanged.connect(function() {
+                    root.evaluateHoverState()
+                })
+            }
+        }
+
+        function scan(obj) {
+            if (!obj) return
+            applyToPanel(obj)
+            if (obj.panel) {
+                applyToPanel(obj.panel)
+            }
+            if (obj.data) {
+                for (var i = 0; i < obj.data.length; i++) {
+                    var d = obj.data[i]
+                    if (d) {
+                        applyToPanel(d)
+                        if (d.panel) applyToPanel(d.panel)
+                    }
+                }
+            }
+            if (obj.children) {
+                for (var j = 0; j < obj.children.length; j++) {
+                    var c = obj.children[j]
+                    if (c) {
+                        applyToPanel(c)
+                        if (c.panel) applyToPanel(c.panel)
+                    }
+                }
+            }
+        }
+
+        scan(item)
+
+        if (item.panelLoader) {
+            var handlePanelLoader = function() {
+                if (item.panelLoader && item.panelLoader.item) {
+                    scan(item.panelLoader.item)
+                }
+            }
+            handlePanelLoader()
+            item.panelLoader.loaded.connect(handlePanelLoader)
+        }
+    }
+
+    // Proxy Bar context for hosted widgets (places popup strictly in screen center horizontally/vertically, with Style.gapsOut)
+    QtObject {
+        id: dockBarContext
+        property bool vertical: root.isVertical
+        property int barSize: root.slotSize + 8
+        property int barH: root.slotSize + 8
+        property int barW: root.slotSize + 8
+        property string position: root.dockScreenPosition
+        property var screen: (root.dockWindow && root.dockWindow.screen) ? root.dockWindow.screen : null
+        property var shell: root.shell
+        property color foreground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
+        property color barForeground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
+        property color urgent: Color.urgent
+        property color muted: Color.muted
+        property color accent: Color.accent
+        property bool foregroundAnimationEnabled: true
+        property string fontFamily: Style.font.family
+        property var activePopout: null
+        function showTooltip(item, text) {}
+        function hideTooltip(item) {}
+        function requestPopout(key) { activePopout = key }
+        function releasePopout(key) { if (activePopout === key) activePopout = null }
+        function isBarWidgetOpen(id) { return false }
+        function switchPanelFrom(panel, dir) { return false }
+        function run(cmd) { Util.execDetached(cmd) }
+    }
+
+    // 2. The Isolated Action Card Popup Overlay Window (Folder Icon Picker)
+    FolderMenu {
+        id: menuWindow
+        root: root
+        dockWindow: dockWindow
+        stackWindow: stackWindow
+    }
+
+    // 3. macOS Stacks Folder Grid Overlay Window (Folder Contents Popup)
+    FolderPopup {
+        id: stackWindow
+        root: root
+        dockWindow: dockWindow
+    }
+
+    // 4. Widget Picker Popup Menu
+    WidgetPickerPopup {
+        id: widgetPicker
+        root: root
+        dockWindow: dockWindow
+        shell: root.shell
+    }
+}

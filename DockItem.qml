@@ -35,6 +35,7 @@ Item {
     signal togglePinRequested(string appId)
     signal dissolveRequested(string stackId)
     signal originalAppLaunched(string appId)
+    signal dragStarted(int fromIndex)
 
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
@@ -140,11 +141,15 @@ Item {
         y: 0
     }
 
+    // Clamped drag offset for visual rendering (strictly confined within dock surface boundaries)
+    readonly property real clampedDragOffsetX: root.isVertical ? 0 : Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, dragOffset.x))
+    readonly property real clampedDragOffsetY: root.isVertical ? Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, dragOffset.y)) : 0
+
     // Main animated icon wrapper (smooth, buttery rail motion)
     Item {
         id: iconWrapper
-        x: (parent.width - width) / 2 + dragOffset.x
-        y: Math.round((parent.height - height) / 2) - 1 + dragOffset.y + root.clickLiftY
+        x: (parent.width - width) / 2 + root.clampedDragOffsetX
+        y: Math.round((parent.height - height) / 2) - 1 + root.clampedDragOffsetY + root.clickLiftY
         width: root.iconBaseSize
         height: root.iconBaseSize
         z: 1
@@ -410,8 +415,8 @@ Item {
             return cur + 1
         }
 
-        x: Math.round((parent.width - width) / 2 + dragOffset.x)
-        y: parent.height - height - 2 + dragOffset.y
+        x: Math.round((parent.width - width) / 2 + root.clampedDragOffsetX)
+        y: parent.height - height - 2 + root.clampedDragOffsetY
         z: root.isDragging ? 101 : 1
 
         height: 6
@@ -456,8 +461,8 @@ Item {
         opacity: visible ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
-        x: Math.round((parent.width - width) / 2 + dragOffset.x)
-        y: parent.height - height - 3 + dragOffset.y
+        x: Math.round((parent.width - width) / 2 + root.clampedDragOffsetX)
+        y: parent.height - height - 3 + root.clampedDragOffsetY
         z: root.isDragging ? 101 : 1
 
         height: 2
@@ -493,11 +498,11 @@ Item {
 
         drag.target: dragOffset
         drag.axis: root.isVertical ? Drag.YAxis : Drag.XAxis
-        // Strictly confined inside dock surface boundaries (zero frame overflowing)
-        drag.minimumX: root.isVertical ? 0 : (-root.itemIndex * root.slotSize)
-        drag.maximumX: root.isVertical ? 0 : ((root.totalCount - 1 - root.itemIndex) * root.slotSize)
-        drag.minimumY: root.isVertical ? (-root.itemIndex * root.slotSize) : 0
-        drag.maximumY: root.isVertical ? ((root.totalCount - 1 - root.itemIndex) * root.slotSize) : 0
+        // Allow free mouse movement across the full screen while dragging along the rail
+        drag.minimumX: -99999
+        drag.maximumX: 99999
+        drag.minimumY: -99999
+        drag.maximumY: 99999
         drag.threshold: 6
 
         property bool didDrag: false
@@ -573,7 +578,8 @@ Item {
                     dragOffset.y = 0
                 }
 
-                var currentOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var rawOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var currentOffset = Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, rawOffset))
                 var absolutePos = root.itemIndex * root.slotSize + currentOffset
 
                 var targetIdx = Math.max(0, Math.min(root.totalCount - 1, Math.round(absolutePos / root.slotSize)))
@@ -585,9 +591,9 @@ Item {
 
                 if (canMerge && targetIdx !== root.itemIndex) {
                     if (targetIdx > root.itemIndex) {
-                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 10)
+                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 0)
                     } else {
-                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= -10)
+                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= 0)
                     }
                 }
 
@@ -605,7 +611,8 @@ Item {
             longPressTimer.stop()
             if (root.isDragging) {
                 root.isDragging = false
-                var currentOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var rawOffset = root.isVertical ? dragOffset.y : dragOffset.x
+                var currentOffset = Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, rawOffset))
                 var absolutePos = root.itemIndex * root.slotSize + currentOffset
                 var targetIdx = Math.max(0, Math.min(root.totalCount - 1, Math.round(absolutePos / root.slotSize)))
                 var slotCenter = targetIdx * root.slotSize
@@ -616,9 +623,9 @@ Item {
 
                 if (canMerge && targetIdx !== root.itemIndex) {
                     if (targetIdx > root.itemIndex) {
-                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 10)
+                        isMerge = (distFromSlotCenter >= -22 && distFromSlotCenter <= 0)
                     } else {
-                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= -10)
+                        isMerge = (distFromSlotCenter <= 22 && distFromSlotCenter >= 0)
                     }
                 }
 
@@ -642,8 +649,21 @@ Item {
         }
 
         onExited: {
+            longPressTimer.stop()
             root.isWheelScrolling = false
             previewResetTimer.restart()
+        }
+
+        onCanceled: {
+            longPressTimer.stop()
+            didLongPress = false
+            if (root.isDragging) {
+                root.isDragging = false
+                root.isMergeActive = false
+                dragOffset.x = 0
+                dragOffset.y = 0
+                root.dragHoverChanged(root.itemIndex, -1, false)
+            }
         }
 
         onWheel: function(wheel) {
@@ -659,6 +679,7 @@ Item {
         }
 
         onClicked: function(mouse) {
+            longPressTimer.stop()
             if (didDrag || didLongPress) {
                 didLongPress = false
                 return
