@@ -1380,3 +1380,39 @@ function removeWidgetFromDockList(dockWidgetsList, widgetId) {
     }
     return arr;
 }
+
+function escapeShellArg(arg) {
+    return "'" + String(arg == null ? "" : arg).replace(/'/g, "'\\''") + "'";
+}
+
+function launchApp(shell, itemData, util) {
+    if (!itemData) return;
+    var launchId = itemData.desktopId || itemData.appId || "";
+    var appName = itemData.name || "";
+
+    // 1. Primary: Use Omarchy's official shell.appLibrary launcher
+    if (shell && shell.appLibrary && typeof shell.appLibrary.launch === "function") {
+        shell.appLibrary.launch(launchId, appName);
+        return;
+    }
+
+    // 2. Fallback: launch via uwsm-app and gtk-launch with hardened Exec sanitization
+    var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : "";
+    var quote = (util && typeof util.shellQuote === "function") ? util.shellQuote : escapeShellArg;
+    var execCmd = itemData.exec ? String(itemData.exec).replace(/%[fFuUickdDnNvm]/g, "").trim() : "";
+
+    var cmd = "";
+    if (target) {
+        cmd = "uwsm-app -- gtk-launch " + quote(target);
+        if (execCmd) {
+            cmd += " || (uwsm-app -- " + execCmd + ")";
+        }
+    } else if (execCmd) {
+        cmd = "uwsm-app -- " + execCmd;
+    }
+
+    if (cmd && util && typeof util.execDetached === "function") {
+        util.execDetached(cmd);
+    }
+}
+

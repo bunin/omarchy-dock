@@ -402,8 +402,9 @@ Item {
         ? ((root.activeWidgetsCount - 1) * root.slotSize + root.clockSlotWidth)
         : (root.activeWidgetsCount * root.slotSize)
     // Dynamic max items limit for dock bar based on logical screen dimensions & scale (15 items on 1080p @ 1.6x, scales dynamically for Ultrawide 21:9 / 32:9)
-    readonly property real logicalScreenWidth: (screen && screen.width > 0) ? screen.width : 1200
-    readonly property real logicalScreenHeight: (screen && screen.height > 0) ? screen.height : 675
+    readonly property var activeScreen: (dockWindow && dockWindow.screen) ? dockWindow.screen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
+    readonly property real logicalScreenWidth: (activeScreen && activeScreen.width > 0) ? activeScreen.width : 1200
+    readonly property real logicalScreenHeight: (activeScreen && activeScreen.height > 0) ? activeScreen.height : 675
     readonly property int maxDockItems: root.isVertical
         ? Math.max(5, Math.round(15 * (logicalScreenHeight / 675)))
         : Math.max(15, Math.round(15 * (logicalScreenWidth / 1200)))

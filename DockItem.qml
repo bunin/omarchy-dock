@@ -531,13 +531,7 @@ Item {
         Keys.onTabPressed: function(event) {
             if (root.itemData) {
                 clickEffectAnim.restart()
-                var launchMidId = root.itemData.desktopId || root.itemData.appId || ""
-                if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                    root.shell.appLibrary.launch(launchMidId, root.itemData.name)
-                } else {
-                    var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (root.itemData.exec || "")
-                    Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
-                }
+                DockModel.launchApp(root.shell, root.itemData, Util)
                 event.accepted = true
             }
         }
@@ -689,13 +683,7 @@ Item {
             if (mouse.button === Qt.MiddleButton) {
                 clickEffectAnim.restart()
                 if (root.itemData) {
-                    var launchMidId = root.itemData.desktopId || root.itemData.appId || ""
-                    if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                        root.shell.appLibrary.launch(launchMidId, root.itemData.name)
-                    } else {
-                        var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (root.itemData.exec || "")
-                        Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
-                    }
+                    DockModel.launchApp(root.shell, root.itemData, Util)
                 }
                 return
             }
@@ -717,12 +705,7 @@ Item {
                     if (!root.itemData.isRunning || !root.itemData.toplevels || root.itemData.toplevels.length === 0) {
                         var launchId = root.itemData.desktopId || root.itemData.appId || ""
                         root.originalAppLaunched(launchId)
-                        if (root.shell && root.shell.appLibrary && typeof root.shell.appLibrary.launch === "function") {
-                            root.shell.appLibrary.launch(launchId, root.itemData.name)
-                        } else {
-                            var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (root.itemData.exec || "")
-                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (root.itemData.exec ? (" || uwsm-app -- " + root.itemData.exec) : ""))
-                        }
+                        DockModel.launchApp(root.shell, root.itemData, Util)
                         return
                     }
 

@@ -673,13 +673,7 @@ PanelWindow {
                                 Keys.onTabPressed: function(event) {
                                     if (modelData) {
                                         subClickEffectAnim.restart()
-                                        var launchMidId = modelData.desktopId || modelData.appId || ""
-                                        if (stackWindow.root.shell && stackWindow.root.shell.appLibrary && typeof stackWindow.root.shell.appLibrary.launch === "function") {
-                                            stackWindow.root.shell.appLibrary.launch(launchMidId, modelData.name)
-                                        } else {
-                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
-                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                        }
+                                        DockModel.launchApp(stackWindow.root.shell, modelData, Util)
                                         event.accepted = true
                                     }
                                 }
@@ -773,13 +767,7 @@ PanelWindow {
                                     // Middle Click (Wheel Button click) -> Immediately launch duplicate
                                     if (mouse.button === Qt.MiddleButton) {
                                         subClickEffectAnim.restart()
-                                        var launchMidId = modelData.desktopId || modelData.appId || ""
-                                        if (stackWindow.root.shell && stackWindow.root.shell.appLibrary && typeof stackWindow.root.shell.appLibrary.launch === "function") {
-                                            stackWindow.root.shell.appLibrary.launch(launchMidId, modelData.name)
-                                        } else {
-                                            var targetMid = launchMidId ? (launchMidId.indexOf(".desktop") !== -1 ? launchMidId : (launchMidId + ".desktop")) : (modelData.exec || "")
-                                            Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(targetMid) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                        }
+                                        DockModel.launchApp(stackWindow.root.shell, modelData, Util)
                                         return
                                     }
 
@@ -792,12 +780,7 @@ PanelWindow {
                                         if (!modelData.isRunning || !modelData.toplevels || modelData.toplevels.length === 0) {
                                             var launchId = modelData.desktopId || modelData.appId || ""
                                             stackWindow.root.requestFocusOnLaunch(launchId)
-                                            if (stackWindow.root.shell && stackWindow.root.shell.appLibrary && typeof stackWindow.root.shell.appLibrary.launch === "function") {
-                                                stackWindow.root.shell.appLibrary.launch(launchId, modelData.name)
-                                            } else {
-                                                var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : (modelData.exec || "")
-                                                Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(target) + (modelData.exec ? (" || uwsm-app -- " + modelData.exec) : ""))
-                                            }
+                                            DockModel.launchApp(stackWindow.root.shell, modelData, Util)
                                             return
                                         }
 
