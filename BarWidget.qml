@@ -15,6 +15,7 @@ BarWidget {
   property bool dockEnabled: true
   property bool autohide: false
   property bool showFolderTitles: true
+  property bool showBadges: true
   property bool widgetsEnabled: true
   property bool settingsOpen: false
 
@@ -27,6 +28,11 @@ BarWidget {
     onLoaded: root.readSettings()
     onFileChanged: { reload(); root.readSettings() }
   }
+
+  property var dockWidgets: ["omarchy.apps"]
+  property string appMenuPosition: "left"
+  property string widgetPosition: "right"
+  property var widgetSavedPositions: ({})
 
   function readSettings() {
     try {
@@ -42,8 +48,23 @@ BarWidget {
         if (s && s.showFolderTitles !== undefined) {
           root.showFolderTitles = (s.showFolderTitles === true)
         }
+        if (s && s.showBadges !== undefined) {
+          root.showBadges = (s.showBadges === true)
+        }
         if (s && s.widgetsEnabled !== undefined) {
           root.widgetsEnabled = (s.widgetsEnabled === true)
+        }
+        if (s && s.appMenuPosition !== undefined) {
+          root.appMenuPosition = s.appMenuPosition
+        }
+        if (s && s.widgetPosition !== undefined) {
+          root.widgetPosition = s.widgetPosition
+        }
+        if (s && s.dockWidgets !== undefined && Array.isArray(s.dockWidgets)) {
+          root.dockWidgets = s.dockWidgets
+        }
+        if (s && s.widgetSavedPositions !== undefined && typeof s.widgetSavedPositions === "object") {
+          root.widgetSavedPositions = s.widgetSavedPositions
         }
       }
     } catch(e) {}
@@ -61,14 +82,20 @@ BarWidget {
     s.dockEnabled = root.dockEnabled
     s.autohide = root.autohide
     s.showFolderTitles = root.showFolderTitles
+    s.showBadges = root.showBadges
     s.widgetsEnabled = root.widgetsEnabled
+    s.appMenuPosition = root.appMenuPosition || s.appMenuPosition || "left"
+    s.widgetPosition = root.widgetPosition || s.widgetPosition || "right"
+    s.widgetSavedPositions = root.widgetSavedPositions || s.widgetSavedPositions || {}
     if (!root.widgetsEnabled) {
       s.dockWidgets = []
-    } else if (!Array.isArray(s.dockWidgets)) {
-      s.dockWidgets = []
+    } else if (Array.isArray(s.dockWidgets) && s.dockWidgets.length > 0) {
+      s.dockWidgets = s.dockWidgets.slice(0, 2)
+    } else if (Array.isArray(root.dockWidgets) && root.dockWidgets.length > 0) {
+      s.dockWidgets = root.dockWidgets.slice(0, 2)
+    } else {
+      s.dockWidgets = ["omarchy.apps"]
     }
-    if (!s.widgetSavedPositions) s.widgetSavedPositions = {}
-    if (!s.widgetPosition) s.widgetPosition = "right"
 
     settingsFile.setText(JSON.stringify(s, null, 2) + "\n")
   }
@@ -95,6 +122,15 @@ BarWidget {
     root.showFolderTitles = val
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setShowFolderTitles " + (val ? "true" : "false"))
+    } else {
+      saveSettings()
+    }
+  }
+
+  function setShowBadges(val) {
+    root.showBadges = val
+    if (root.bar && typeof root.bar.run === "function") {
+      root.bar.run("omarchy-shell rosakodu.dock setShowBadges " + (val ? "true" : "false"))
     } else {
       saveSettings()
     }
@@ -455,6 +491,81 @@ BarWidget {
             cursorShape: Qt.PointingHandCursor
             onClicked: {
               root.setShowFolderTitles(!root.showFolderTitles)
+            }
+          }
+        }
+
+        // Toggle Notification Badges Row
+        Rectangle {
+          id: badgesRow
+          Layout.fillWidth: true
+          height: 48
+          radius: 8
+          opacity: root.dockEnabled ? 1.0 : 0.4
+          enabled: root.dockEnabled
+          color: toggleBadgesMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
+          Behavior on color { ColorAnimation { duration: 120 } }
+          Behavior on opacity { NumberAnimation { duration: 150 } }
+
+          RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+
+            ColumnLayout {
+              Layout.fillWidth: true
+              Layout.alignment: Qt.AlignVCenter
+              spacing: 2
+
+              Text {
+                text: "Notification badges"
+                font.family: Style.font.family
+                font.pixelSize: 12
+                font.bold: true
+                color: Color.popups.text
+              }
+
+              Text {
+                text: "Show unread badges on app icons"
+                font.family: Style.font.family
+                font.pixelSize: 10
+                color: Color.muted
+              }
+            }
+
+            // Custom Smooth Toggle Switch
+            Rectangle {
+              id: switchBadgesTrack
+              Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+              Layout.preferredWidth: 36
+              Layout.preferredHeight: 20
+              width: 36
+              height: 20
+              radius: 10
+              color: root.showBadges ? Color.accent : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.25)
+              Behavior on color { ColorAnimation { duration: 180 } }
+
+              Rectangle {
+                id: switchBadgesThumb
+                width: 14
+                height: 14
+                radius: 7
+                anchors.verticalCenter: parent.verticalCenter
+                x: root.showBadges ? (switchBadgesTrack.width - width - 3) : 3
+                color: root.showBadges ? Color.background : Color.popups.text
+                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+              }
+            }
+          }
+
+          MouseArea {
+            id: toggleBadgesMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.setShowBadges(!root.showBadges)
             }
           }
         }

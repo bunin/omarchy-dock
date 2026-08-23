@@ -925,7 +925,100 @@ function matchToplevel(toplevel, appId, entry) {
     return false;
 }
 
-function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary) {
+function toCanonical(str) {
+    if (!str || typeof str !== "string") return "";
+    var raw = str.trim().toLowerCase();
+    if (!raw) return "";
+
+    // 1. First-class desktop & Web App service aliases
+    if (raw.indexOf("telegram") !== -1) return "telegram";
+    if (raw.indexOf("whatsapp") !== -1) return "whatsapp";
+    if (raw.indexOf("chatgpt") !== -1 || raw.indexOf("openai") !== -1) return "chatgpt";
+    if (raw.indexOf("claude") !== -1 || raw.indexOf("anthropic") !== -1) return "claude";
+    if (raw.indexOf("gemini") !== -1) return "gemini";
+    if (raw.indexOf("notion") !== -1) return "notion";
+    if (raw.indexOf("figma") !== -1) return "figma";
+    if (raw.indexOf("github") !== -1) return "github";
+    if (raw.indexOf("gitlab") !== -1) return "gitlab";
+    if (raw.indexOf("linear") !== -1) return "linear";
+    if (raw.indexOf("trello") !== -1) return "trello";
+    if (raw.indexOf("jira") !== -1) return "jira";
+    if (raw.indexOf("slack") !== -1) return "slack";
+    if (raw.indexOf("discord") !== -1 || raw.indexOf("vesktop") !== -1 || raw.indexOf("webcord") !== -1) return "discord";
+    if (raw.indexOf("spotify") !== -1) return "spotify";
+    if (raw.indexOf("gmail") !== -1 || raw.indexOf("mail.google.com") !== -1) return "gmail";
+    if (raw.indexOf("outlook") !== -1) return "outlook";
+    if (raw.indexOf("proton") !== -1 || raw.indexOf("protonmail") !== -1) return "protonmail";
+    if (raw.indexOf("antigravity") !== -1) return "antigravity";
+    if (raw.indexOf("code") !== -1 || raw.indexOf("vscodium") !== -1 || raw.indexOf("vscode") !== -1) return "code";
+    if (raw.indexOf("nautilus") !== -1 || raw.indexOf("org.gnome.nautilus") !== -1 || raw.indexOf("thunar") !== -1 || raw.indexOf("dolphin") !== -1) return "nautilus";
+    if (raw.indexOf("kitty") !== -1 || raw.indexOf("alacritty") !== -1 || raw.indexOf("ghostty") !== -1 || raw.indexOf("foot") !== -1 || raw.indexOf("terminal") !== -1) return "terminal";
+    if (raw.indexOf("chrome") !== -1 || raw.indexOf("chromium") !== -1) return "chrome";
+    if (raw.indexOf("firefox") !== -1 || raw.indexOf("zen-browser") !== -1) return "firefox";
+
+    // 2. Extract domain core from Web App URLs
+    var urlMatch = raw.match(/https?:\/\/(?:www\.|web\.|app\.|mail\.)?([a-zA-Z0-9-]+)\./i);
+    if (urlMatch && urlMatch[1]) {
+        var dom = urlMatch[1].toLowerCase();
+        if (["com", "org", "net", "io", "app", "dev"].indexOf(dom) === -1) {
+            return dom;
+        }
+    }
+
+    // 3. Generic stripping
+    var s = raw;
+    s = s.replace(/\.desktop$/i, "");
+    s = s.replace(/\.appimage$/i, "");
+    s = s.replace(/-(?:bin|git|stable|nightly|electron|desktop)$/i, "");
+    s = s.replace(/^(?:org|com|io|net|edu|dev)\.[a-z0-9_]+\./i, "");
+    s = s.replace(/^(?:org|com|io|net|edu|dev)\./i, "");
+    return s.replace(/[^a-z0-9]/g, "");
+}
+
+function getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId) {
+    if (!badgeCounts || typeof badgeCounts !== "object") return { count: 0, hasUrgent: false };
+    var rawKeys = [
+        appId,
+        entry ? entry.id : "",
+        entry ? stripDesktop(entry.id) : "",
+        desktopId,
+        desktopId ? stripDesktop(desktopId) : "",
+        name,
+        entry ? entry.name : "",
+        entry ? entry.exec : ""
+    ];
+    var keys = [];
+    for (var k = 0; k < rawKeys.length; k++) {
+        var r = String(rawKeys[k] || "").trim();
+        if (!r) continue;
+        if (keys.indexOf(r) === -1) keys.push(r);
+        var canon = toCanonical(r);
+        if (canon && keys.indexOf(canon) === -1) keys.push(canon);
+    }
+
+    var count = 0;
+    var isUrgent = false;
+    for (var i = 0; i < keys.length; i++) {
+        var raw = String(keys[i] || "").trim().toLowerCase();
+        if (!raw) continue;
+        if (badgeCounts[raw] != null && Number(badgeCounts[raw]) > count) {
+            count = Number(badgeCounts[raw]);
+        }
+        if (urgentCounts && urgentCounts[raw] === true) {
+            isUrgent = true;
+        }
+        var clean = raw.replace(/[^a-z0-9]/g, "");
+        if (clean && badgeCounts[clean] != null && Number(badgeCounts[clean]) > count) {
+            count = Number(badgeCounts[clean]);
+        }
+        if (clean && urgentCounts && urgentCounts[clean] === true) {
+            isUrgent = true;
+        }
+    }
+    return { count: count, hasUrgent: isUrgent };
+}
+
+function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts) {
     var pinned = Array.isArray(pinnedList) ? pinnedList : [];
     var toplevels = toArray(toplevelsList);
     var entries = toArray(desktopEntries);
@@ -963,6 +1056,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 var sIcon = resolveIcon(sEntry, sAppId, appLibrary);
                 var sName = sEntry && sEntry.name ? sEntry.name : sAppId;
                 var sIconSource = (sEntry && sEntry.iconSource) ? sEntry.iconSource : "";
+                var sDesktopId = (sEntry && sEntry.id) ? sEntry.id : (sAppId.indexOf(".desktop") !== -1 ? sAppId : (sAppId + ".desktop"));
 
                 var sTops = [];
                 var sActive = false;
@@ -985,9 +1079,11 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 if (sTops.length > 0) isAnySubRunning = true;
                 if (sActive) isAnySubActive = true;
 
+                var sInfo = getBadgeInfo(badgeCounts, urgentCounts, sAppId, sEntry, sName, sDesktopId);
+
                 subApps.push({
                     appId: sAppId,
-                    desktopId: (sEntry && sEntry.id) ? sEntry.id : (sAppId.indexOf(".desktop") !== -1 ? sAppId : (sAppId + ".desktop")),
+                    desktopId: sDesktopId,
                     exec: (sEntry && sEntry.exec) ? sEntry.exec : "",
                     name: sName,
                     icon: sIcon,
@@ -998,8 +1094,17 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     isActive: sActive,
                     activeTopIndex: sActiveIdx,
                     windowCount: sTops.length,
+                    badgeCount: sInfo.count,
+                    hasUrgent: sInfo.hasUrgent,
                     toplevels: sTops
                 });
+            }
+
+            var totalStackBadge = 0;
+            var hasStackUrgent = false;
+            for (var sb = 0; sb < subApps.length; sb++) {
+                totalStackBadge += (subApps[sb].badgeCount || 0);
+                if (subApps[sb].hasUrgent) hasStackUrgent = true;
             }
 
             items.push({
@@ -1016,6 +1121,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isRunning: isAnySubRunning,
                 isActive: isAnySubActive,
                 windowCount: 0,
+                badgeCount: totalStackBadge,
+                hasUrgent: hasStackUrgent,
                 subApps: subApps,
                 toplevels: []
             });
@@ -1049,6 +1156,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 }
             }
 
+            var itemInfo = getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId);
+
             items.push({
                 id: appId,
                 appId: appId,
@@ -1065,6 +1174,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isActive: isAnyActive,
                 activeTopIndex: activeIdx,
                 windowCount: matching.length,
+                badgeCount: itemInfo.count,
+                hasUrgent: itemInfo.hasUrgent,
                 toplevels: matching
             });
         }
@@ -1113,6 +1224,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
         if (rMatching.length === 0) continue;
 
+        var rInfo = getBadgeInfo(badgeCounts, urgentCounts, rAppId, rEntry, rName, rDesktopId);
+
         items.push({
             id: rAppId,
             appId: rAppId,
@@ -1129,6 +1242,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             isActive: rIsActive,
             activeTopIndex: rActiveIdx,
             windowCount: rMatching.length,
+            badgeCount: rInfo.count,
+            hasUrgent: rInfo.hasUrgent,
             toplevels: rMatching
         });
     }
@@ -1369,20 +1484,128 @@ function returnWidgetToBar(shell, widgetId, savedPositions, defaultRegion, shell
 }
 
 function addWidgetToDockList(dockWidgetsList, widgetId) {
-    return [widgetId];
+    var arr = Array.isArray(dockWidgetsList) ? dockWidgetsList.slice() : [];
+    if (!widgetId) return arr;
+
+    // Remove duplicates of the same widgetId
+    for (var i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] === widgetId) arr.splice(i, 1);
+    }
+
+    if (widgetId === "omarchy.apps") {
+        // Add omarchy.apps at the front, keep other non-apps widgets (max 1)
+        var others = arr.filter(function(id) { return id && id !== "omarchy.apps"; });
+        return ["omarchy.apps"].concat(others.slice(0, 1));
+    } else {
+        // Add non-apps widget; preserve omarchy.apps if present, cap others at 1
+        var hasApps = arr.indexOf("omarchy.apps") !== -1;
+        var result = hasApps ? ["omarchy.apps", widgetId] : [widgetId];
+        return result;
+    }
 }
 
 function removeWidgetFromDockList(dockWidgetsList, widgetId) {
     var arr = Array.isArray(dockWidgetsList) ? dockWidgetsList.slice() : [];
-    var idx = arr.indexOf(widgetId);
-    if (idx !== -1) {
-        arr.splice(idx, 1);
+    var res = [];
+    for (var i = 0; i < arr.length; i++) {
+        if (arr[i] !== widgetId && arr[i] !== "omarchy.apps") {
+            res.push(arr[i]);
+        }
     }
-    return arr;
+    return res;
+}
+
+function getDockWidgetLayout(showAppMenu, appMenuPosition, widgetsEnabled, dockWidgetsList, widgetPosition) {
+    var leftWidgets = [];
+    var rightWidgets = [];
+    var appPos = (appMenuPosition === "right") ? "right" : "left";
+    var otherPos = (widgetPosition === "left") ? "left" : "right";
+
+    // Left side:
+    if (showAppMenu && appPos === "left") {
+        leftWidgets.push("omarchy.apps");
+    }
+    if (widgetsEnabled && otherPos === "left") {
+        var listL = Array.isArray(dockWidgetsList) ? dockWidgetsList : [];
+        for (var i = 0; i < listL.length; i++) {
+            if (listL[i] && listL[i] !== "omarchy.apps") {
+                leftWidgets.push(listL[i]);
+            }
+        }
+    }
+
+    // Right side:
+    if (widgetsEnabled && otherPos === "right") {
+        var listR = Array.isArray(dockWidgetsList) ? dockWidgetsList : [];
+        for (var j = 0; j < listR.length; j++) {
+            if (listR[j] && listR[j] !== "omarchy.apps") {
+                rightWidgets.push(listR[j]);
+            }
+        }
+    }
+    if (showAppMenu && appPos === "right") {
+        rightWidgets.push("omarchy.apps");
+    }
+
+    return {
+        leftWidgets: leftWidgets,
+        rightWidgets: rightWidgets
+    };
 }
 
 function escapeShellArg(arg) {
     return "'" + String(arg == null ? "" : arg).replace(/'/g, "'\\''") + "'";
+}
+
+function parseDesktopExec(execStr) {
+    if (!execStr || typeof execStr !== "string") return [];
+    // Remove desktop field codes (%f, %u, %F, %U, etc.) according to FreeDesktop spec
+    var raw = execStr.replace(/%%/g, "\x00")
+                     .replace(/%[a-zA-Z]/g, "")
+                     .replace(/\x00/g, "%")
+                     .trim();
+    if (!raw) return [];
+
+    var args = [];
+    var current = "";
+    var inQuotes = false;
+    var escape = false;
+
+    for (var i = 0; i < raw.length; i++) {
+        var ch = raw[i];
+
+        if (escape) {
+            current += ch;
+            escape = false;
+            continue;
+        }
+
+        if (ch === "\\") {
+            escape = true;
+            continue;
+        }
+
+        if (ch === '"') {
+            inQuotes = !inQuotes;
+            continue;
+        }
+
+        if (!inQuotes && (ch === " " || ch === "\t")) {
+            if (current.length > 0) {
+                args.push(current);
+                current = "";
+            }
+            continue;
+        }
+
+        current += ch;
+    }
+
+    if (current.length > 0) {
+        args.push(current);
+    }
+
+    return args;
 }
 
 function launchApp(shell, itemData, util) {
@@ -1396,19 +1619,28 @@ function launchApp(shell, itemData, util) {
         return;
     }
 
-    // 2. Fallback: launch via uwsm-app and gtk-launch with hardened Exec sanitization
+    // 2. Fallback: Launch via gtk-launch or individually-escaped argv
     var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : "";
     var quote = (util && typeof util.shellQuote === "function") ? util.shellQuote : escapeShellArg;
-    var execCmd = itemData.exec ? String(itemData.exec).replace(/%[fFuUickdDnNvm]/g, "").trim() : "";
+    var argv = parseDesktopExec(itemData.exec);
+
+    var fallbackCmd = "";
+    if (argv.length > 0) {
+        var escapedArgs = [];
+        for (var a = 0; a < argv.length; a++) {
+            escapedArgs.push(quote(argv[a]));
+        }
+        fallbackCmd = "uwsm-app -- " + escapedArgs.join(" ");
+    }
 
     var cmd = "";
     if (target) {
         cmd = "uwsm-app -- gtk-launch " + quote(target);
-        if (execCmd) {
-            cmd += " || (uwsm-app -- " + execCmd + ")";
+        if (fallbackCmd) {
+            cmd += " || (" + fallbackCmd + ")";
         }
-    } else if (execCmd) {
-        cmd = "uwsm-app -- " + execCmd;
+    } else if (fallbackCmd) {
+        cmd = fallbackCmd;
     }
 
     if (cmd && util && typeof util.execDetached === "function") {

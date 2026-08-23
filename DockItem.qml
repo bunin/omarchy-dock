@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
+import "components"
 
 Item {
     id: root
@@ -24,6 +25,7 @@ Item {
     property bool isEditMode: false
     property int dockDragActiveIndex: -1
     readonly property bool isAnyDragging: dockDragActiveIndex >= 0 || isDragging
+    property bool showBadges: true
 
     signal itemLeftClicked(var itemData)
     signal itemRightClicked(var itemData, var itemItem)
@@ -36,6 +38,16 @@ Item {
     signal dissolveRequested(string stackId)
     signal originalAppLaunched(string appId)
     signal dragStarted(int fromIndex)
+
+    readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
+    property int lastBadgeCount: 0
+
+    onBadgeCountChanged: {
+        if (badgeCount > lastBadgeCount && badgeCount > 0) {
+            clickEffectAnim.restart()
+        }
+        lastBadgeCount = badgeCount
+    }
 
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
@@ -297,6 +309,17 @@ Item {
                 root.previewTopIndex = -1
             }
         }
+    }
+
+    // 0. iOS / macOS-Style Theme Notification Badge with Count (Anchored to top-right of iconWrapper)
+    NotificationBadge {
+        anchors.top: iconWrapper.top
+        anchors.topMargin: -4
+        anchors.right: iconWrapper.right
+        anchors.rightMargin: -4
+        count: root.badgeCount
+        hasUrgent: (root.itemData && !!root.itemData.hasUrgent)
+        isSuppressed: root.isEditMode || root.isAnyDragging || !root.showBadges
     }
 
     // 1. Pin / Unpin Glyph (Centered directly above scaled iconWrapper, hidden while dragging)

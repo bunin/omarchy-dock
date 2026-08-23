@@ -435,6 +435,19 @@ PanelWindow {
                                     antialiasing: true
                                 }
 
+                                // iOS-Style Theme Notification Badge on Sub-App (Modular)
+                                NotificationBadge {
+                                    anchors.top: parent.top
+                                    anchors.topMargin: -3
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: -3
+                                    badgeHeight: 16
+                                    badgeFontSize: 9
+                                    count: (modelData && modelData.badgeCount) ? modelData.badgeCount : 0
+                                    hasUrgent: (modelData && !!modelData.hasUrgent)
+                                    isSuppressed: stackWindow.root.isEditMode || stackWindow.root.folderDragActiveIndex >= 0 || !stackWindow.root.showBadges
+                                }
+
                                 // Silky smooth, organic wiggle animation
                                 SequentialAnimation {
                                     id: subJiggleAnim
@@ -773,6 +786,9 @@ PanelWindow {
 
                                     if (mouse.button === Qt.LeftButton) {
                                         subClickEffectAnim.restart()
+                                        if (modelData) {
+                                            stackWindow.root.clearBadge(modelData)
+                                        }
                                         if (stackWindow.root.isEditMode) {
                                             return
                                         }

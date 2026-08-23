@@ -100,12 +100,16 @@ Item {
         }
         function addWidget(widgetId: string): string { root.addDockWidget(widgetId); return "ok" }
         function removeWidget(widgetId: string): string { root.removeDockWidget(widgetId, ""); return "ok" }
+        function setShowAppMenu(val: string): string { root.setShowAppMenu(val === "true" || val === "1"); return "ok" }
+        function setAppMenuPosition(pos: string): string { root.setAppMenuPosition(pos); return "ok" }
         function setWidgetsEnabled(val: string): string { root.setWidgetsEnabled(val === "true" || val === "1"); return "ok" }
         function setWidgetPosition(pos: string): string { root.setWidgetPosition(pos); return "ok" }
         function setEditMode(val: string): string { root.isEditMode = (val === "true" || val === "1"); return "ok" }
         function setDockEnabled(val: string): string { root.dockEnabled = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setAutohide(val: string): string { root.autohide = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setAutohideEdgeDepth(val: string): string { var n = parseInt(val, 10); if (!isNaN(n) && n >= 1 && n <= 64) { root.autohideEdgeDepth = n; root.saveSettings(); } return "ok" }
         function setShowFolderTitles(val: string): string { root.showFolderTitles = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setShowBadges(val: string): string { root.showBadges = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function ping(): string { return "ok" }
     }
 
@@ -313,10 +317,14 @@ Item {
     property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/dock-settings.json"
     property bool dockEnabled: true
     property bool autohide: false
+    property int autohideEdgeDepth: 1  // pixels from screen edge that trigger dock reveal
     property bool showFolderTitles: true
+    property bool showBadges: true
+    property bool showAppMenu: true
+    property string appMenuPosition: "left"
     property bool widgetsEnabled: true
-    property string widgetPosition: "left"
-    property var dockWidgets: ["omarchy.apps"]
+    property string widgetPosition: "right"
+    property var dockWidgets: []
     property var widgetSavedPositions: ({})
     property bool isDockHovered: false
     property bool isStackHovered: false
@@ -348,8 +356,61 @@ Item {
         }
     }
 
+    function getActiveWorkspaceWindowCount() {
+        var activeId = -1
+        if (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id !== undefined) {
+            activeId = Hyprland.focusedWorkspace.id
+        } else if (Hyprland.focusedMonitor && Hyprland.focusedMonitor.activeWorkspace && Hyprland.focusedMonitor.activeWorkspace.id !== undefined) {
+            activeId = Hyprland.focusedMonitor.activeWorkspace.id
+        }
+        if (activeId === -1) return 0
+
+        var wsList = (Hyprland.workspaces && Hyprland.workspaces.values) ? Hyprland.workspaces.values : []
+        for (var i = 0; i < wsList.length; i++) {
+            var ws = wsList[i]
+            if (ws && ws.id === activeId) {
+                if (ws.toplevels && ws.toplevels.values) {
+                    return ws.toplevels.values.length
+                }
+                return 0
+            }
+        }
+        return 0
+    }
+
+    property int activeWorkspaceWindowCount: root.getActiveWorkspaceWindowCount()
+
+    function refreshActiveWorkspaceWindowCount() {
+        root.activeWorkspaceWindowCount = root.getActiveWorkspaceWindowCount()
+    }
+
+    Connections {
+        target: Hyprland
+        function onFocusedWorkspaceChanged() { root.refreshActiveWorkspaceWindowCount() }
+        function onRawEvent(event) { root.refreshActiveWorkspaceWindowCount() }
+    }
+
+    Connections {
+        target: Hyprland.workspaces
+        function onValuesChanged() { root.refreshActiveWorkspaceWindowCount() }
+    }
+
+    Connections {
+        target: ToplevelManager.toplevels
+        function onValuesChanged() { root.refreshActiveWorkspaceWindowCount() }
+    }
+
+    Timer {
+        id: workspaceCheckTimer
+        interval: 200
+        running: root.autohide
+        repeat: true
+        onTriggered: root.refreshActiveWorkspaceWindowCount()
+    }
+
+    readonly property bool isWorkspaceEmpty: root.activeWorkspaceWindowCount === 0
     readonly property bool isDockActive: root.isDockHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || root.checkWidgetPanelsOpen() || (root.dockDragActiveIndex >= 0)
-    readonly property bool shouldSlideOut: root.autohide && !root.isDockActive
+    readonly property bool shouldSlideOut: root.autohide && !root.isDockActive && !root.isWorkspaceEmpty
 
     function closeAllWidgetPanels() {
         for (var i = 0; i < root.loadedWidgetItems.length; i++) {
@@ -378,10 +439,16 @@ Item {
         }
     }
 
-    readonly property int activeWidgetsCount: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.length : 0
-    readonly property bool hasWidgets: root.activeWidgetsCount > 0
-    readonly property real separatorSize: root.hasWidgets ? 8 : 0
-    readonly property real itemsWidth: (root.dockItems.length * root.slotSize)
+    readonly property var widgetLayout: DockModel.getDockWidgetLayout(root.showAppMenu, root.appMenuPosition, root.widgetsEnabled, root.dockWidgets, root.widgetPosition)
+    readonly property var leftWidgetsList: widgetLayout.leftWidgets || []
+    readonly property var rightWidgetsList: widgetLayout.rightWidgets || []
+    readonly property bool hasLeftWidgets: leftWidgetsList.length > 0
+    readonly property bool hasRightWidgets: rightWidgetsList.length > 0
+    readonly property bool hasWidgets: hasLeftWidgets || hasRightWidgets
+
+    readonly property bool hasClockOnLeft: hasLeftWidgets && leftWidgetsList.indexOf("omarchy.clock") !== -1
+    readonly property bool hasClockOnRight: hasRightWidgets && rightWidgetsList.indexOf("omarchy.clock") !== -1
+    readonly property bool hasClockWidget: hasClockOnLeft || hasClockOnRight
 
     property string clockDisplayText: ""
 
@@ -393,23 +460,78 @@ Item {
         text: root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm")
     }
 
-    readonly property bool hasClockWidget: root.hasWidgets && root.dockWidgets && root.dockWidgets.indexOf("omarchy.clock") !== -1
-    readonly property real clockSlotWidth: (root.hasClockWidget && !root.isVertical)
+    readonly property real clockSlotWidth: (hasClockWidget && !root.isVertical)
         ? Math.max(root.slotSize, clockMetrics.advanceWidth + 24)
         : root.slotSize
 
-    readonly property real widgetsWidth: (root.hasClockWidget && !root.isVertical)
-        ? ((root.activeWidgetsCount - 1) * root.slotSize + root.clockSlotWidth)
-        : (root.activeWidgetsCount * root.slotSize)
+    function getLeftWidgetOffset(index) {
+        var offset = 0
+        for (var i = 0; i < index; i++) {
+            var id = root.leftWidgetsList[i]
+            var dim = (id === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+            offset += dim
+        }
+        return offset
+    }
+
+    function getRightWidgetOffset(index) {
+        var offset = 0
+        for (var i = 0; i < index; i++) {
+            var id = root.rightWidgetsList[i]
+            var dim = (id === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+            offset += dim
+        }
+        return offset
+    }
+
+    readonly property real leftWidgetsWidth: {
+        if (!hasLeftWidgets) return 0
+        var total = 0
+        for (var i = 0; i < leftWidgetsList.length; i++) {
+            var id = leftWidgetsList[i]
+            total += (id === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+        }
+        return total
+    }
+
+    readonly property real rightWidgetsWidth: {
+        if (!hasRightWidgets) return 0
+        var total = 0
+        for (var i = 0; i < rightWidgetsList.length; i++) {
+            var id = rightWidgetsList[i]
+            total += (id === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+        }
+        return total
+    }
+
+    readonly property real leftSeparatorSize: hasLeftWidgets ? 8 : 0
+    readonly property real rightSeparatorSize: hasRightWidgets ? 8 : 0
+    readonly property real itemsWidth: (root.dockItems.length * root.slotSize)
+
     // Dynamic max items limit for dock bar based on logical screen dimensions & scale (15 items on 1080p @ 1.6x, scales dynamically for Ultrawide 21:9 / 32:9)
     readonly property var activeScreen: (dockWindow && dockWindow.screen) ? dockWindow.screen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
     readonly property real logicalScreenWidth: (activeScreen && activeScreen.width > 0) ? activeScreen.width : 1200
     readonly property real logicalScreenHeight: (activeScreen && activeScreen.height > 0) ? activeScreen.height : 675
-    readonly property int maxDockItems: root.isVertical
-        ? Math.max(5, Math.round(15 * (logicalScreenHeight / 675)))
-        : Math.max(15, Math.round(15 * (logicalScreenWidth / 1200)))
+    readonly property int maxDockItems: {
+        if (root.isVertical) {
+            // Vertical: limit by screen height minus widget slots
+            var usedV = (hasLeftWidgets ? (leftWidgetsWidth + leftSeparatorSize) : 0)
+                      + (hasRightWidgets ? (rightSeparatorSize + rightWidgetsWidth) : 0)
+            var availableH = Math.max(0, logicalScreenHeight - usedV)
+            return Math.max(3, Math.floor(availableH / root.slotSize))
+        } else {
+            // Horizontal: limit by screen width minus widget slots
+            var usedH = (hasLeftWidgets ? (leftWidgetsWidth + leftSeparatorSize) : 0)
+                      + (hasRightWidgets ? (rightSeparatorSize + rightWidgetsWidth) : 0)
+            var availableW = Math.max(0, logicalScreenWidth - usedH)
+            return Math.max(3, Math.floor(availableW / root.slotSize))
+        }
+    }
 
-    readonly property real totalDockDimension: Math.max(root.slotSize, itemsWidth + (root.hasWidgets ? (separatorSize + widgetsWidth) : 0))
+    readonly property real totalDockDimension: Math.max(root.slotSize,
+        (hasLeftWidgets ? (leftWidgetsWidth + leftSeparatorSize) : 0) +
+        itemsWidth +
+        (hasRightWidgets ? (rightSeparatorSize + rightWidgetsWidth) : 0))
 
     onDockEnabledChanged: {
         if (!dockEnabled) {
@@ -449,32 +571,46 @@ Item {
             var txt = settingsFile.text()
             if (txt && txt.trim().length > 0) {
                 var s = JSON.parse(txt)
-                if (s && s.dockEnabled !== undefined) {
+                if (!s || typeof s !== "object") return
+                if (s.dockEnabled !== undefined) {
                     root.dockEnabled = (s.dockEnabled === true)
                 }
-                if (s && s.autohide !== undefined) {
+                if (s.autohide !== undefined) {
                     root.autohide = (s.autohide === true)
                 }
-                if (s && s.showFolderTitles !== undefined) {
+                if (s.autohideEdgeDepth !== undefined) {
+                    var depth = parseInt(s.autohideEdgeDepth, 10)
+                    if (!isNaN(depth) && depth >= 1 && depth <= 64) root.autohideEdgeDepth = depth
+                }
+                if (s.showFolderTitles !== undefined) {
                     root.showFolderTitles = (s.showFolderTitles === true)
                 }
-                if (s && s.widgetPosition !== undefined) {
+                if (s.showBadges !== undefined) {
+                    root.showBadges = (s.showBadges === true)
+                }
+                if (s.appMenuPosition !== undefined) {
+                    root.appMenuPosition = s.appMenuPosition
+                }
+                if (s.widgetPosition !== undefined) {
                     root.widgetPosition = s.widgetPosition
                 }
-                if (s && s.widgetsEnabled !== undefined) {
+                if (s.widgetsEnabled !== undefined) {
                     root.widgetsEnabled = (s.widgetsEnabled === true)
                 }
-                if (s && s.dockWidgets !== undefined && Array.isArray(s.dockWidgets)) {
-                    root.dockWidgets = root.widgetsEnabled ? s.dockWidgets.slice(0, 1) : []
+                if (s.dockWidgets !== undefined && Array.isArray(s.dockWidgets)) {
+                    if (!root.widgetsEnabled) {
+                        root.dockWidgets = []
+                    } else if (s.dockWidgets.length === 0) {
+                        root.dockWidgets = ["omarchy.apps"]
+                    } else {
+                        root.dockWidgets = s.dockWidgets.slice(0, 2)
+                    }
+                } else if (root.widgetsEnabled) {
+                    root.dockWidgets = ["omarchy.apps"]
                 }
-                if (s && s.widgetSavedPositions !== undefined && typeof s.widgetSavedPositions === "object") {
+                if (s.widgetSavedPositions !== undefined && typeof s.widgetSavedPositions === "object") {
                     root.widgetSavedPositions = s.widgetSavedPositions
                 }
-            } else {
-                root.dockWidgets = ["omarchy.apps"]
-                root.widgetPosition = "left"
-                root.widgetsEnabled = true
-                saveSettings()
             }
         } catch(e) {}
     }
@@ -485,33 +621,20 @@ Item {
         var jsonStr = JSON.stringify({
             dockEnabled: root.dockEnabled,
             autohide: root.autohide,
+            autohideEdgeDepth: root.autohideEdgeDepth,
             showFolderTitles: root.showFolderTitles,
+            showBadges: root.showBadges,
             widgetsEnabled: root.widgetsEnabled,
-            widgetPosition: root.widgetPosition,
-            dockWidgets: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.slice(0, 1) : [],
+            appMenuPosition: root.appMenuPosition || "left",
+            widgetPosition: root.widgetPosition || "right",
+            dockWidgets: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets.slice(0, 2) : [],
             widgetSavedPositions: root.widgetSavedPositions || {}
         }, null, 2)
         settingsFile.setText(jsonStr + "\n")
     }
 
-    function setWidgetsEnabled(val) {
-        var boolVal = (val === true || val === "true")
-        if (root.widgetsEnabled === boolVal && (!boolVal || (root.dockWidgets && root.dockWidgets.length === 0))) return
-        root.widgetsEnabled = boolVal
-        if (!root.widgetsEnabled) {
-            if (root.dockWidgets && root.dockWidgets.length > 0) {
-                var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
-                for (var i = 0; i < root.dockWidgets.length; i++) {
-                    var wId = root.dockWidgets[i]
-                    if (wId && wId !== "omarchy.apps") {
-                        var defReg = ((wId === "omarchy.weather" || wId === "omarchy.clock" || wId === "omarchy.system-update" || wId === "omarchy.indicators") ? "center" : "right")
-                        currentSaved = DockModel.returnWidgetToBar(root.shell, wId, currentSaved, defReg, shellConfigFile)
-                    }
-                }
-                root.dockWidgets = []
-                root.widgetSavedPositions = currentSaved
-            }
-        }
+    function setAppMenuPosition(pos) {
+        root.appMenuPosition = (pos === "right") ? "right" : "left"
         saveSettings()
     }
 
@@ -522,21 +645,23 @@ Item {
 
     function addDockWidget(widgetId) {
         root.widgetsEnabled = true
-        // Enforce maximum 1 widget: return any previous dock widget to the tray/bar
         var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
-        if (root.dockWidgets && root.dockWidgets.length > 0) {
-            for (var i = 0; i < root.dockWidgets.length; i++) {
-                var prevId = root.dockWidgets[i]
-                if (prevId && prevId !== widgetId && prevId !== "omarchy.apps") {
-                    var prevDefRegion = ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
-                    currentSaved = DockModel.returnWidgetToBar(root.shell, prevId, currentSaved, prevDefRegion, shellConfigFile)
+
+        // If adding a non-app widget, return any previous non-app widget to the bar
+        if (widgetId !== "omarchy.apps") {
+            if (root.dockWidgets && root.dockWidgets.length > 0) {
+                for (var i = 0; i < root.dockWidgets.length; i++) {
+                    var prevId = root.dockWidgets[i]
+                    if (prevId && prevId !== "omarchy.apps" && prevId !== widgetId) {
+                        var prevDefRegion = ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
+                        currentSaved = DockModel.returnWidgetToBar(root.shell, prevId, currentSaved, prevDefRegion, shellConfigFile)
+                    }
                 }
             }
-        }
-        root.dockWidgets = [widgetId]
-        if (widgetId !== "omarchy.apps") {
             currentSaved = DockModel.removeWidgetFromBar(root.shell, widgetId, currentSaved, shellConfigFile)
         }
+
+        root.dockWidgets = DockModel.addWidgetToDockList(root.dockWidgets, widgetId)
         root.widgetSavedPositions = currentSaved
         saveSettings()
     }
@@ -889,6 +1014,17 @@ Item {
         batchUpdateTimer.restart()
     }
 
+    NotificationTracker {
+        id: notifTracker
+        shell: root.shell
+        knownWindows: root.knownWindows
+        onBadgeChanged: root.doUpdateDockItems()
+    }
+
+    function clearBadge(itemData) {
+        if (notifTracker) notifTracker.clearBadge(itemData)
+    }
+
     function doUpdateDockItems() {
         root.syncKnownWindows()
         var toplevels = root.knownWindows
@@ -897,7 +1033,7 @@ Item {
         var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
             ? DesktopEntries.applications.values
             : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
-        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib)
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent)
 
         // Refresh active stack item contents if open
         if (root.activeStackItem) {
@@ -1310,7 +1446,7 @@ Item {
         WlrLayershell.namespace: "omarchy-dock"
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-        exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && (!root.autohide || root.isDockActive)) ? ExclusionMode.Auto : ExclusionMode.Ignore
+        exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && (!root.autohide || !root.shouldSlideOut)) ? ExclusionMode.Auto : ExclusionMode.Ignore
         color: "transparent"
 
         anchors {
@@ -1421,7 +1557,176 @@ Item {
                 width: root.isVertical ? root.slotSize : root.totalDockDimension
                 height: root.isVertical ? root.totalDockDimension : root.slotSize
 
-                // 1. Applications & Folders
+                // 1. Left Dock Active Bar/Tray Widgets
+                Repeater {
+                    model: root.leftWidgetsList
+
+                    Item {
+                        id: leftWidgetSlotRoot
+                        required property string modelData
+                        required property int index
+
+                        readonly property real widgetSlotDimension: (modelData === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+                        readonly property real widgetPos: root.getLeftWidgetOffset(index)
+                        x: root.isVertical ? 0 : widgetPos
+                        y: root.isVertical ? widgetPos : 0
+                        width: root.isVertical ? root.slotSize : widgetSlotDimension
+                        height: root.isVertical ? widgetSlotDimension : root.slotSize
+                        z: 1
+
+                        Item {
+                            id: leftWidgetWrapper
+                            x: Math.round((parent.width - width) / 2)
+                            y: Math.round((parent.height - height) / 2) - 1
+                            width: (modelData === "omarchy.clock" && !root.isVertical) ? (leftWidgetSlotRoot.width - 10) : root.iconBaseSize
+                            height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
+                            scale: leftWidgetSlotMouse.containsMouse ? 1.10 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+
+                            Text {
+                                id: leftClockHorizontalLabel
+                                visible: modelData === "omarchy.clock" && !root.isVertical
+                                anchors.centerIn: parent
+                                text: (leftWidgetLoader.item && leftWidgetLoader.item.displayText) ? leftWidgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
+                                font.family: Style.font.family
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                                color: leftWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                renderType: Text.CurveRendering
+                                font.hintingPreference: Font.PreferNoHinting
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            Column {
+                                id: leftClockVerticalCol
+                                visible: modelData === "omarchy.clock" && root.isVertical
+                                anchors.centerIn: parent
+                                spacing: 1
+
+                                Repeater {
+                                    model: (leftWidgetLoader.item && leftWidgetLoader.item.verticalLines && leftWidgetLoader.item.verticalLines.length > 0)
+                                           ? leftWidgetLoader.item.verticalLines
+                                           : [Qt.formatDateTime(new Date(), "HH"), Qt.formatDateTime(new Date(), "mm")]
+
+                                    Text {
+                                        required property string modelData
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: modelData
+                                        font.family: Style.font.family
+                                        font.pixelSize: modelData.length > 3 ? 9 : 10
+                                        font.weight: Font.Medium
+                                        color: leftWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                        renderType: Text.CurveRendering
+                                        font.hintingPreference: Font.PreferNoHinting
+                                    }
+                                }
+                            }
+
+                            DockGlyph {
+                                id: leftWidgetGlyph
+                                visible: modelData !== "omarchy.clock"
+                                anchors.centerIn: parent
+                                width: root.iconBaseSize
+                                height: root.iconBaseSize
+                                text: root.getWidgetIcon(modelData, leftWidgetLoader.item)
+                                fontFamily: Style.font.family
+                                fontSize: 22
+                                color: leftWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                Behavior on color { ColorAnimation { duration: 120 } }
+                            }
+
+                            Loader {
+                                id: leftWidgetLoader
+                                anchors.fill: parent
+                                opacity: 0.0
+                                source: root.getWidgetSource(modelData)
+                                onLoaded: {
+                                    if (item) {
+                                        root.configureHostedWidget(item, modelData)
+                                        if (modelData === "omarchy.clock") {
+                                            if (item.displayText !== undefined) root.clockDisplayText = item.displayText
+                                            if (item.displayTextChanged) {
+                                                item.displayTextChanged.connect(function() {
+                                                    root.clockDisplayText = item.displayText
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: leftWidgetSlotMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                            cursorShape: root.isEditMode ? Qt.ArrowCursor : Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (root.isEditMode) {
+                                    if (mouse.button === Qt.RightButton) {
+                                        root.isEditMode = false
+                                    }
+                                    return
+                                }
+                                if (modelData === "omarchy.apps") {
+                                    if (mouse.button === Qt.RightButton) {
+                                        Util.execDetached("omarchy-menu toggle root")
+                                    } else {
+                                        Util.execDetached("omarchy-menu toggle apps")
+                                    }
+                                    return
+                                }
+                                var target = leftWidgetLoader.item
+                                if (target) {
+                                    root.configureHostedWidget(target, modelData)
+                                    if (mouse.button === Qt.RightButton) {
+                                        if (typeof target.cycleFormat === "function") {
+                                            target.cycleFormat()
+                                        }
+                                    } else if (mouse.button === Qt.MiddleButton) {
+                                        if (target.bar && typeof target.bar.run === "function") {
+                                            target.bar.run("omarchy-menu-timezone")
+                                        } else {
+                                            Util.execDetached("omarchy-menu-timezone")
+                                        }
+                                    } else {
+                                        if (typeof target.togglePanel === "function") {
+                                            target.togglePanel()
+                                        } else if (typeof target.toggle === "function") {
+                                            target.toggle()
+                                        } else if (typeof target.open === "function") {
+                                            if (target.opened) target.close()
+                                            else target.open()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. Left Sleek Separator between Left Widgets and Apps
+                Item {
+                    id: leftDockSeparator
+                    visible: root.hasLeftWidgets
+                    opacity: root.hasLeftWidgets ? 1.0 : 0.0
+                    x: root.isVertical ? 0 : root.leftWidgetsWidth
+                    y: root.isVertical ? root.leftWidgetsWidth : 0
+                    width: root.isVertical ? root.slotSize : root.leftSeparatorSize
+                    height: root.isVertical ? root.leftSeparatorSize : root.slotSize
+                    z: 0
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: root.isVertical ? (root.slotSize - 18) : 1.5
+                        height: root.isVertical ? 1.5 : (root.slotSize - 18)
+                        radius: 0.75
+                        color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.45)
+                    }
+                }
+
+                // 3. Applications & Folders
                 Repeater {
                     model: root.dockItems
 
@@ -1440,8 +1745,8 @@ Item {
                         isSelected: (!root.isMenuFromFolder && root.activeMenuItem && (root.activeMenuItem.appId === modelData.appId || root.activeMenuItem.id === modelData.id)) || (root.activeStackItem && (root.activeStackItem.id === modelData.id || root.activeStackItem.appId === modelData.appId))
                         isMergeTarget: (root.currentMergeTargetIndex === index)
 
-                        // 1D Live Rail Displacement (with Left/Right widget offset)
-                        readonly property real appBaseOffset: (root.widgetPosition === "left" && root.hasWidgets) ? (root.widgetsWidth + root.separatorSize) : 0
+                        // 1D Live Rail Displacement (with Left Widget offset)
+                        readonly property real appBaseOffset: (root.hasLeftWidgets ? (root.leftWidgetsWidth + root.leftSeparatorSize) : 0)
                         readonly property int visualSlot: (root.dockDragActiveIndex === index) ? index : root.getDockVisualSlot(index, root.dockDragActiveIndex, root.dockDragTargetIndex)
                         x: root.isVertical ? 0 : (appBaseOffset + visualSlot * root.slotSize)
                         y: root.isVertical ? (appBaseOffset + visualSlot * root.slotSize) : 0
@@ -1450,6 +1755,7 @@ Item {
                         Behavior on y { enabled: root.dockDragActiveIndex >= 0; NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
                         isEditMode: root.isEditMode
+                        showBadges: root.showBadges
                         dockDragActiveIndex: root.dockDragActiveIndex
 
                         onEditModeRequested: {
@@ -1475,6 +1781,9 @@ Item {
                         }
 
                         onItemLeftClicked: function(item) {
+                            if (item && !item.isStack) {
+                                root.clearBadge(item)
+                            }
                             if (item && item.isStack) {
                                 root.toggleStack(item, index)
                             } else {
@@ -1520,16 +1829,16 @@ Item {
                     }
                 }
 
-                // 2. Sleek Separator between Apps and Widgets
+                // 4. Right Sleek Separator between Apps and Right Widgets
                 Item {
-                    id: dockSeparator
-                    visible: root.hasWidgets
-                    opacity: root.hasWidgets ? 1.0 : 0.0
-                    readonly property real sepOffset: (root.widgetPosition === "left") ? root.widgetsWidth : root.itemsWidth
-                    x: root.isVertical ? 0 : sepOffset
-                    y: root.isVertical ? sepOffset : 0
-                    width: root.isVertical ? root.slotSize : root.separatorSize
-                    height: root.isVertical ? root.separatorSize : root.slotSize
+                    id: rightDockSeparator
+                    visible: root.hasRightWidgets
+                    opacity: root.hasRightWidgets ? 1.0 : 0.0
+                    readonly property real rSepOffset: (root.hasLeftWidgets ? (root.leftWidgetsWidth + root.leftSeparatorSize) : 0) + root.itemsWidth
+                    x: root.isVertical ? 0 : rSepOffset
+                    y: root.isVertical ? rSepOffset : 0
+                    width: root.isVertical ? root.slotSize : root.rightSeparatorSize
+                    height: root.isVertical ? root.rightSeparatorSize : root.slotSize
                     z: 0
 
                     Rectangle {
@@ -1541,56 +1850,56 @@ Item {
                     }
                 }
 
-                // 3. Dock Active Bar/Tray Widgets
+                // 5. Right Dock Active Bar/Tray Widgets
                 Repeater {
-                    model: (root.widgetsEnabled && root.dockWidgets) ? root.dockWidgets : []
+                    model: root.rightWidgetsList
 
                     Item {
-                        id: widgetSlotRoot
+                        id: rightWidgetSlotRoot
+                        required property string modelData
+                        required property int index
 
-                        readonly property real widgetBaseOffset: (root.widgetPosition === "left") ? 0 : (root.itemsWidth + root.separatorSize)
-                        readonly property real widgetSlotDimension: (modelData === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
-                        readonly property real widgetPos: widgetBaseOffset + (index * root.slotSize)
-                        x: root.isVertical ? 0 : widgetPos
-                        y: root.isVertical ? widgetPos : 0
-                        width: root.isVertical ? root.slotSize : widgetSlotDimension
-                        height: root.isVertical ? widgetSlotDimension : root.slotSize
+                        readonly property real rWidgetBaseOffset: (root.hasLeftWidgets ? (root.leftWidgetsWidth + root.leftSeparatorSize) : 0) + root.itemsWidth + root.rightSeparatorSize
+                        readonly property real rWidgetSlotDimension: (modelData === "omarchy.clock" && !root.isVertical) ? root.clockSlotWidth : root.slotSize
+                        readonly property real rWidgetPos: rWidgetBaseOffset + root.getRightWidgetOffset(index)
+                        x: root.isVertical ? 0 : rWidgetPos
+                        y: root.isVertical ? rWidgetPos : 0
+                        width: root.isVertical ? root.slotSize : rWidgetSlotDimension
+                        height: root.isVertical ? rWidgetSlotDimension : root.slotSize
                         z: 1
 
                         Item {
-                            id: widgetWrapper
+                            id: rightWidgetWrapper
                             x: Math.round((parent.width - width) / 2)
                             y: Math.round((parent.height - height) / 2) - 1
-                            width: (modelData === "omarchy.clock" && !root.isVertical) ? (widgetSlotRoot.width - 10) : root.iconBaseSize
+                            width: (modelData === "omarchy.clock" && !root.isVertical) ? (rightWidgetSlotRoot.width - 10) : root.iconBaseSize
                             height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
-                            scale: widgetSlotMouse.containsMouse ? 1.10 : 1.0
+                            scale: rightWidgetSlotMouse.containsMouse ? 1.10 : 1.0
                             Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
-                            // 1. Live Clock Horizontal Text Display (Matches status bar exactly)
                             Text {
-                                id: clockHorizontalLabel
+                                id: rightClockHorizontalLabel
                                 visible: modelData === "omarchy.clock" && !root.isVertical
                                 anchors.centerIn: parent
-                                text: (widgetLoader.item && widgetLoader.item.displayText) ? widgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
+                                text: (rightWidgetLoader.item && rightWidgetLoader.item.displayText) ? rightWidgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
                                 font.family: Style.font.family
                                 font.pixelSize: 12
                                 font.weight: Font.Medium
-                                color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                color: rightWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                 renderType: Text.CurveRendering
                                 font.hintingPreference: Font.PreferNoHinting
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
 
-                            // 2. Live Clock Vertical Stack Display
                             Column {
-                                id: clockVerticalCol
+                                id: rightClockVerticalCol
                                 visible: modelData === "omarchy.clock" && root.isVertical
                                 anchors.centerIn: parent
                                 spacing: 1
 
                                 Repeater {
-                                    model: (widgetLoader.item && widgetLoader.item.verticalLines && widgetLoader.item.verticalLines.length > 0)
-                                           ? widgetLoader.item.verticalLines
+                                    model: (rightWidgetLoader.item && rightWidgetLoader.item.verticalLines && rightWidgetLoader.item.verticalLines.length > 0)
+                                           ? rightWidgetLoader.item.verticalLines
                                            : [Qt.formatDateTime(new Date(), "HH"), Qt.formatDateTime(new Date(), "mm")]
 
                                     Text {
@@ -1600,30 +1909,28 @@ Item {
                                         font.family: Style.font.family
                                         font.pixelSize: modelData.length > 3 ? 9 : 10
                                         font.weight: Font.Medium
-                                        color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                        color: rightWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                         renderType: Text.CurveRendering
                                         font.hintingPreference: Font.PreferNoHinting
                                     }
                                 }
                             }
 
-                            // 3. Standard Vector Glyph (All other widgets)
                             DockGlyph {
-                                id: widgetGlyph
+                                id: rightWidgetGlyph
                                 visible: modelData !== "omarchy.clock"
                                 anchors.centerIn: parent
                                 width: root.iconBaseSize
                                 height: root.iconBaseSize
-                                text: root.getWidgetIcon(modelData, widgetLoader.item)
+                                text: root.getWidgetIcon(modelData, rightWidgetLoader.item)
                                 fontFamily: Style.font.family
                                 fontSize: 22
-                                color: widgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
+                                color: rightWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
 
-                            // Headless Widget Backend Loader (Invisible but active so panels/services stay alive and anchored to dock)
                             Loader {
-                                id: widgetLoader
+                                id: rightWidgetLoader
                                 anchors.fill: parent
                                 opacity: 0.0
                                 source: root.getWidgetSource(modelData)
@@ -1643,9 +1950,8 @@ Item {
                             }
                         }
 
-                        // MouseArea for Click to Open Widget Panel / Cycle Format / Timezone
                         MouseArea {
-                            id: widgetSlotMouse
+                            id: rightWidgetSlotMouse
                             anchors.fill: parent
                             hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -1665,7 +1971,7 @@ Item {
                                     }
                                     return
                                 }
-                                var target = widgetLoader.item
+                                var target = rightWidgetLoader.item
                                 if (target) {
                                     root.configureHostedWidget(target, modelData)
                                     if (mouse.button === Qt.RightButton) {
@@ -1822,5 +2128,42 @@ Item {
         root: root
         dockWindow: dockWindow
         shell: root.shell
+    }
+
+    // 5. Autohide Edge Trigger — thin invisible strip at screen edge, activates dock reveal
+    //    Width/height = autohideEdgeDepth px (1–64). Active only when dock is hidden (shouldSlideOut).
+    PanelWindow {
+        id: edgeTriggerWindow
+        visible: root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded
+                 && root.autohide && root.shouldSlideOut
+
+        WlrLayershell.namespace: "omarchy-dock-edge"
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        exclusionMode: ExclusionMode.Ignore
+        color: "transparent"
+
+        // Anchor to the same edge as the dock, no margins — hug the screen edge
+        anchors {
+            top:    root.dockScreenPosition === "top"
+            bottom: root.dockScreenPosition === "bottom"
+            left:   root.dockScreenPosition === "left"
+            right:  root.dockScreenPosition === "right"
+        }
+
+        // Thickness = configurable depth; breadth spans full screen edge (no fixed dimension)
+        implicitWidth:  root.isVertical ? root.autohideEdgeDepth : (root.totalDockDimension + 14)
+        implicitHeight: root.isVertical ? (root.totalDockDimension + 14) : root.autohideEdgeDepth
+
+        HoverHandler {
+            id: edgeTriggerHover
+            onHoveredChanged: {
+                if (hovered) {
+                    // Cursor reached the screen edge — show the dock
+                    root.isDockHovered = true
+                    autohideLeaveTimer.stop()
+                }
+            }
+        }
     }
 }
