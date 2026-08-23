@@ -320,7 +320,7 @@ Item {
     property int autohideEdgeDepth: 1  // pixels from screen edge that trigger dock reveal
     property bool showFolderTitles: true
     property bool showBadges: true
-    property bool showAppMenu: true
+    readonly property bool showAppMenu: root.widgetsEnabled && root.dockWidgets && (root.dockWidgets.indexOf("omarchy.apps") !== -1)
     property string appMenuPosition: "left"
     property bool widgetsEnabled: true
     property string widgetPosition: "right"
@@ -600,8 +600,6 @@ Item {
                 if (s.dockWidgets !== undefined && Array.isArray(s.dockWidgets)) {
                     if (!root.widgetsEnabled) {
                         root.dockWidgets = []
-                    } else if (s.dockWidgets.length === 0) {
-                        root.dockWidgets = ["omarchy.apps"]
                     } else {
                         root.dockWidgets = s.dockWidgets.slice(0, 2)
                     }
@@ -631,6 +629,19 @@ Item {
             widgetSavedPositions: root.widgetSavedPositions || {}
         }, null, 2)
         settingsFile.setText(jsonStr + "\n")
+    }
+
+    function setShowAppMenu(val) {
+        if (val) {
+            root.addDockWidget("omarchy.apps")
+        } else {
+            root.removeDockWidget("omarchy.apps", "")
+        }
+    }
+
+    function setWidgetsEnabled(val) {
+        root.widgetsEnabled = val
+        saveSettings()
     }
 
     function setAppMenuPosition(pos) {

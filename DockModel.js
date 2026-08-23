@@ -1508,7 +1508,7 @@ function removeWidgetFromDockList(dockWidgetsList, widgetId) {
     var arr = Array.isArray(dockWidgetsList) ? dockWidgetsList.slice() : [];
     var res = [];
     for (var i = 0; i < arr.length; i++) {
-        if (arr[i] !== widgetId && arr[i] !== "omarchy.apps") {
+        if (arr[i] !== widgetId) {
             res.push(arr[i]);
         }
     }
@@ -1521,11 +1521,20 @@ function getDockWidgetLayout(showAppMenu, appMenuPosition, widgetsEnabled, dockW
     var appPos = (appMenuPosition === "right") ? "right" : "left";
     var otherPos = (widgetPosition === "left") ? "left" : "right";
 
+    if (!widgetsEnabled) {
+        return {
+            leftWidgets: [],
+            rightWidgets: []
+        };
+    }
+
+    var hasApps = (showAppMenu === true) && Array.isArray(dockWidgetsList) && (dockWidgetsList.indexOf("omarchy.apps") !== -1);
+
     // Left side:
-    if (showAppMenu && appPos === "left") {
+    if (hasApps && appPos === "left") {
         leftWidgets.push("omarchy.apps");
     }
-    if (widgetsEnabled && otherPos === "left") {
+    if (otherPos === "left") {
         var listL = Array.isArray(dockWidgetsList) ? dockWidgetsList : [];
         for (var i = 0; i < listL.length; i++) {
             if (listL[i] && listL[i] !== "omarchy.apps") {
@@ -1535,7 +1544,7 @@ function getDockWidgetLayout(showAppMenu, appMenuPosition, widgetsEnabled, dockW
     }
 
     // Right side:
-    if (widgetsEnabled && otherPos === "right") {
+    if (otherPos === "right") {
         var listR = Array.isArray(dockWidgetsList) ? dockWidgetsList : [];
         for (var j = 0; j < listR.length; j++) {
             if (listR[j] && listR[j] !== "omarchy.apps") {
@@ -1543,7 +1552,7 @@ function getDockWidgetLayout(showAppMenu, appMenuPosition, widgetsEnabled, dockW
             }
         }
     }
-    if (showAppMenu && appPos === "right") {
+    if (hasApps && appPos === "right") {
         rightWidgets.push("omarchy.apps");
     }
 
