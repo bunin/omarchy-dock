@@ -19,9 +19,10 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 - 🌐 **Full Web Apps (PWA) Support** — Automatic domain matching for Chrome/Chromium web apps (Google Maps, Google Contacts, WhatsApp, YouTube, Discord, etc.) with native GTK theme icons.
 - ⚡ **Zero-Flicker Boot & Tile Lift** — Two-phase initialization instantly reserves Hyprland exclusive space to lift tiled windows smoothly, followed by a monolithic fade-in once all vector theme icons are loaded.
 - 🧭 **Dynamic Auto-Positioning** — Automatically adapts its position opposite to the Omarchy status bar (top $\leftrightarrow$ bottom, left $\leftrightarrow$ right).
-- ⏱️ **Smart Auto-Hide & Overlay Mode** — Optional auto-hide with instant hover reveal, and a dedicated **Overlay Mode** toggle to float the dock seamlessly above full-screen/tiling windows without shifting Hyprland window arrangements (macOS / Dash to Dock behavior).
+- ⏱️ **Flexible Visibility** — Keep the dock visible, reveal it from the screen edge, or toggle it through a Hyprland keybinding.
+- 🪟 **Native Overlay Mode** — Float the dock above full-screen/tiling windows without shifting Hyprland window arrangements (macOS / Dash to Dock behavior).
 - 🔔 **Real-Time Notification Badges** — Dynamic unread badges on app icons aggregated from D-Bus notifications, Hyprland dwell timers, and window titles.
-- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, Overlay Mode, Folder Titles, Notification Badges, and Dock Widgets configuration.
+- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu for dock visibility, workspace targeting, Overlay Mode, folder titles, notification badges, and dock widgets.
 - 🎨 **100% Native Theme Sync** — Clean borderless status capsules that automatically react to Omarchy colors (`Color.accent`, `Color.bar.background`), system fonts, and window corner radius tokens.
 - 🔤 **Subpixel Vector Glyphs (`DockGlyph`)** — GPU-accelerated vector curve rendering without font hinting distortion or pixel jitter during animations.
 
@@ -63,8 +64,9 @@ You can customize options directly via the `···` status bar widget or in `~/.
 ```json
 {
   "dockEnabled": true,
-  "autohide": false,
+  "visibilityMode": "always",
   "overlayMode": false,
+  "visibleWorkspace": "all",
   "showFolderTitles": true,
   "showBadges": true,
   "widgetsEnabled": true,
@@ -74,6 +76,35 @@ You can customize options directly via the `···` status bar widget or in `~/.
   ]
 }
 ```
+
+`visibilityMode` accepts `always`, `hover`, or `keybind`. `overlayMode` uses the
+native v1.5.0 implementation: `false` reserves screen space and `true` floats
+the dock above tiled windows.
+`visibleWorkspace` accepts `all`, a numeric workspace ID, or a Hyprland
+workspace name. With `all`, a keyboard opening targets the workspace and
+monitor containing the focused window and keeps that target until the dock is
+closed. With an explicit selector, the dock always targets that workspace and
+can open only while the workspace is active on a monitor.
+
+### Keyboard toggle
+
+Keyboard shortcuts belong to Hyprland, so the plugin never edits your Omarchy
+bindings automatically. To use `SUPER + SHIFT + D`, add this to
+`~/.config/hypr/bindings.lua`:
+
+```lua
+-- Omarchy assigns this shortcut to Docker by default, so replace it explicitly.
+hl.unbind("SUPER + SHIFT + D")
+o.bind("SUPER + SHIFT + D", "Dock", "omarchy-shell -q rosakodu.dock toggleReveal")
+```
+
+Choose any other key combination by changing the first argument to `o.bind`.
+The shortcut works when `visibilityMode` is `always` or `keybind`; `hover`
+accepts only the screen-edge trigger. If the dock is already visible, the first
+press closes it without moving it and the next press opens it on the current
+target. In `keybind` mode the dock starts hidden and automatically hides after
+the same 1.5-second inactivity delay used by hover mode. Keeping the pointer or
+a dock popup active pauses the dismissal timer.
 
 Pinned items and folder layouts are automatically saved to `~/.config/omarchy/dock-pinned.json`.
 
@@ -90,4 +121,3 @@ omarchy plugin remove rosakodu.dock
 ## 📄 License
 
 [MIT](./LICENSE) © 2026 rosakodu
-
