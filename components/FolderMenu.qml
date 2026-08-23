@@ -10,12 +10,13 @@ import ".."
 
 PanelWindow {
     id: menuWindow
-    visible: menuWindow.root.isMenuOpen && menuWindow.root.opened && menuWindow.root.pluginEnabled && menuWindow.root.dockEnabled
+    visible: menuWindow.root.isMenuOpen && menuWindow.root.dockRevealed
 
     required property var root
     required property var dockWindow
     property var stackWindow: null
     property alias menuCard: menuCard
+    screen: menuWindow.dockWindow ? menuWindow.dockWindow.screen : null
 
     readonly property bool isDirectDockPopup: !menuWindow.root.isMenuFromFolder
 

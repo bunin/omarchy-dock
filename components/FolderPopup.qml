@@ -14,8 +14,9 @@ PanelWindow {
     required property var root
     required property var dockWindow
     property alias stackCard: stackCard
+    screen: stackWindow.dockWindow ? stackWindow.dockWindow.screen : null
 
-    visible: stackWindow.root.isStackOpen && stackWindow.root.opened && stackWindow.root.pluginEnabled && stackWindow.root.dockEnabled
+    visible: stackWindow.root.isStackOpen && stackWindow.root.dockRevealed
 
         WlrLayershell.namespace: "omarchy-dock-stack"
         WlrLayershell.layer: WlrLayer.Top
@@ -824,4 +825,3 @@ PanelWindow {
                 }
             }
         }
-
