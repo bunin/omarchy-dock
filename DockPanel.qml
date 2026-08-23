@@ -347,7 +347,8 @@ Item {
 
     function evaluateHoverState() {
         var anyOpenWidget = checkWidgetPanelsOpen()
-        var anyHover = (dockHoverHandler && dockHoverHandler.hovered) || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+        var isDockWinHovered = (!root.autohide || !root.shouldSlideOut) && dockHoverHandler && dockHoverHandler.hovered
+        var anyHover = isDockWinHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
         if (anyHover) {
             autohideLeaveTimer.stop()
             root.isDockHovered = true
@@ -658,18 +659,17 @@ Item {
         root.widgetsEnabled = true
         var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
 
-        // If adding a non-app widget, return any previous non-app widget to the bar
         if (widgetId !== "omarchy.apps") {
+            var prevIds = []
             if (root.dockWidgets && root.dockWidgets.length > 0) {
                 for (var i = 0; i < root.dockWidgets.length; i++) {
                     var prevId = root.dockWidgets[i]
                     if (prevId && prevId !== "omarchy.apps" && prevId !== widgetId) {
-                        var prevDefRegion = ((prevId === "omarchy.weather" || prevId === "omarchy.clock" || prevId === "omarchy.system-update" || prevId === "omarchy.indicators") ? "center" : "right")
-                        currentSaved = DockModel.returnWidgetToBar(root.shell, prevId, currentSaved, prevDefRegion, shellConfigFile)
+                        prevIds.push(prevId)
                     }
                 }
             }
-            currentSaved = DockModel.removeWidgetFromBar(root.shell, widgetId, currentSaved, shellConfigFile)
+            currentSaved = DockModel.switchDockWidgetInBar(root.shell, widgetId, prevIds, currentSaved, shellConfigFile)
         }
 
         root.dockWidgets = DockModel.addWidgetToDockList(root.dockWidgets, widgetId)
@@ -678,12 +678,11 @@ Item {
     }
 
     function removeDockWidget(widgetId, targetRegion) {
-        var defRegion = targetRegion || ((widgetId === "omarchy.weather" || widgetId === "omarchy.clock" || widgetId === "omarchy.system-update" || widgetId === "omarchy.indicators") ? "center" : "right")
         var next = DockModel.removeWidgetFromDockList(root.dockWidgets, widgetId)
         root.dockWidgets = next.slice()
         if (widgetId !== "omarchy.apps") {
             var currentSaved = JSON.parse(JSON.stringify(root.widgetSavedPositions || {}))
-            currentSaved = DockModel.returnWidgetToBar(root.shell, widgetId, currentSaved, defRegion, shellConfigFile)
+            currentSaved = DockModel.switchDockWidgetInBar(root.shell, "", [widgetId], currentSaved, shellConfigFile)
             root.widgetSavedPositions = currentSaved
         }
         saveSettings()
@@ -1044,7 +1043,7 @@ Item {
         var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
             ? DesktopEntries.applications.values
             : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
-        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent)
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems)
 
         // Refresh active stack item contents if open
         if (root.activeStackItem) {
@@ -1479,6 +1478,7 @@ Item {
 
         HoverHandler {
             id: dockHoverHandler
+            enabled: !root.autohide || !root.shouldSlideOut
             onHoveredChanged: {
                 root.evaluateHoverState()
             }
@@ -2162,9 +2162,15 @@ Item {
             right:  root.dockScreenPosition === "right"
         }
 
-        // Thickness = configurable depth; breadth spans full screen edge (no fixed dimension)
-        implicitWidth:  root.isVertical ? root.autohideEdgeDepth : (root.totalDockDimension + 14)
-        implicitHeight: root.isVertical ? (root.totalDockDimension + 14) : root.autohideEdgeDepth
+        margins {
+            top: 0
+            bottom: 0
+            left: 0
+            right: 0
+        }
+
+        implicitWidth:  root.isVertical ? root.autohideEdgeDepth : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
+        implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : root.autohideEdgeDepth
 
         HoverHandler {
             id: edgeTriggerHover

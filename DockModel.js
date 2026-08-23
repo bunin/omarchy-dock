@@ -1018,7 +1018,7 @@ function getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId) 
     return { count: count, hasUrgent: isUrgent };
 }
 
-function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts) {
+function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems) {
     var pinned = Array.isArray(pinnedList) ? pinnedList : [];
     var toplevels = toArray(toplevelsList);
     var entries = toArray(desktopEntries);
@@ -1181,8 +1181,12 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         }
     }
 
-    // 2. Process Running Unpinned Toplevels
+    // 2. Process Running Unpinned Toplevels (Stop if limit reached)
     for (var j = 0; j < toplevels.length; j++) {
+        if (maxItems && maxItems > 0 && items.length >= maxItems) {
+            break;
+        }
+
         var topItem = toplevels[j];
         if (!topItem) continue;
         var topItemKey = getTopKey(topItem, j);
@@ -1249,6 +1253,175 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
     }
 
     return items;
+}
+
+function switchDockWidgetInBar(shell, newWidgetId, prevWidgetIds, savedPositions, shellConfigFile) {
+    if (!savedPositions) savedPositions = {};
+    if (!Array.isArray(prevWidgetIds)) prevWidgetIds = [];
+
+    var defaultRegions = {
+        "omarchy.menu": "left",
+        "omarchy.clock": "center",
+        "omarchy.weather": "center",
+        "omarchy.system-update": "center",
+        "omarchy.indicators": "center",
+        "omarchy.audio": "right",
+        "omarchy.bluetooth": "right",
+        "omarchy.network": "right",
+        "omarchy.power": "right",
+        "omarchy.monitor": "right",
+        "omarchy.tailscale": "right"
+    };
+
+    var canonicalSectionOrders = {
+        "left": [
+            "omarchy.menu",
+            "omarchy.workspaces"
+        ],
+        "center": [
+            "omarchy.indicators",
+            "rosakodu.dock",
+            "omarchy.system-update",
+            "omarchy.clock",
+            "omarchy.weather"
+        ],
+        "right": [
+            "omarchy.agents",
+            "omarchy.tray",
+            "glafeara.languages",
+            "silvaio.gamemode",
+            "lgse.sandman",
+            "omarchy.network",
+            "omarchy.bluetooth",
+            "omarchy.monitor",
+            "omarchy.power",
+            "omarchy.audio",
+            "omarchy.tailscale"
+        ]
+    };
+
+    var mutator = function(config) {
+        if (!config) config = {};
+        if (!config.bar) config.bar = {};
+        if (!config.bar.layout) config.bar.layout = {};
+        var regions = ["left", "center", "right"];
+        for (var r = 0; r < regions.length; r++) {
+            if (!Array.isArray(config.bar.layout[regions[r]])) {
+                config.bar.layout[regions[r]] = [];
+            }
+        }
+
+        // 1. Return all previous widgets back to bar
+        for (var p = 0; p < prevWidgetIds.length; p++) {
+            var prevId = prevWidgetIds[p];
+            if (!prevId || prevId === "omarchy.apps" || prevId === newWidgetId) continue;
+
+            var savedInfo = savedPositions[prevId];
+            var defReg = defaultRegions[prevId] || "right";
+            var targetRegion = (savedInfo && savedInfo.region) ? savedInfo.region : defReg;
+            var targetEntry = (savedInfo && savedInfo.entry) ? savedInfo.entry : { id: prevId };
+            var fullSectionOrder = (savedInfo && Array.isArray(savedInfo.fullSectionOrder) && savedInfo.fullSectionOrder.length > 0)
+                ? savedInfo.fullSectionOrder
+                : (canonicalSectionOrders[targetRegion] || []);
+
+            // Remove if already in layout anywhere
+            for (var r1 = 0; r1 < regions.length; r1++) {
+                var list1 = config.bar.layout[regions[r1]];
+                for (var i1 = list1.length - 1; i1 >= 0; i1--) {
+                    var id1 = (typeof list1[i1] === "string") ? list1[i1] : (list1[i1] && list1[i1].id);
+                    if (id1 === prevId) {
+                        list1.splice(i1, 1);
+                    }
+                }
+            }
+
+            // Insert into targetRegion
+            var targetList = config.bar.layout[targetRegion];
+            var insertAt = -1;
+
+            if (fullSectionOrder.length > 0) {
+                var selfOrderIdx = fullSectionOrder.indexOf(prevId);
+                if (selfOrderIdx !== -1) {
+                    for (var f = selfOrderIdx + 1; f < fullSectionOrder.length; f++) {
+                        var fId = fullSectionOrder[f];
+                        for (var m = 0; m < targetList.length; m++) {
+                            var mId = (typeof targetList[m] === "string") ? targetList[m] : (targetList[m] && targetList[m].id);
+                            if (mId === fId) {
+                                insertAt = m;
+                                break;
+                            }
+                        }
+                        if (insertAt !== -1) break;
+                    }
+                    if (insertAt === -1) {
+                        for (var b = selfOrderIdx - 1; b >= 0; b--) {
+                            var bId = fullSectionOrder[b];
+                            for (var n = 0; n < targetList.length; n++) {
+                                var nId = (typeof targetList[n] === "string") ? targetList[n] : (targetList[n] && targetList[n].id);
+                                if (nId === bId) {
+                                    insertAt = n + 1;
+                                    break;
+                                }
+                            }
+                            if (insertAt !== -1) break;
+                        }
+                    }
+                }
+            }
+
+            if (insertAt === -1 && savedInfo && savedInfo.index !== undefined) {
+                insertAt = Math.min(Math.max(0, savedInfo.index), targetList.length);
+            }
+            if (insertAt === -1) {
+                insertAt = targetList.length;
+            }
+
+            targetList.splice(insertAt, 0, targetEntry);
+            delete savedPositions[prevId];
+        }
+
+        // 2. If newWidgetId is provided and not omarchy.apps, remove it from bar and snapshot position
+        if (newWidgetId && newWidgetId !== "omarchy.apps") {
+            for (var r2 = 0; r2 < regions.length; r2++) {
+                var regionName = regions[r2];
+                var list2 = config.bar.layout[regionName];
+                for (var i2 = list2.length - 1; i2 >= 0; i2--) {
+                    var entry2 = list2[i2];
+                    var id2 = (typeof entry2 === "string") ? entry2 : (entry2 && entry2.id);
+                    if (id2 === newWidgetId) {
+                        var fullSec = [];
+                        for (var s2 = 0; s2 < list2.length; s2++) {
+                            var sId2 = (typeof list2[s2] === "string") ? list2[s2] : (list2[s2] && list2[s2].id);
+                            if (sId2) fullSec.push(sId2);
+                        }
+                        savedPositions[newWidgetId] = {
+                            region: regionName,
+                            index: i2,
+                            fullSectionOrder: fullSec,
+                            entry: JSON.parse(JSON.stringify(entry2))
+                        };
+                        list2.splice(i2, 1);
+                    }
+                }
+            }
+        }
+    };
+
+    if (shell && typeof shell.mutateShellConfig === "function") {
+        shell.mutateShellConfig(mutator);
+    }
+    if (shellConfigFile && typeof shellConfigFile.text === "function" && typeof shellConfigFile.setText === "function") {
+        try {
+            var raw = shellConfigFile.text();
+            if (raw) {
+                var config = JSON.parse(raw);
+                mutator(config);
+                shellConfigFile.setText(JSON.stringify(config, null, 2) + "\n");
+            }
+        } catch(e) {}
+    }
+
+    return savedPositions;
 }
 
 function removeWidgetFromBar(shell, widgetId, savedPositions, shellConfigFile) {
