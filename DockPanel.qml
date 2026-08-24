@@ -206,7 +206,19 @@ Item {
                 nextKnown.push(cand)
             }
         }
-        root.knownWindows = nextKnown
+
+        var unchanged = nextKnown.length === root.knownWindows.length
+        if (unchanged) {
+            for (var m = 0; m < nextKnown.length; m++) {
+                if (nextKnown[m] !== root.knownWindows[m]) {
+                    unchanged = false
+                    break
+                }
+            }
+        }
+        if (!unchanged) {
+            root.knownWindows = nextKnown
+        }
         return root.knownWindows
     }
 
