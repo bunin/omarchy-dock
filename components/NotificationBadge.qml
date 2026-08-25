@@ -7,20 +7,16 @@ Item {
     property int count: 0
     property bool hasUrgent: false
     property bool isSuppressed: false
-    property real badgeHeight: 18
-    property real badgeFontSize: 10
+    property real badgeHeight: 14
+    property real badgeFontSize: 8.5
 
-    // Unified theme-aware dynamic color (Strictly Omarchy theme accent / urgent)
-    readonly property color currentTargetColor: (root.hasUrgent && Color.urgent) ? Color.urgent : (Color.accent || "#3584E4")
-    property color badgeColor: currentTargetColor
-    
-    // Perceived luminance for optimal text contrast on active badge color
-    readonly property real badgeLuminance: (typeof badgeColor.r === "number")
-        ? (badgeColor.r * 0.299 + badgeColor.g * 0.587 + badgeColor.b * 0.114)
-        : 0.5
-    property color textColor: badgeLuminance > 0.55 ? (Color.background || "#000000") : (Color.foreground || "#FFFFFF")
+    // Badge background color: identical to dock border color (Color.accent / urgent)
+    readonly property color badgeColor: (root.hasUrgent && Color.urgent) ? Color.urgent : (Color.accent || "#3584E4")
 
-    implicitWidth: Math.max(badgeHeight, badgeText.contentWidth + 8)
+    // Badge text color: identical to dock surface background color (Color.bar.background / Color.background)
+    readonly property color textColor: Color.bar.background || Color.background || "#11111b"
+
+    implicitWidth: Math.max(badgeHeight, Math.round(badgeText.paintedWidth + 6))
     implicitHeight: badgeHeight
     z: 250
 
@@ -43,7 +39,7 @@ Item {
         NumberAnimation {
             target: badgeRect
             property: "scale"
-            to: 1.28
+            to: 1.25
             duration: 110
             easing.type: Easing.OutQuad
         }
@@ -53,7 +49,7 @@ Item {
             to: 1.0
             duration: 160
             easing.type: Easing.OutBack
-            easing.overshoot: 1.6
+            easing.overshoot: 1.5
         }
     }
 

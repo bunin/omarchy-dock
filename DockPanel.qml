@@ -110,6 +110,7 @@ Item {
         function setAutohideEdgeDepth(val: string): string { var n = parseInt(val, 10); if (!isNaN(n) && n >= 1 && n <= 64) { root.autohideEdgeDepth = n; root.saveSettings(); } return "ok" }
         function setShowFolderTitles(val: string): string { root.showFolderTitles = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setShowBadges(val: string): string { root.showBadges = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setOverlayMode(val: string): string { root.overlayMode = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function ping(): string { return "ok" }
     }
 
@@ -329,6 +330,7 @@ Item {
     property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/dock-settings.json"
     property bool dockEnabled: true
     property bool autohide: false
+    property bool overlayMode: false
     property int autohideEdgeDepth: 1  // pixels from screen edge that trigger dock reveal
     property bool showFolderTitles: true
     property bool showBadges: true
@@ -591,6 +593,9 @@ Item {
                 if (s.autohide !== undefined) {
                     root.autohide = (s.autohide === true)
                 }
+                if (s.overlayMode !== undefined) {
+                    root.overlayMode = (s.overlayMode === true)
+                }
                 if (s.autohideEdgeDepth !== undefined) {
                     var depth = parseInt(s.autohideEdgeDepth, 10)
                     if (!isNaN(depth) && depth >= 1 && depth <= 64) root.autohideEdgeDepth = depth
@@ -632,6 +637,7 @@ Item {
         var jsonStr = JSON.stringify({
             dockEnabled: root.dockEnabled,
             autohide: root.autohide,
+            overlayMode: root.overlayMode,
             autohideEdgeDepth: root.autohideEdgeDepth,
             showFolderTitles: root.showFolderTitles,
             showBadges: root.showBadges,
@@ -642,6 +648,11 @@ Item {
             widgetSavedPositions: root.widgetSavedPositions || {}
         }, null, 2)
         settingsFile.setText(jsonStr + "\n")
+    }
+
+    function setOverlayMode(val) {
+        root.overlayMode = (val === true || val === "true")
+        root.saveSettings()
     }
 
     function setShowAppMenu(val) {
@@ -788,6 +799,7 @@ Item {
         running: true
         onTriggered: {
             root.refreshLayers()
+            root.refreshHyprlandOptions()
         }
     }
 
@@ -829,6 +841,73 @@ Item {
     // Dynamic system tiling border size & rounding
     property int systemBorderSize: 2
     property int systemRounding: Style.cornerRadius >= 0 ? Style.cornerRadius : 12
+
+    Process {
+        id: roundingProc
+        command: ["hyprctl", "-j", "getoption", "decoration:rounding"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var json = JSON.parse(text || "{}")
+                    var n = Number(json.int)
+                    if (isFinite(n) && n >= 0) {
+                        if (root.systemRounding !== n) {
+                            root.systemRounding = n
+                            root.doUpdateDockItems()
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
+    Process {
+        id: borderSizeProc
+        command: ["hyprctl", "-j", "getoption", "general:border_size"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var json = JSON.parse(text || "{}")
+                    var n = Number(json.int)
+                    if (isFinite(n) && n >= 0) {
+                        if (root.systemBorderSize !== n) {
+                            root.systemBorderSize = n
+                            root.doUpdateDockItems()
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
+    function refreshHyprlandOptions() {
+        if (!roundingProc.running) roundingProc.running = true
+        if (!borderSizeProc.running) borderSizeProc.running = true
+    }
+
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/hypr/looknfeel.lua"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.refreshHyprlandOptions()
+        onLoaded: root.refreshHyprlandOptions()
+    }
+
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/hypr/hyprland.conf"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.refreshHyprlandOptions()
+    }
+
+    FileView {
+        path: Quickshell.env("HOME") + "/.local/state/omarchy/toggles/hypr/window-no-gaps.lua"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.refreshHyprlandOptions()
+    }
 
     // Unified Edit Mode State (Jiggle Mode across dock and open folders)
     property bool isEditMode: false
@@ -896,22 +975,16 @@ Item {
             var c = cands[i]
             if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
                 var src = shell.appLibrary.iconSource(c)
-                if (src && src.length > 0 && src !== Quickshell.iconPath("application-x-executable", true)) {
+                if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) {
                     return src
                 }
             }
-            var qs = Quickshell.iconPath(c, true)
-            if (qs && qs.length > 0 && qs !== Quickshell.iconPath("application-x-executable", true)) {
+            var qs = Quickshell.iconPath(c, false)
+            if (qs && qs.length > 0 && qs.indexOf("application-x-executable") === -1) {
                 return qs
             }
         }
 
-        if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
-            var f = shell.appLibrary.iconSource(cands[0])
-            if (f && f.length > 0) return f
-        }
-        var f2 = Quickshell.iconPath(cands[0], true)
-        if (f2 && f2.length > 0) return f2
         return Quickshell.iconPath("application-x-executable", true)
     }
 
@@ -1224,13 +1297,12 @@ Item {
         printErrors: false
         onLoaded: {
             root.isGtkSettingsLoaded = true
-            root.checkAndApplyTheme()
+            root.triggerThemeRefresh()
         }
         onFileChanged: {
             reload()
             root.isGtkSettingsLoaded = true
-            root.iconsReady = false
-            root.checkAndApplyTheme()
+            root.triggerThemeRefresh()
         }
     }
 
@@ -1250,66 +1322,57 @@ Item {
     property bool iconsReady: false
     property bool isDockVisualReady: false
 
-    property string activeThemeName: ""
-
-    function checkAndApplyTheme() {
-        var txt = gtkSettingsFile.text()
-        if (!txt || txt.trim().length === 0) {
-            return
-        }
-
-        var m = txt.match(/gtk-icon-theme-name\s*=\s*([^\r\n]+)/)
-        if (!m) {
-            return
-        }
-
-        var themeName = m[1].trim()
-        var isCustom = themeName.length > 0 && themeName.toLowerCase() !== "hicolor" && themeName.toLowerCase() !== "adwaita" && themeName.toLowerCase() !== "gnome"
-
-        // 1. В первую очередь — проверка сторонних иконок темы, если тема установлена
-        if (isCustom) {
-            if (shell && shell.appLibrary && shell.appLibrary.iconIndex) {
-                var keys = Object.keys(shell.appLibrary.iconIndex)
-                if (keys && keys.length > 50) {
-                    var curThemeLower = themeName.toLowerCase()
-                    var hasThemeIcons = false
-                    for (var i = 0; i < keys.length; i++) {
-                        var pth = shell.appLibrary.iconIndex[keys[i]]
-                        if (pth && pth.toLowerCase().indexOf(curThemeLower) >= 0) {
-                            hasThemeIcons = true
-                            break
-                        }
-                    }
-                    if (hasThemeIcons) {
-                        root.activeThemeName = themeName
-                        root.iconRevision++
-                        root.doUpdateDockItems()
-                        root.iconsReady = true
-                        return
-                    }
-                }
-            }
-            return
-        }
-
-        // 2. Если сторонней темы нет — отображаем стандартные системные иконки
-        root.activeThemeName = themeName
-        root.doUpdateDockItems()
-        root.iconsReady = true
+    function triggerThemeRefresh() {
+        themeChangeDebounceTimer.restart()
     }
 
     Timer {
-        id: themePollTimer
-        interval: 50
-        running: !root.iconsReady
-        repeat: true
-        onTriggered: root.checkAndApplyTheme()
+        id: themeChangeDebounceTimer
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (shell && shell.appLibrary && typeof shell.appLibrary.refreshIcons === "function") {
+                shell.appLibrary.refreshIcons()
+            }
+        }
+    }
+
+    Timer {
+        id: iconIndexApplyTimer
+        interval: 20
+        repeat: false
+        onTriggered: {
+            root.iconRevision++
+            root.doUpdateDockItems()
+            var hasIndex = (shell && shell.appLibrary && shell.appLibrary.iconIndex && Object.keys(shell.appLibrary.iconIndex).length > 0)
+            if (hasIndex) {
+                root.iconsReady = true
+            }
+        }
+    }
+
+    FileView {
+        id: omarchyIconThemeFile
+        path: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/icons.theme"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.triggerThemeRefresh()
+        onLoaded: root.triggerThemeRefresh()
+    }
+
+    FileView {
+        id: gtk4SettingsFile
+        path: Quickshell.env("HOME") + "/.config/gtk-4.0/settings.ini"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.triggerThemeRefresh()
+        onLoaded: root.triggerThemeRefresh()
     }
 
     // Защитный таймер: если фоновый поиск темы затянулся, показываем доступные иконки
     Timer {
         id: iconsSafetyTimer
-        interval: 10000
+        interval: 1500
         running: !root.iconsReady
         repeat: false
         onTriggered: {
@@ -1321,10 +1384,10 @@ Item {
         }
     }
 
-    // Задержка показа дока после поднятия плитки окон Hyprland (220мс на анимацию тайлинга)
+    // Задержка показа дока после поднятия плитки окон Hyprland (250мс на анимацию тайлинга и готовность иконок)
     Timer {
         id: dockVisualAppearTimer
-        interval: 220
+        interval: 250
         running: root.iconsReady && !root.isDockVisualReady
         repeat: false
         onTriggered: {
@@ -1335,16 +1398,10 @@ Item {
     Connections {
         target: (shell && shell.appLibrary) ? shell.appLibrary : null
         function onIconIndexChanged() {
-            if (!root.iconsReady) {
-                root.checkAndApplyTheme()
-            } else {
-                root.iconRevision++
-                root.doUpdateDockItems()
-            }
+            iconIndexApplyTimer.restart()
         }
         function onAppsChanged() {
-            root.iconRevision++
-            root.doUpdateDockItems()
+            iconIndexApplyTimer.restart()
         }
     }
 
@@ -1370,6 +1427,7 @@ Item {
             }
         } catch(e) {}
         root.readSettings()
+        root.refreshHyprlandOptions()
         if (shell && shell.appLibrary && typeof shell.appLibrary.refreshIcons === "function") {
             shell.appLibrary.refreshIcons()
         }
@@ -1468,7 +1526,7 @@ Item {
         WlrLayershell.namespace: "omarchy-dock"
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-        exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && (!root.autohide || !root.shouldSlideOut)) ? ExclusionMode.Auto : ExclusionMode.Ignore
+        exclusionMode: (root.opened && root.pluginEnabled && root.dockEnabled && root.isPinnedLoaded && visible && !root.overlayMode && (!root.autohide || !root.shouldSlideOut)) ? ExclusionMode.Auto : ExclusionMode.Ignore
         color: "transparent"
 
         anchors {

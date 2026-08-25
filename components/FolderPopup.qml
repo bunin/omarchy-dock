@@ -427,6 +427,7 @@ PanelWindow {
                                     width: 28
                                     height: 28
                                     fillMode: Image.PreserveAspectFit
+                                    cache: false
                                     source: (stackWindow.root.iconRevision, stackWindow.root.resolveIcon(modelData))
                                     sourceSize: Qt.size(Math.max(128, 28 * 4 * Screen.devicePixelRatio), Math.max(128, 28 * 4 * Screen.devicePixelRatio))
                                     asynchronous: false
@@ -438,11 +439,11 @@ PanelWindow {
                                 // iOS-Style Theme Notification Badge on Sub-App (Modular)
                                 NotificationBadge {
                                     anchors.top: parent.top
-                                    anchors.topMargin: -3
+                                    anchors.topMargin: -2
                                     anchors.right: parent.right
-                                    anchors.rightMargin: -3
-                                    badgeHeight: 16
-                                    badgeFontSize: 9
+                                    anchors.rightMargin: -2
+                                    badgeHeight: 13
+                                    badgeFontSize: 8.5
                                     count: (modelData && modelData.badgeCount) ? modelData.badgeCount : 0
                                     hasUrgent: (modelData && !!modelData.hasUrgent)
                                     isSuppressed: stackWindow.root.isEditMode || stackWindow.root.folderDragActiveIndex >= 0 || !stackWindow.root.showBadges

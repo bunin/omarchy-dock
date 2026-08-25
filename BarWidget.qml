@@ -14,10 +14,21 @@ BarWidget {
   property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/dock-settings.json"
   property bool dockEnabled: true
   property bool autohide: false
+  property bool overlayMode: false
   property bool showFolderTitles: true
   property bool showBadges: true
   property bool widgetsEnabled: true
   property bool settingsOpen: false
+  property bool isSavingSettings: false
+
+  Timer {
+    id: saveSettingsTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      root.isSavingSettings = false
+    }
+  }
 
   FileView {
     id: settingsFile
@@ -26,7 +37,12 @@ BarWidget {
     atomicWrites: true
     printErrors: false
     onLoaded: root.readSettings()
-    onFileChanged: { reload(); root.readSettings() }
+    onFileChanged: {
+      if (!root.isSavingSettings) {
+        reload()
+        root.readSettings()
+      }
+    }
   }
 
   property var dockWidgets: ["omarchy.apps"]
@@ -35,6 +51,7 @@ BarWidget {
   property var widgetSavedPositions: ({})
 
   function readSettings() {
+    if (root.isSavingSettings) return
     try {
       var txt = settingsFile.text()
       if (txt && txt.trim().length > 0) {
@@ -44,6 +61,9 @@ BarWidget {
         }
         if (s && s.autohide !== undefined) {
           root.autohide = (s.autohide === true)
+        }
+        if (s && s.overlayMode !== undefined) {
+          root.overlayMode = (s.overlayMode === true)
         }
         if (s && s.showFolderTitles !== undefined) {
           root.showFolderTitles = (s.showFolderTitles === true)
@@ -71,6 +91,8 @@ BarWidget {
   }
 
   function saveSettings() {
+    root.isSavingSettings = true
+    saveSettingsTimer.restart()
     var s = {}
     try {
       var txt = settingsFile.text()
@@ -81,6 +103,7 @@ BarWidget {
 
     s.dockEnabled = root.dockEnabled
     s.autohide = root.autohide
+    s.overlayMode = root.overlayMode
     s.showFolderTitles = root.showFolderTitles
     s.showBadges = root.showBadges
     s.widgetsEnabled = root.widgetsEnabled
@@ -102,46 +125,49 @@ BarWidget {
 
   function setDockEnabled(val) {
     root.dockEnabled = val
+    saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setDockEnabled " + (val ? "true" : "false"))
-    } else {
-      saveSettings()
     }
   }
 
   function setAutohide(val) {
     root.autohide = val
+    saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setAutohide " + (val ? "true" : "false"))
-    } else {
-      saveSettings()
+    }
+  }
+
+  function setOverlayMode(val) {
+    root.overlayMode = val
+    saveSettings()
+    if (root.bar && typeof root.bar.run === "function") {
+      root.bar.run("omarchy-shell rosakodu.dock setOverlayMode " + (val ? "true" : "false"))
     }
   }
 
   function setShowFolderTitles(val) {
     root.showFolderTitles = val
+    saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setShowFolderTitles " + (val ? "true" : "false"))
-    } else {
-      saveSettings()
     }
   }
 
   function setShowBadges(val) {
     root.showBadges = val
+    saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setShowBadges " + (val ? "true" : "false"))
-    } else {
-      saveSettings()
     }
   }
 
   function setWidgetsEnabled(val) {
     root.widgetsEnabled = val
+    saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setWidgetsEnabled " + (val ? "true" : "false"))
-    } else {
-      saveSettings()
     }
   }
 
@@ -416,6 +442,85 @@ BarWidget {
             cursorShape: Qt.PointingHandCursor
             onClicked: {
               root.setAutohide(!root.autohide)
+            }
+          }
+        }
+
+        // Toggle Overlay Mode Row
+        Rectangle {
+          id: overlayRow
+          Layout.fillWidth: true
+          height: 48
+          radius: 8
+          opacity: root.dockEnabled ? 1.0 : 0.4
+          enabled: root.dockEnabled
+          color: toggleOverlayMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
+          Behavior on color { ColorAnimation { duration: 120 } }
+          Behavior on opacity { NumberAnimation { duration: 150 } }
+
+          RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+
+            ColumnLayout {
+              Layout.fillWidth: true
+              Layout.alignment: Qt.AlignVCenter
+              spacing: 2
+
+              Text {
+                text: "Overlay mode"
+                font.family: Style.font.family
+                font.pixelSize: 12
+                font.bold: true
+                color: Color.popups.text
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+              }
+
+              Text {
+                text: "Show dock above windows"
+                font.family: Style.font.family
+                font.pixelSize: 10
+                color: Color.muted
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+              }
+            }
+
+            // Custom Smooth Toggle Switch
+            Rectangle {
+              id: switchOverlayTrack
+              Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+              Layout.preferredWidth: 36
+              Layout.preferredHeight: 20
+              width: 36
+              height: 20
+              radius: 10
+              color: root.overlayMode ? Color.accent : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.25)
+              Behavior on color { ColorAnimation { duration: 180 } }
+
+              Rectangle {
+                id: switchOverlayThumb
+                width: 14
+                height: 14
+                radius: 7
+                anchors.verticalCenter: parent.verticalCenter
+                x: root.overlayMode ? (switchOverlayTrack.width - width - 3) : 3
+                color: root.overlayMode ? Color.background : Color.popups.text
+                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+              }
+            }
+          }
+
+          MouseArea {
+            id: toggleOverlayMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.setOverlayMode(!root.overlayMode)
             }
           }
         }

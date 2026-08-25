@@ -582,11 +582,11 @@ Item {
 
     function extractUnreadFromTitle(title) {
         if (!title || typeof title !== "string") return 0
-        // Matches (3), [5], (99+), etc. commonly used in web messengers, mail and terminals
-        var m = title.match(/(?:\(|\[)(\d+)(?:\+)?(?:\)|\])/)
+        // Matches (3), [5], (99+), etc. with sane bound <= 999 to avoid process IDs or ports
+        var m = title.match(/(?:\(|\[)(\d{1,3})(?:\+)?(?:\)|\])/)
         if (m && m[1]) {
             var val = parseInt(m[1], 10)
-            return (!isNaN(val) && val > 0) ? val : 0
+            return (!isNaN(val) && val > 0 && val <= 999) ? val : 0
         }
         return 0
     }

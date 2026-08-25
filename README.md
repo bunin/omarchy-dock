@@ -19,8 +19,9 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 - 🌐 **Full Web Apps (PWA) Support** — Automatic domain matching for Chrome/Chromium web apps (Google Maps, Google Contacts, WhatsApp, YouTube, Discord, etc.) with native GTK theme icons.
 - ⚡ **Zero-Flicker Boot & Tile Lift** — Two-phase initialization instantly reserves Hyprland exclusive space to lift tiled windows smoothly, followed by a monolithic fade-in once all vector theme icons are loaded.
 - 🧭 **Dynamic Auto-Positioning** — Automatically adapts its position opposite to the Omarchy status bar (top $\leftrightarrow$ bottom, left $\leftrightarrow$ right).
-- ⏱️ **Smart Auto-Hide** — Optional auto-hide with a 1.5-second dismissal delay and instant hover reveal.
-- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, Folder Titles, and Dock Widgets configuration.
+- ⏱️ **Smart Auto-Hide & Overlay Mode** — Optional auto-hide with instant hover reveal, and a dedicated **Overlay Mode** toggle to float the dock seamlessly above full-screen/tiling windows without shifting Hyprland window arrangements (macOS / Dash to Dock behavior).
+- 🔔 **Real-Time Notification Badges** — Dynamic unread badges on app icons aggregated from D-Bus notifications, Hyprland dwell timers, and window titles.
+- 🎛️ **Status Bar Settings Widget (`BarWidget`)** — Native top bar menu with smooth toggle switches for Dock Enable, Auto-hide, Overlay Mode, Folder Titles, Notification Badges, and Dock Widgets configuration.
 - 🎨 **100% Native Theme Sync** — Clean borderless status capsules that automatically react to Omarchy colors (`Color.accent`, `Color.bar.background`), system fonts, and window corner radius tokens.
 - 🔤 **Subpixel Vector Glyphs (`DockGlyph`)** — GPU-accelerated vector curve rendering without font hinting distortion or pixel jitter during animations.
 
@@ -63,7 +64,9 @@ You can customize options directly via the `···` status bar widget or in `~/.
 {
   "dockEnabled": true,
   "autohide": false,
+  "overlayMode": false,
   "showFolderTitles": true,
+  "showBadges": true,
   "widgetsEnabled": true,
   "widgetPosition": "left",
   "dockWidgets": [

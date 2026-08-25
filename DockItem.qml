@@ -76,22 +76,16 @@ Item {
             var c = cands[i]
             if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
                 var src = shell.appLibrary.iconSource(c)
-                if (src && src.length > 0 && src !== Quickshell.iconPath("application-x-executable", true)) {
+                if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) {
                     return src
                 }
             }
-            var qs = Quickshell.iconPath(c, true)
-            if (qs && qs.length > 0 && qs !== Quickshell.iconPath("application-x-executable", true)) {
+            var qs = Quickshell.iconPath(c, false)
+            if (qs && qs.length > 0 && qs.indexOf("application-x-executable") === -1) {
                 return qs
             }
         }
 
-        if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
-            var f = shell.appLibrary.iconSource(cands[0])
-            if (f && f.length > 0) return f
-        }
-        var f2 = Quickshell.iconPath(cands[0], true)
-        if (f2 && f2.length > 0) return f2
         return Quickshell.iconPath("application-x-executable", true)
     }
 
@@ -183,6 +177,7 @@ Item {
             width: root.iconBaseSize
             height: root.iconBaseSize
             fillMode: Image.PreserveAspectFit
+            cache: false
             source: (root.iconRevision, root.resolveIcon(root.itemData))
             sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
             asynchronous: false
@@ -224,6 +219,7 @@ Item {
                     width: stackGrid.cellWidth
                     height: stackGrid.cellWidth
                     fillMode: Image.PreserveAspectFit
+                    cache: false
                     source: (root.iconRevision, root.resolveIcon(modelData))
                     sourceSize: Qt.size(Math.max(64, width * 4 * Screen.devicePixelRatio), Math.max(64, height * 4 * Screen.devicePixelRatio))
                     mipmap: true
@@ -314,9 +310,9 @@ Item {
     // 0. iOS / macOS-Style Theme Notification Badge with Count (Anchored to top-right of iconWrapper)
     NotificationBadge {
         anchors.top: iconWrapper.top
-        anchors.topMargin: -4
+        anchors.topMargin: -2
         anchors.right: iconWrapper.right
-        anchors.rightMargin: -4
+        anchors.rightMargin: -2
         count: root.badgeCount
         hasUrgent: (root.itemData && !!root.itemData.hasUrgent)
         isSuppressed: root.isEditMode || root.isAnyDragging || !root.showBadges
@@ -342,7 +338,7 @@ Item {
             fontSize: 11
             color: (root.itemData && root.itemData.isPinned)
                 ? Color.accent
-                : (pinBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.85))
+                : (pinBadgeMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.45))
 
             scale: pinBadgeMouse.containsMouse ? 1.35 : 1.0
             Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
