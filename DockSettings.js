@@ -100,6 +100,13 @@ function workspaceIdentity(workspace) {
     return String(workspace.id)
 }
 
+function keyboardToggleWorkspace(monitorWorkspace, focusedWorkspace, toplevelWorkspace) {
+    if (monitorWorkspace) return monitorWorkspace
+    if (focusedWorkspace) return focusedWorkspace
+    if (toplevelWorkspace) return toplevelWorkspace
+    return null
+}
+
 function keyboardToggleDecision(dockRevealed, configuredSelector, focusedWorkspace, configuredWorkspace) {
     if (dockRevealed === true) {
         return { action: "hide", targetWorkspace: "" }

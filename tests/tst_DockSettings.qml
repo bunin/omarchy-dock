@@ -80,6 +80,28 @@ TestCase {
         verify(!DockSettings.workspaceMatches("3", 2, "2"))
     }
 
+    function test_keyboardToggleWorkspacePrefersFocusedMonitor() {
+        var emptyWorkspace = { id: 4, name: "4", active: true }
+        var staleToplevelWorkspace = { id: 2, name: "2", active: true }
+
+        var selected = DockSettings.keyboardToggleWorkspace(
+            emptyWorkspace,
+            staleToplevelWorkspace,
+            staleToplevelWorkspace
+        )
+
+        compare(selected, emptyWorkspace)
+    }
+
+    function test_keyboardToggleWorkspaceFallbacks() {
+        var focusedWorkspace = { id: 3, name: "3", active: true }
+        var toplevelWorkspace = { id: 2, name: "2", active: true }
+
+        compare(DockSettings.keyboardToggleWorkspace(null, focusedWorkspace, toplevelWorkspace), focusedWorkspace)
+        compare(DockSettings.keyboardToggleWorkspace(null, null, toplevelWorkspace), toplevelWorkspace)
+        compare(DockSettings.keyboardToggleWorkspace(null, null, null), null)
+    }
+
     function test_visibilityState_data() {
         return [
             { tag: "always-follow", mode: "always", override: 0, active: false, empty: false, hidden: false },

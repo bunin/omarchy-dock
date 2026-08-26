@@ -391,13 +391,17 @@ Item {
     }
 
     function focusedWorkspaceForKeyboardToggle() {
-        var toplevel = Hyprland.activeToplevel
-        if (toplevel && toplevel.workspace) return toplevel.workspace
-        if (Hyprland.focusedWorkspace) return Hyprland.focusedWorkspace
-        if (Hyprland.focusedMonitor && Hyprland.focusedMonitor.activeWorkspace) {
-            return Hyprland.focusedMonitor.activeWorkspace
-        }
-        return null
+        var monitorWorkspace = Hyprland.focusedMonitor
+            ? Hyprland.focusedMonitor.activeWorkspace
+            : null
+        var toplevelWorkspace = Hyprland.activeToplevel
+            ? Hyprland.activeToplevel.workspace
+            : null
+        return DockSettings.keyboardToggleWorkspace(
+            monitorWorkspace,
+            Hyprland.focusedWorkspace,
+            toplevelWorkspace
+        )
     }
 
     readonly property bool hasExplicitWorkspace: root.visibleWorkspace !== "all"
