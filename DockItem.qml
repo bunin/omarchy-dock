@@ -62,9 +62,9 @@ Item {
 
     // Dynamic Real-time Theme-aware Icon Resolution
     function resolveIcon(itemObj) {
-        if (!itemObj) return Quickshell.iconPath("application-x-executable", true)
+        if (!itemObj) return Quickshell.iconPath("application-x-executable", true) || "file:///usr/share/pixmaps/omarchy.png"
         var raw = (typeof itemObj === "string") ? itemObj : (itemObj.rawIcon || itemObj.icon || itemObj.appId || itemObj.id || "")
-        if (!raw) return Quickshell.iconPath("application-x-executable", true)
+        if (!raw) return Quickshell.iconPath("application-x-executable", true) || "file:///usr/share/pixmaps/omarchy.png"
         if (raw.indexOf("://") >= 0) return raw
         if (raw.indexOf("/") === 0) return "file://" + raw
 
@@ -86,7 +86,15 @@ Item {
             }
         }
 
-        return Quickshell.iconPath("application-x-executable", true)
+        if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
+            var fbApp = shell.appLibrary.iconSource("omarchy") || shell.appLibrary.iconSource("ghostty") || shell.appLibrary.iconSource("utilities-terminal")
+            if (fbApp && fbApp.length > 0) return fbApp
+        }
+
+        var fbQs = Quickshell.iconPath("omarchy", false) || Quickshell.iconPath("com.mitchellh.ghostty", false) || Quickshell.iconPath("utilities-terminal", false) || Quickshell.iconPath("application-x-executable", true)
+        if (fbQs && fbQs.length > 0) return fbQs
+
+        return "file:///usr/share/pixmaps/omarchy.png"
     }
 
     // Clear, steady Merge Target Halo (stays perfectly still while hovered)
@@ -172,7 +180,7 @@ Item {
         // Normal Single App Icon (Instantly react to rawIcon theme swaps, crisp HiDPI rasterization)
         Image {
             id: appIcon
-            visible: root.itemData && !root.itemData.isStack
+            visible: root.itemData && !root.itemData.isStack && (status !== Image.Error)
             anchors.centerIn: parent
             width: root.iconBaseSize
             height: root.iconBaseSize
@@ -182,6 +190,19 @@ Item {
             sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
             asynchronous: false
             mipmap: true
+            smooth: true
+            antialiasing: true
+        }
+
+        Image {
+            id: fallbackAppIcon
+            visible: root.itemData && !root.itemData.isStack && (appIcon.status === Image.Error || !appIcon.visible)
+            anchors.centerIn: parent
+            width: root.iconBaseSize
+            height: root.iconBaseSize
+            fillMode: Image.PreserveAspectFit
+            source: "file:///usr/share/pixmaps/omarchy.png"
+            sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
             smooth: true
             antialiasing: true
         }
