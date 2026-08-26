@@ -611,6 +611,30 @@ function getCandidates(rawIcon, icon, appId) {
         for (var j = 0; j < fb2.length; j++) add(fb2[j]);
     }
 
+    if (clean.indexOf("org.omarchy.") === 0 || clean.indexOf("omarchy-") === 0 || clean.indexOf("omarchy.") === 0) {
+        if (clean.indexOf("update") !== -1) {
+            add("system-software-update");
+            add("software-update-available");
+            add("update-manager");
+            add("system-upgrade");
+        }
+        if (clean.indexOf("config") !== -1 || clean.indexOf("settings") !== -1 || clean.indexOf("edit") !== -1) {
+            add("preferences-system");
+            add("configuration-section");
+            add("system-settings");
+            add("preferences-desktop");
+        }
+        if (clean.indexOf("about") !== -1 || clean.indexOf("info") !== -1) {
+            add("help-about");
+            add("help");
+            add("dialog-information");
+        }
+        add("omarchy");
+        add("utilities-terminal");
+        add("com.mitchellh.ghostty");
+        add("ghostty");
+    }
+
     var chromeDom = extractChromeDomain(clean);
     if (chromeDom) {
         add(chromeDom);

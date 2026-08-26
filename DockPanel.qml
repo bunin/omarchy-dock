@@ -1245,7 +1245,7 @@ Item {
     Connections {
         target: Style
         function onCornerRadiusChanged() {
-            root.systemRounding = Style.cornerRadius > 0 ? Style.cornerRadius : 12
+            root.systemRounding = Style.cornerRadius >= 0 ? Style.cornerRadius : 12
             root.doUpdateDockItems()
         }
     }
