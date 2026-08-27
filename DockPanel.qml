@@ -846,6 +846,9 @@ Item {
 
     function setAutohide(val) {
         if (val) {
+            if (!root.dockEnabled) {
+                root.dockEnabled = true
+            }
             root.visibilityMode = root.preferredVisibilityMode || "hover"
         } else {
             if (root.visibilityMode === "hover" || root.visibilityMode === "keybind") {
