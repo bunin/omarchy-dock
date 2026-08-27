@@ -282,14 +282,14 @@ BarWidget {
     bar: root.bar
     centerOnBar: true
     contentWidth: (Style && typeof Style.space === "function") ? Style.space(410) : 410
-    contentHeight: 480
+    contentHeight: (root.autohide && root.effectiveMode === "keybind") ? 480 : 410
+    Behavior on contentHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
     borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.accent, Color.accent, Math.max(1, Style.space(2)))
 
     ColumnLayout {
       id: cardColumn
       anchors.fill: parent
-      spacing: root.autohide ? (root.effectiveMode === "keybind" ? 7 : 10) : 12
-      Behavior on spacing { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+      spacing: 10
 
         // Header Row
         RowLayout {
@@ -322,82 +322,108 @@ BarWidget {
           color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.35)
         }
 
-        // Toggle Dock Enabled Row (shown at the top when !root.autohide)
-        Rectangle {
-          id: dockEnabledRow
+        // Top Slot (Fixed 42px: crossfades Enable Dock switch <-> Reveal Method dropdown)
+        Item {
           Layout.fillWidth: true
-          visible: !root.autohide
-          height: 42
-          radius: 8
-          color: toggleDockEnabledMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
-          Behavior on color { ColorAnimation { duration: 120 } }
+          Layout.preferredHeight: 42
+          Layout.minimumHeight: 42
+          Layout.maximumHeight: 42
 
-          RowLayout {
+          // Mode A: Enable dock toggle row
+          Rectangle {
+            id: dockEnabledRow
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 8
+            radius: 8
+            opacity: !root.autohide ? 1.0 : 0.0
+            visible: opacity > 0.01
+            enabled: !root.autohide
+            color: toggleDockEnabledMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-            ColumnLayout {
-              Layout.fillWidth: true
-              Layout.alignment: Qt.AlignVCenter
-              spacing: 1
+            RowLayout {
+              anchors.fill: parent
+              anchors.leftMargin: 10
+              anchors.rightMargin: 10
+              spacing: 8
 
-              Text {
+              ColumnLayout {
                 Layout.fillWidth: true
-                text: "Enable dock"
-                font.family: Style.font.family
-                font.pixelSize: 12
-                font.bold: true
-                color: Color.popups.text
-                elide: Text.ElideRight
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 1
+
+                Text {
+                  Layout.fillWidth: true
+                  text: "Enable dock"
+                  font.family: Style.font.family
+                  font.pixelSize: 12
+                  font.bold: true
+                  color: Color.popups.text
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  Layout.fillWidth: true
+                  text: "Show dock panel on screen"
+                  font.family: Style.font.family
+                  font.pixelSize: 10
+                  color: Color.muted
+                  elide: Text.ElideRight
+                }
               }
 
-              Text {
-                Layout.fillWidth: true
-                text: "Show dock panel on screen"
-                font.family: Style.font.family
-                font.pixelSize: 10
-                color: Color.muted
-                elide: Text.ElideRight
+              // Custom Smooth Toggle Switch
+              Rectangle {
+                id: switchDockEnabledTrack
+                Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                Layout.preferredWidth: 36
+                Layout.minimumWidth: 36
+                Layout.maximumWidth: 36
+                Layout.preferredHeight: 20
+                width: 36
+                height: 20
+                radius: 10
+                color: root.dockEnabled ? Color.accent : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.25)
+                Behavior on color { ColorAnimation { duration: 180 } }
+
+                Rectangle {
+                  id: switchDockEnabledThumb
+                  width: 14
+                  height: 14
+                  radius: 7
+                  anchors.verticalCenter: parent.verticalCenter
+                  x: root.dockEnabled ? (switchDockEnabledTrack.width - width - 3) : 3
+                  color: root.dockEnabled ? Color.background : Color.popups.text
+                  Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                }
               }
             }
 
-            // Custom Smooth Toggle Switch
-            Rectangle {
-              id: switchDockEnabledTrack
-              Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-              Layout.preferredWidth: 36
-              Layout.minimumWidth: 36
-              Layout.maximumWidth: 36
-              Layout.preferredHeight: 20
-              width: 36
-              height: 20
-              radius: 10
-              color: root.dockEnabled ? Color.accent : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.25)
-              Behavior on color { ColorAnimation { duration: 180 } }
-
-              Rectangle {
-                id: switchDockEnabledThumb
-                width: 14
-                height: 14
-                radius: 7
-                anchors.verticalCenter: parent.verticalCenter
-                x: root.dockEnabled ? (switchDockEnabledTrack.width - width - 3) : 3
-                color: root.dockEnabled ? Color.background : Color.popups.text
-                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+            MouseArea {
+              id: toggleDockEnabledMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.setDockEnabled(!root.dockEnabled)
               }
             }
           }
 
-          MouseArea {
-            id: toggleDockEnabledMouse
+          // Mode B: Reveal Method Dropdown
+          DockDropdown {
+            id: revealMethodDropdown
             anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              root.setDockEnabled(!root.dockEnabled)
-            }
+            opacity: root.autohide ? 1.0 : 0.0
+            visible: opacity > 0.01
+            enabled: root.autohide
+            value: root.effectiveMode === "keybind" ? "keybind" : "hover"
+            options: [
+              { value: "hover", label: "Screen-edge hover" },
+              { value: "keybind", label: "Keyboard shortcut" }
+            ]
+            onChanged: function(value) { root.setVisibilityMode(value) }
+            Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
           }
         }
 
@@ -487,33 +513,26 @@ BarWidget {
           }
         }
 
-        DockDropdown {
-          Layout.fillWidth: true
-          visible: root.autohide
-          value: root.effectiveMode === "keybind" ? "keybind" : "hover"
-          options: [
-            { value: "hover", label: "Screen-edge hover" },
-            { value: "keybind", label: "Keyboard shortcut" }
-          ]
-          onChanged: function(value) { root.setVisibilityMode(value) }
-        }
-
+        // Snippet Block (smoothly expands ONLY when Keyboard shortcut mode is active)
         ColumnLayout {
+          id: hintBlock
           Layout.fillWidth: true
-          visible: root.autohide
           Layout.leftMargin: 2
           Layout.rightMargin: 2
           Layout.topMargin: 0
-          Layout.bottomMargin: 4
-          Layout.preferredHeight: 64
-          Layout.minimumHeight: 64
-          Layout.maximumHeight: 64
+          Layout.bottomMargin: (root.autohide && root.effectiveMode === "keybind") ? 4 : 0
+          Layout.preferredHeight: (root.autohide && root.effectiveMode === "keybind") ? 64 : 0
+          clip: true
+          visible: Layout.preferredHeight > 0.1
+          opacity: (root.autohide && root.effectiveMode === "keybind") ? 1.0 : 0.0
           spacing: 4
+          Behavior on Layout.preferredHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+          Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
           Text {
             Layout.fillWidth: true
             Layout.leftMargin: 6
-            text: root.effectiveMode === "keybind" ? "Add to ~/.config/hypr/bindings.lua:" : "Behavior:"
+            text: "Add to ~/.config/hypr/bindings.lua:"
             font.family: Style.font.family
             font.pixelSize: 10
             font.bold: true
@@ -528,13 +547,9 @@ BarWidget {
             Layout.minimumHeight: 44
             Layout.maximumHeight: 44
             radius: 6
-            color: root.effectiveMode === "keybind"
-              ? (cmdMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.25))
-              : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.15)
+            color: cmdMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.25)
             border.width: 1
-            border.color: root.effectiveMode === "keybind"
-              ? (cmdMouse.containsMouse ? Color.accent : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.4))
-              : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.25)
+            border.color: cmdMouse.containsMouse ? Color.accent : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.4)
             Behavior on color { ColorAnimation { duration: 120 } }
 
             property bool copied: false
@@ -555,20 +570,17 @@ BarWidget {
                 id: cmdText
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
-                text: root.effectiveMode === "keybind"
-                  ? (cmdPill.copied ? "✓ Copied to clipboard!" : "o.bind(\"SUPER + D\", \"Toggle Dock\",\n  \"omarchy-shell -q rosakodu.dock toggleReveal\")")
-                  : "Move cursor to screen edge to reveal dock"
-                font.family: (root.effectiveMode === "keybind" && !cmdPill.copied) ? (Style.font.monospace || "monospace") : Style.font.family
-                font.pixelSize: (root.effectiveMode === "keybind" && !cmdPill.copied) ? 9 : 10
+                text: cmdPill.copied ? "✓ Copied to clipboard!" : "o.bind(\"SUPER + D\", \"Toggle Dock\",\n  \"omarchy-shell -q rosakodu.dock toggleReveal\")"
+                font.family: !cmdPill.copied ? (Style.font.monospace || "monospace") : Style.font.family
+                font.pixelSize: !cmdPill.copied ? 9 : 10
                 lineHeight: 1.18
                 font.bold: cmdPill.copied
-                color: cmdPill.copied ? Color.accent : (root.effectiveMode === "keybind" ? Color.popups.text : Color.muted)
+                color: cmdPill.copied ? Color.accent : Color.popups.text
                 wrapMode: Text.Wrap
                 verticalAlignment: Text.AlignVCenter
               }
 
               DockGlyph {
-                visible: root.effectiveMode === "keybind"
                 width: 14
                 height: 14
                 text: cmdPill.copied ? "󰄬" : "󰆏"
@@ -581,11 +593,10 @@ BarWidget {
             MouseArea {
               id: cmdMouse
               anchors.fill: parent
-              enabled: root.effectiveMode === "keybind" && root.autohide
-              hoverEnabled: root.effectiveMode === "keybind"
-              cursorShape: root.effectiveMode === "keybind" ? Qt.PointingHandCursor : Qt.ArrowCursor
+              enabled: root.autohide && root.effectiveMode === "keybind"
+              hoverEnabled: root.autohide && root.effectiveMode === "keybind"
+              cursorShape: Qt.PointingHandCursor
               onClicked: {
-                if (root.effectiveMode !== "keybind") return
                 var cmd = 'o.bind("SUPER + D", "Toggle Dock", "omarchy-shell -q rosakodu.dock toggleReveal")'
                 try {
                   Quickshell.clipboardText = cmd
