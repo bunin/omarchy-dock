@@ -66,17 +66,18 @@ function shouldSlideOut(visibilityMode, visibilityOverride, dockActive, workspac
     return dockActive !== true && workspaceEmpty !== true
 }
 
-function keyboardToggleAllowed(visibilityMode) {
-    return normalizeVisibilityMode(visibilityMode, false) !== VISIBILITY_HOVER
+function keyboardToggleAllowed(visibilityMode, autohide) {
+    if (autohide !== undefined && autohide !== true) return false
+    return normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_KEYBIND
 }
 
-function revealRequestAllowed(visibilityMode, source) {
-    return source === "internal" || keyboardToggleAllowed(visibilityMode)
+function revealRequestAllowed(visibilityMode, source, autohide) {
+    if (source === "internal") return true
+    return keyboardToggleAllowed(visibilityMode, autohide)
 }
 
 function shouldAutoDismissKeyboardReveal(visibilityMode, visibilityOverride) {
-    return normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_KEYBIND
-        && normalizeVisibilityOverride(visibilityOverride) === VISIBILITY_OVERRIDE_SHOWN
+    return false
 }
 
 function releaseInteractionVisibilityOverride(owned, previousOverride, currentOverride) {
@@ -87,7 +88,6 @@ function releaseInteractionVisibilityOverride(owned, previousOverride, currentOv
 
 function dockScreenTarget(visibleWorkspace, visibilityMode, visibilityOverride) {
     if (normalizeVisibleWorkspace(visibleWorkspace) !== "all") return "configured"
-    if (normalizeVisibilityOverride(visibilityOverride) === VISIBILITY_OVERRIDE_SHOWN) return "captured"
     if (normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_HOVER) return "focused"
     return "base"
 }
@@ -117,13 +117,10 @@ function keyboardToggleDecision(dockRevealed, configuredSelector, focusedWorkspa
     if (!workspace) {
         return { action: "workspace-unavailable", targetWorkspace: "" }
     }
-    if (workspace.active !== true) {
+    if (workspace.active === false) {
         return { action: "workspace-inactive", targetWorkspace: "" }
     }
 
     var identity = workspaceIdentity(workspace)
-    if (identity === "") {
-        return { action: "workspace-unavailable", targetWorkspace: "" }
-    }
-    return { action: "show", targetWorkspace: identity }
+    return { action: "show", targetWorkspace: identity || "all" }
 }

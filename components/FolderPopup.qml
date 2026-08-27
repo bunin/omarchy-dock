@@ -83,7 +83,7 @@ PanelWindow {
                 event.accepted = true
                 if (stackWindow.root.isEditingFolderTitle) {
                     if (typeof titleInput !== "undefined") {
-                        titleInput.text = stackWindow.root.activeStackItem ? stackWindow.root.activeStackItem.name : "Folder"
+                        titleInput.text = (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                     }
                     stackWindow.root.isEditingFolderTitle = false
                     stackCard.forceActiveFocus()
@@ -233,7 +233,7 @@ PanelWindow {
                             id: titleLabel
                             x: titleContainer.needsMarquee ? titleContainer.marqueeOffset : Math.round((parent.width - implicitWidth) / 2)
                             anchors.verticalCenter: parent.verticalCenter
-                            text: stackWindow.root.activeStackItem ? stackWindow.root.activeStackItem.name : "Folder"
+                            text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                             font.family: Style.font.family
                             font.pixelSize: 12
                             font.bold: true
@@ -252,7 +252,7 @@ PanelWindow {
                         visible: stackWindow.root.isEditingFolderTitle
                         enabled: stackWindow.root.isEditingFolderTitle
                         focus: stackWindow.root.isEditingFolderTitle
-                        text: stackWindow.root.activeStackItem ? stackWindow.root.activeStackItem.name : "Folder"
+                        text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                         font.family: Style.font.family
                         font.pixelSize: 12
                         font.bold: true
@@ -264,14 +264,14 @@ PanelWindow {
 
                         onVisibleChanged: {
                             if (visible && stackWindow.root.activeStackItem) {
-                                text = stackWindow.root.activeStackItem.name
+                                text = (stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                                 selectAll()
                                 forceActiveFocus()
                             }
                         }
 
                         function saveAndClose() {
-                            var n = text.trim() || "Folder"
+                            var n = text.trim()
                             if (stackWindow.root.activeStackItem) {
                                 stackWindow.root.setPinned(DockModel.renameStack(stackWindow.root.pinnedIds, stackWindow.root.activeStackItem.id, n))
                                 stackWindow.root.activeStackItem.name = n
@@ -285,7 +285,7 @@ PanelWindow {
                         Keys.onEnterPressed:  function(event) { event.accepted = true; saveAndClose() }
                         Keys.onEscapePressed: function(event) {
                             event.accepted = true
-                            text = stackWindow.root.activeStackItem ? stackWindow.root.activeStackItem.name : "Folder"
+                            text = (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                             stackWindow.root.isEditingFolderTitle = false
                             focus = false
                             stackCard.forceActiveFocus()

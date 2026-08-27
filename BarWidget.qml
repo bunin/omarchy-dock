@@ -7,6 +7,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "DockSettings.js" as DockSettings
+import "components"
 
 BarWidget {
   id: root
@@ -21,7 +22,7 @@ BarWidget {
   property bool showFolderTitles: true
   property bool showBadges: true
   property bool widgetsEnabled: true
-  property bool settingsOpen: false
+  readonly property bool settingsOpen: settingsWindow.open
   property bool isSavingSettings: false
 
   Timer {
@@ -52,6 +53,8 @@ BarWidget {
   property string appMenuPosition: "left"
   property string widgetPosition: "right"
   property var widgetSavedPositions: ({})
+  property string preferredVisibilityMode: "hover"
+  readonly property string effectiveMode: root.autohide ? root.visibilityMode : (root.preferredVisibilityMode || "hover")
 
   function readSettings() {
     if (root.isSavingSettings) return
@@ -61,10 +64,18 @@ BarWidget {
         var s = JSON.parse(txt)
         var normalized = DockSettings.normalize(s)
         root.visibilityMode = normalized.visibilityMode
+        if (s && s.preferredVisibilityMode !== undefined) {
+          var pvm = String(s.preferredVisibilityMode).trim().toLowerCase()
+          if (pvm === "hover" || pvm === "keybind") root.preferredVisibilityMode = pvm
+        } else if (normalized.visibilityMode === "hover" || normalized.visibilityMode === "keybind") {
+          root.preferredVisibilityMode = normalized.visibilityMode
+        }
         root.overlayMode = normalized.overlayMode
         root.visibleWorkspace = normalized.visibleWorkspace
         if (s && s.dockEnabled !== undefined) {
-          root.dockEnabled = (s.dockEnabled === true)
+          root.dockEnabled = (s.dockEnabled === true || s.dockEnabled === "true" || s.dockEnabled === 1 || s.dockEnabled === "1")
+        } else {
+          root.dockEnabled = true
         }
         if (s && s.showFolderTitles !== undefined) {
           root.showFolderTitles = (s.showFolderTitles === true)
@@ -104,6 +115,7 @@ BarWidget {
 
     s.dockEnabled = root.dockEnabled
     s.visibilityMode = root.visibilityMode
+    s.preferredVisibilityMode = root.preferredVisibilityMode
     s.autohide = DockSettings.legacyAutohide(root.visibilityMode)
     s.overlayMode = root.overlayMode
     s.visibleWorkspace = root.visibleWorkspace
@@ -135,7 +147,14 @@ BarWidget {
   }
 
   function setAutohide(val) {
-    root.visibilityMode = val ? "hover" : "always"
+    if (val) {
+      root.visibilityMode = root.preferredVisibilityMode || "hover"
+    } else {
+      if (root.visibilityMode === "hover" || root.visibilityMode === "keybind") {
+        root.preferredVisibilityMode = root.visibilityMode
+      }
+      root.visibilityMode = "always"
+    }
     saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setAutohide " + (val ? "true" : "false"))
@@ -151,7 +170,11 @@ BarWidget {
   }
 
   function setVisibilityMode(mode) {
-    root.visibilityMode = DockSettings.normalizeVisibilityMode(mode, false)
+    var norm = DockSettings.normalizeVisibilityMode(mode, false)
+    if (norm === "hover" || norm === "keybind") {
+      root.preferredVisibilityMode = norm
+    }
+    root.visibilityMode = norm
     saveSettings()
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setVisibilityMode " + root.visibilityMode)
@@ -164,6 +187,42 @@ BarWidget {
     if (root.bar && typeof root.bar.run === "function") {
       root.bar.run("omarchy-shell rosakodu.dock setVisibleWorkspace " + root.visibleWorkspace)
     }
+  }
+
+  function buildWorkspaceOptions() {
+    var opts = [
+      { value: "all", label: "All workspaces" }
+    ]
+    var existingIds = [1, 2, 3, 4, 5]
+    if (Hyprland && Hyprland.workspaces && Hyprland.workspaces.values) {
+      var values = Hyprland.workspaces.values
+      for (var i = 0; i < values.length; i++) {
+        var ws = values[i]
+        if (ws && ws.id > 0 && ws.id <= 10 && existingIds.indexOf(ws.id) === -1) {
+          existingIds.push(ws.id)
+        }
+      }
+    }
+    if (root.visibleWorkspace !== "all") {
+      var selId = parseInt(root.visibleWorkspace, 10)
+      if (!isNaN(selId) && selId > 0 && selId <= 10 && existingIds.indexOf(selId) === -1) {
+        existingIds.push(selId)
+      }
+    }
+    existingIds.sort(function(a, b) { return a - b })
+    for (var j = 0; j < existingIds.length; j++) {
+      opts.push({
+        value: String(existingIds[j]),
+        label: "Workspace " + existingIds[j]
+      })
+    }
+    return opts
+  }
+
+  readonly property var workspaceOptions: {
+    var _dummy = Hyprland && Hyprland.workspaces && Hyprland.workspaces.values ? Hyprland.workspaces.values.length : 0
+    var _sel = root.visibleWorkspace
+    return root.buildWorkspaceOptions()
   }
 
   function setShowFolderTitles(val) {
@@ -190,6 +249,12 @@ BarWidget {
     }
   }
 
+  readonly property bool opened: settingsWindow.open
+  function open() { settingsWindow.open = true }
+  function close() { settingsWindow.open = false }
+  function toggle() { settingsWindow.open = !settingsWindow.open }
+  function closeForPopoutSwitch() { close() }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -201,91 +266,27 @@ BarWidget {
     tooltipText: "Dock Settings"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.LeftButton) {
-        root.settingsOpen = !root.settingsOpen
+        root.toggle()
       }
     }
   }
 
-  onSettingsOpenChanged: {
-    if (settingsOpen) {
-      settingsCard.forceActiveFocus()
-    }
-  }
-
-  // Outside-click dismissal for Settings popup
-  HyprlandFocusGrab {
-    id: settingsGrab
-    active: root.settingsOpen
-    windows: [settingsWindow]
-    onCleared: {
-      root.settingsOpen = false
-    }
-  }
-
-  // Settings Popup Overlay Window (Strictly centered horizontally on screen, matching Weather panel)
-  PanelWindow {
+  // Standard Omarchy KeyboardPanel (Exact same screen level, gap, and animation as Weather & Audio)
+  KeyboardPanel {
     id: settingsWindow
-    visible: root.settingsOpen
+    anchorItem: button
+    owner: root
+    bar: root.bar
+    centerOnBar: true
+    contentWidth: (Style && typeof Style.space === "function") ? Style.space(410) : 410
+    contentHeight: 480
+    borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.accent, Color.accent, Math.max(1, Style.space(2)))
 
-    WlrLayershell.namespace: "omarchy-dock-settings"
-    WlrLayershell.layer: WlrLayer.Overlay
-    exclusionMode: ExclusionMode.Ignore
-    color: "transparent"
-
-    readonly property bool isBarBottom: root.bar && root.bar.position === "bottom"
-    readonly property bool isBarLeft: root.bar && root.bar.position === "left"
-    readonly property bool isBarRight: root.bar && root.bar.position === "right"
-
-    readonly property real screenWidth: root.bar && root.bar.screen ? root.bar.screen.width : (Screen.width || 1920)
-    readonly property real screenHeight: root.bar && root.bar.screen ? root.bar.screen.height : (Screen.height || 1080)
-    // Strictly centered horizontally on screen for top/bottom bar, vertically for left/right bar
-    readonly property real calculatedLeft: Math.round((screenWidth - 280) / 2)
-    readonly property real calculatedTop: Math.round((screenHeight - (settingsCard.height || 120)) / 2)
-
-    anchors {
-      top: (isBarRight || isBarLeft) ? true : !isBarBottom
-      bottom: isBarBottom
-      left: isBarRight ? false : true
-      right: isBarRight
-    }
-
-    margins {
-      top: (isBarLeft || isBarRight) ? calculatedTop : (isBarBottom ? 0 : ((Style.gapsOut || 5) + 38))
-      bottom: isBarBottom ? ((Style.gapsOut || 5) + 38) : 0
-      left: isBarRight ? 0 : (isBarLeft ? ((Style.gapsOut || 5) + 38) : calculatedLeft)
-      right: isBarRight ? ((Style.gapsOut || 5) + 38) : 0
-    }
-
-    implicitWidth: 280
-    implicitHeight: settingsCard.height
-
-    Rectangle {
-      id: settingsCard
-      focus: true
-      Keys.onEscapePressed: function(event) {
-        root.settingsOpen = false
-        event.accepted = true
-      }
-      Keys.onBackPressed: function(event) {
-        root.settingsOpen = false
-        event.accepted = true
-      }
-      width: 280
-      height: cardColumn.height + 24
-      color: Color.composed("popups.background", "popups.background-alpha", Color.background, 0.96)
-      border.width: Style.borderWidth || 2
-      border.color: Color.accent
-      radius: Style.cornerRadius >= 0 ? Style.cornerRadius : 12
-      antialiasing: true
-      smooth: true
-
-      ColumnLayout {
-        id: cardColumn
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.margins: 12
-        spacing: 10
+    ColumnLayout {
+      id: cardColumn
+      anchors.fill: parent
+      spacing: root.autohide ? (root.effectiveMode === "keybind" ? 7 : 10) : 12
+      Behavior on spacing { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
         // Header Row
         RowLayout {
@@ -318,13 +319,14 @@ BarWidget {
           color: Color.composed("popups.border", "popups.border-alpha", Color.border, 0.35)
         }
 
-        // Toggle Enable Dock Row (at the very top)
+        // Toggle Dock Enabled Row (shown at the top when !root.autohide)
         Rectangle {
-          id: enableDockRow
+          id: dockEnabledRow
           Layout.fillWidth: true
-          height: 48
+          visible: !root.autohide
+          height: 42
           radius: 8
-          color: toggleEnableMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
+          color: toggleDockEnabledMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
           Behavior on color { ColorAnimation { duration: 120 } }
 
           RowLayout {
@@ -335,31 +337,36 @@ BarWidget {
 
             ColumnLayout {
               Layout.fillWidth: true
-              Layout.minimumWidth: 0
               Layout.alignment: Qt.AlignVCenter
-              spacing: 2
+              spacing: 1
 
               Text {
+                Layout.fillWidth: true
                 text: "Enable dock"
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
                 color: Color.popups.text
+                elide: Text.ElideRight
               }
 
               Text {
-                text: "Show or hide dock bar"
+                Layout.fillWidth: true
+                text: "Show dock panel on screen"
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
+                elide: Text.ElideRight
               }
             }
 
             // Custom Smooth Toggle Switch
             Rectangle {
-              id: switchEnableTrack
+              id: switchDockEnabledTrack
               Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
               Layout.preferredWidth: 36
+              Layout.minimumWidth: 36
+              Layout.maximumWidth: 36
               Layout.preferredHeight: 20
               width: 36
               height: 20
@@ -368,12 +375,12 @@ BarWidget {
               Behavior on color { ColorAnimation { duration: 180 } }
 
               Rectangle {
-                id: switchEnableThumb
+                id: switchDockEnabledThumb
                 width: 14
                 height: 14
                 radius: 7
                 anchors.verticalCenter: parent.verticalCenter
-                x: root.dockEnabled ? (switchEnableTrack.width - width - 3) : 3
+                x: root.dockEnabled ? (switchDockEnabledTrack.width - width - 3) : 3
                 color: root.dockEnabled ? Color.background : Color.popups.text
                 Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
               }
@@ -381,7 +388,7 @@ BarWidget {
           }
 
           MouseArea {
-            id: toggleEnableMouse
+            id: toggleDockEnabledMouse
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
@@ -391,17 +398,22 @@ BarWidget {
           }
         }
 
+        DockDropdown {
+          Layout.fillWidth: true
+          showLabel: false
+          value: root.visibleWorkspace
+          options: root.workspaceOptions
+          onChanged: function(value) { root.setVisibleWorkspace(value) }
+        }
+
         // Toggle Autohide Row
         Rectangle {
           id: autohideRow
           Layout.fillWidth: true
-          height: 48
+          height: 42
           radius: 8
-          opacity: root.dockEnabled ? 1.0 : 0.4
-          enabled: root.dockEnabled
           color: toggleMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
           Behavior on color { ColorAnimation { duration: 120 } }
-          Behavior on opacity { NumberAnimation { duration: 150 } }
 
           RowLayout {
             anchors.fill: parent
@@ -411,9 +423,8 @@ BarWidget {
 
             ColumnLayout {
               Layout.fillWidth: true
-              Layout.minimumWidth: 0
               Layout.alignment: Qt.AlignVCenter
-              spacing: 2
+              spacing: 1
 
               Text {
                 Layout.fillWidth: true
@@ -422,18 +433,16 @@ BarWidget {
                 font.pixelSize: 12
                 font.bold: true
                 color: Color.popups.text
+                elide: Text.ElideRight
               }
 
               Text {
                 Layout.fillWidth: true
-                text: root.autohide
-                  ? (root.visibilityMode === "keybind" ? "Shortcut reveal with timed hide" : "Hide dock when not hovered")
-                  : "Keep the dock visible by default"
+                text: "Reveal dock only on demand"
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
                 elide: Text.ElideRight
-                maximumLineCount: 1
               }
             }
 
@@ -475,17 +484,127 @@ BarWidget {
           }
         }
 
+        DockDropdown {
+          Layout.fillWidth: true
+          visible: root.autohide
+          value: root.effectiveMode === "keybind" ? "keybind" : "hover"
+          options: [
+            { value: "hover", label: "Screen-edge hover" },
+            { value: "keybind", label: "Keyboard shortcut" }
+          ]
+          onChanged: function(value) { root.setVisibilityMode(value) }
+        }
+
+        ColumnLayout {
+          Layout.fillWidth: true
+          visible: root.autohide
+          Layout.leftMargin: 2
+          Layout.rightMargin: 2
+          Layout.topMargin: 0
+          Layout.bottomMargin: 4
+          Layout.preferredHeight: 64
+          Layout.minimumHeight: 64
+          Layout.maximumHeight: 64
+          spacing: 4
+
+          Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: 6
+            text: root.effectiveMode === "keybind" ? "Add to ~/.config/hypr/bindings.lua:" : "Behavior:"
+            font.family: Style.font.family
+            font.pixelSize: 10
+            font.bold: true
+            color: Color.popups.text
+            elide: Text.ElideRight
+          }
+
+          Rectangle {
+            id: cmdPill
+            Layout.fillWidth: true
+            Layout.preferredHeight: 44
+            Layout.minimumHeight: 44
+            Layout.maximumHeight: 44
+            radius: 6
+            color: root.effectiveMode === "keybind"
+              ? (cmdMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.25))
+              : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.15)
+            border.width: 1
+            border.color: root.effectiveMode === "keybind"
+              ? (cmdMouse.containsMouse ? Color.accent : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.4))
+              : Color.composed("popups.border", "popups.border-alpha", Color.border, 0.25)
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            property bool copied: false
+            Timer {
+              id: copyTimer
+              interval: 1800
+              repeat: false
+              onTriggered: cmdPill.copied = false
+            }
+
+            RowLayout {
+              anchors.fill: parent
+              anchors.leftMargin: 10
+              anchors.rightMargin: 10
+              spacing: 8
+
+              Text {
+                id: cmdText
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                text: root.effectiveMode === "keybind"
+                  ? (cmdPill.copied ? "✓ Copied to clipboard!" : "o.bind(\"SUPER + D\", \"Toggle Dock\",\n  \"omarchy-shell -q rosakodu.dock toggleReveal\")")
+                  : "Move cursor to screen edge to reveal dock"
+                font.family: (root.effectiveMode === "keybind" && !cmdPill.copied) ? (Style.font.monospace || "monospace") : Style.font.family
+                font.pixelSize: (root.effectiveMode === "keybind" && !cmdPill.copied) ? 9 : 10
+                lineHeight: 1.18
+                font.bold: cmdPill.copied
+                color: cmdPill.copied ? Color.accent : (root.effectiveMode === "keybind" ? Color.popups.text : Color.muted)
+                wrapMode: Text.Wrap
+                verticalAlignment: Text.AlignVCenter
+              }
+
+              DockGlyph {
+                visible: root.effectiveMode === "keybind"
+                width: 14
+                height: 14
+                text: cmdPill.copied ? "󰄬" : "󰆏"
+                fontFamily: Style.font.family
+                fontSize: 11
+                color: cmdPill.copied ? Color.accent : Color.muted
+              }
+            }
+
+            MouseArea {
+              id: cmdMouse
+              anchors.fill: parent
+              enabled: root.effectiveMode === "keybind" && root.autohide
+              hoverEnabled: root.effectiveMode === "keybind"
+              cursorShape: root.effectiveMode === "keybind" ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: {
+                if (root.effectiveMode !== "keybind") return
+                var cmd = 'o.bind("SUPER + D", "Toggle Dock", "omarchy-shell -q rosakodu.dock toggleReveal")'
+                try {
+                  Quickshell.clipboardText = cmd
+                } catch(e) {}
+                if (root.bar && typeof root.bar.run === "function") {
+                  root.bar.run("wl-copy '" + cmd + "'")
+                }
+                cmdPill.copied = true
+                copyTimer.restart()
+              }
+            }
+          }
+        }
+
         // Toggle Overlay Mode Row
         Rectangle {
           id: overlayRow
           Layout.fillWidth: true
-          height: 48
+          height: 42
           radius: 8
-          opacity: root.dockEnabled ? 1.0 : 0.4
-          enabled: root.dockEnabled
           color: toggleOverlayMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
           Behavior on color { ColorAnimation { duration: 120 } }
-          Behavior on opacity { NumberAnimation { duration: 150 } }
 
           RowLayout {
             anchors.fill: parent
@@ -496,24 +615,24 @@ BarWidget {
             ColumnLayout {
               Layout.fillWidth: true
               Layout.alignment: Qt.AlignVCenter
-              spacing: 2
+              spacing: 1
 
               Text {
+                Layout.fillWidth: true
                 text: "Overlay mode"
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
                 color: Color.popups.text
-                Layout.fillWidth: true
                 elide: Text.ElideRight
               }
 
               Text {
-                text: "Show dock above windows"
+                Layout.fillWidth: true
+                text: "Float on top of application windows"
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
-                Layout.fillWidth: true
                 elide: Text.ElideRight
               }
             }
@@ -554,137 +673,14 @@ BarWidget {
           }
         }
 
-        Dropdown {
-          Layout.fillWidth: true
-          enabled: root.dockEnabled && root.autohide
-          opacity: enabled ? 1.0 : 0.4
-          label: "Automatic reveal method"
-          value: root.visibilityMode === "keybind" ? "keybind" : "hover"
-          options: [
-            { value: "hover", label: "Screen-edge hover" },
-            { value: "keybind", label: "Keyboard shortcut" }
-          ]
-          onChanged: function(value) { root.setVisibilityMode(value) }
-        }
-
-        Text {
-          Layout.fillWidth: true
-          visible: root.dockEnabled
-          text: "Keyboard toggle (when autohide is off or Keyboard shortcut is selected): omarchy-shell -q rosakodu.dock toggleReveal"
-          wrapMode: Text.WordWrap
-          font.family: Style.font.family
-          font.pixelSize: 9
-          color: Color.muted
-        }
-
-        Dropdown {
-          Layout.fillWidth: true
-          enabled: root.dockEnabled
-          opacity: enabled ? 1.0 : 0.4
-          label: "Show on workspace"
-          value: root.visibleWorkspace
-          options: [
-            { value: "all", label: "All workspaces" },
-            { value: "1", label: "Workspace 1" },
-            { value: "2", label: "Workspace 2" },
-            { value: "3", label: "Workspace 3" },
-            { value: "4", label: "Workspace 4" },
-            { value: "5", label: "Workspace 5" },
-            { value: "6", label: "Workspace 6" },
-            { value: "7", label: "Workspace 7" },
-            { value: "8", label: "Workspace 8" },
-            { value: "9", label: "Workspace 9" },
-            { value: "10", label: "Workspace 10" }
-          ]
-          onChanged: function(value) { root.setVisibleWorkspace(value) }
-        }
-
-        // Toggle Folder Names Row
-        Rectangle {
-          id: folderTitlesRow
-          Layout.fillWidth: true
-          height: 48
-          radius: 8
-          opacity: root.dockEnabled ? 1.0 : 0.4
-          enabled: root.dockEnabled
-          color: toggleTitlesMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
-          Behavior on color { ColorAnimation { duration: 120 } }
-          Behavior on opacity { NumberAnimation { duration: 150 } }
-
-          RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            spacing: 8
-
-            ColumnLayout {
-              Layout.fillWidth: true
-              Layout.alignment: Qt.AlignVCenter
-              spacing: 2
-
-              Text {
-                text: "Folder names"
-                font.family: Style.font.family
-                font.pixelSize: 12
-                font.bold: true
-                color: Color.popups.text
-              }
-
-              Text {
-                text: "Show titles in folder popups"
-                font.family: Style.font.family
-                font.pixelSize: 10
-                color: Color.muted
-              }
-            }
-
-            // Custom Smooth Toggle Switch
-            Rectangle {
-              id: switchTitlesTrack
-              Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-              Layout.preferredWidth: 36
-              Layout.preferredHeight: 20
-              width: 36
-              height: 20
-              radius: 10
-              color: root.showFolderTitles ? Color.accent : Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.25)
-              Behavior on color { ColorAnimation { duration: 180 } }
-
-              Rectangle {
-                id: switchTitlesThumb
-                width: 14
-                height: 14
-                radius: 7
-                anchors.verticalCenter: parent.verticalCenter
-                x: root.showFolderTitles ? (switchTitlesTrack.width - width - 3) : 3
-                color: root.showFolderTitles ? Color.background : Color.popups.text
-                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-              }
-            }
-          }
-
-          MouseArea {
-            id: toggleTitlesMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              root.setShowFolderTitles(!root.showFolderTitles)
-            }
-          }
-        }
-
         // Toggle Notification Badges Row
         Rectangle {
           id: badgesRow
           Layout.fillWidth: true
-          height: 48
+          height: 42
           radius: 8
-          opacity: root.dockEnabled ? 1.0 : 0.4
-          enabled: root.dockEnabled
           color: toggleBadgesMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
           Behavior on color { ColorAnimation { duration: 120 } }
-          Behavior on opacity { NumberAnimation { duration: 150 } }
 
           RowLayout {
             anchors.fill: parent
@@ -695,21 +691,25 @@ BarWidget {
             ColumnLayout {
               Layout.fillWidth: true
               Layout.alignment: Qt.AlignVCenter
-              spacing: 2
+              spacing: 1
 
               Text {
+                Layout.fillWidth: true
                 text: "Notification badges"
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
                 color: Color.popups.text
+                elide: Text.ElideRight
               }
 
               Text {
-                text: "Show unread badges on app icons"
+                Layout.fillWidth: true
+                text: "Show unread counter on app icons"
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
+                elide: Text.ElideRight
               }
             }
 
@@ -753,13 +753,10 @@ BarWidget {
         Rectangle {
           id: widgetsRow
           Layout.fillWidth: true
-          height: 48
+          height: 42
           radius: 8
-          opacity: root.dockEnabled ? 1.0 : 0.4
-          enabled: root.dockEnabled
           color: toggleWidgetsMouse.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent"
           Behavior on color { ColorAnimation { duration: 120 } }
-          Behavior on opacity { NumberAnimation { duration: 150 } }
 
           RowLayout {
             anchors.fill: parent
@@ -770,21 +767,25 @@ BarWidget {
             ColumnLayout {
               Layout.fillWidth: true
               Layout.alignment: Qt.AlignVCenter
-              spacing: 2
+              spacing: 1
 
               Text {
+                Layout.fillWidth: true
                 text: "Dock widgets"
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
                 color: Color.popups.text
+                elide: Text.ElideRight
               }
 
               Text {
-                text: "Display bar widgets on dock"
+                Layout.fillWidth: true
+                text: "Integrate app menu and bar widgets"
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
+                elide: Text.ElideRight
               }
             }
 
@@ -830,8 +831,8 @@ BarWidget {
           Layout.fillWidth: true
           Layout.preferredHeight: 40
           radius: 8
-          opacity: (root.dockEnabled && root.widgetsEnabled) ? 1.0 : 0.4
-          enabled: root.dockEnabled && root.widgetsEnabled
+          opacity: root.widgetsEnabled ? 1.0 : 0.4
+          enabled: root.widgetsEnabled
           color: configureWidgetsMouse.containsMouse ? Color.composed("accent", "accent-alpha", Color.accent, 0.2) : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.08)
           border.width: 1
           border.color: configureWidgetsMouse.containsMouse ? Color.accent : "transparent"
@@ -857,7 +858,7 @@ BarWidget {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: {
-              root.settingsOpen = false
+              root.close()
               var sh = root.shell || (root.bar ? root.bar.shell : null)
               var dockSvc = (sh && typeof sh.serviceFor === "function") ? sh.serviceFor("rosakodu.dock") : null
               if (dockSvc && typeof dockSvc.openWidgetPicker === "function") {
@@ -873,4 +874,3 @@ BarWidget {
       }
     }
   }
-}

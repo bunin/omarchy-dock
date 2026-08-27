@@ -339,6 +339,7 @@ Item {
     property string settingsPath: Quickshell.env("HOME") + "/.config/omarchy/dock-settings.json"
     property bool dockEnabled: true
     property string visibilityMode: "always"
+    property string preferredVisibilityMode: "hover"
     readonly property bool autohide: root.visibilityMode !== "always"
     property bool overlayMode: false
     property int visibilityOverride: DockSettings.VISIBILITY_OVERRIDE_FOLLOW
@@ -446,11 +447,9 @@ Item {
     }
 
     readonly property bool workspaceAllowed: {
+        if (!root.hasExplicitWorkspace) return true
         var workspace = root.currentDockWorkspace
-        if (root.hasExplicitWorkspace) return workspace !== null && workspace.active === true
-        if (root.visibilityOverride !== DockSettings.VISIBILITY_OVERRIDE_SHOWN) return true
-        if (!workspace || workspace.active !== true || !workspace.monitor) return false
-        return String(workspace.monitor.name || "") === root.keyboardTargetMonitorName
+        return workspace !== null
     }
 
     readonly property bool dockAvailable: root.opened
@@ -562,41 +561,31 @@ Item {
         root.closeAllWidgetPanels()
     }
 
+    property double lastToggleRevealTime: 0
+
     function toggleReveal(revealSource) {
         if (!root.opened || !root.dockEnabled || !root.pluginEnabled || !root.isPinnedLoaded) return "unavailable"
         var source = revealSource === "internal" ? "internal" : "keyboard"
-        if (!DockSettings.revealRequestAllowed(root.visibilityMode, source)) return "inactive"
+        if (!DockSettings.revealRequestAllowed(root.visibilityMode, source, root.autohide)) return "inactive"
 
-        var focusedWorkspace = root.focusedWorkspaceForKeyboardToggle()
-        var decision = DockSettings.keyboardToggleDecision(
-            root.dockRevealed,
-            root.visibleWorkspace,
-            focusedWorkspace,
-            root.configuredWorkspace
-        )
+        var now = Date.now()
+        if (now - root.lastToggleRevealTime < 300) {
+            return root.dockRevealed ? "shown" : "hidden"
+        }
+        root.lastToggleRevealTime = now
 
-        if (decision.action === "hide") {
+        if (root.dockRevealed) {
             autohideLeaveTimer.stop()
             root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_HIDDEN
             root.isDockHovered = false
             root.closeDockPopups()
             return "hidden"
+        } else {
+            autohideLeaveTimer.stop()
+            root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_SHOWN
+            root.isDockHovered = true
+            return "shown"
         }
-        if (decision.action !== "show") return decision.action
-
-        var targetWorkspace = root.hasExplicitWorkspace ? root.configuredWorkspace : focusedWorkspace
-        var targetScreen = targetWorkspace && targetWorkspace.monitor
-            ? root.screenForMonitor(targetWorkspace.monitor)
-            : null
-        if (!targetScreen) return "screen-unavailable"
-
-        root.keyboardTargetWorkspace = decision.targetWorkspace
-        root.keyboardTargetMonitorName = String(targetWorkspace.monitor.name || "")
-        root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_SHOWN
-        if (source === "keyboard" && DockSettings.shouldAutoDismissKeyboardReveal(root.visibilityMode, root.visibilityOverride)) {
-            autohideLeaveTimer.restart()
-        }
-        return "shown"
     }
 
     function handleWidgetPickerOpenedChanged(opened) {
@@ -782,18 +771,24 @@ Item {
                 if (!s || typeof s !== "object") return
                 var normalized = DockSettings.normalize(s)
                 root.visibilityMode = normalized.visibilityMode
+                if (s.preferredVisibilityMode !== undefined) {
+                    var pvm = String(s.preferredVisibilityMode).trim().toLowerCase()
+                    if (pvm === "hover" || pvm === "keybind") root.preferredVisibilityMode = pvm
+                } else if (normalized.visibilityMode === "hover" || normalized.visibilityMode === "keybind") {
+                    root.preferredVisibilityMode = normalized.visibilityMode
+                }
                 root.overlayMode = normalized.overlayMode
                 root.visibleWorkspace = normalized.visibleWorkspace
                 if (s.dockEnabled !== undefined) {
-                    root.dockEnabled = (s.dockEnabled === true)
+                    root.dockEnabled = (s.dockEnabled === true || s.dockEnabled === "true" || s.dockEnabled === 1 || s.dockEnabled === "1")
+                } else {
+                    root.dockEnabled = true
                 }
                 if (s.autohideEdgeDepth !== undefined) {
                     var depth = parseInt(s.autohideEdgeDepth, 10)
                     if (!isNaN(depth) && depth >= 1 && depth <= 64) root.autohideEdgeDepth = depth
                 }
-                if (s.showFolderTitles !== undefined) {
-                    root.showFolderTitles = (s.showFolderTitles === true)
-                }
+                root.showFolderTitles = true
                 if (s.showBadges !== undefined) {
                     root.showBadges = (s.showBadges === true)
                 }
@@ -828,6 +823,7 @@ Item {
         var jsonStr = JSON.stringify({
             dockEnabled: root.dockEnabled,
             visibilityMode: root.visibilityMode,
+            preferredVisibilityMode: root.preferredVisibilityMode,
             autohide: DockSettings.legacyAutohide(root.visibilityMode),
             overlayMode: root.overlayMode,
             visibleWorkspace: root.visibleWorkspace,
@@ -843,13 +839,29 @@ Item {
         settingsFile.setText(jsonStr + "\n")
     }
 
+    function setDockEnabled(val) {
+        root.dockEnabled = (val === true || val === "true" || val === 1 || val === "1")
+        saveSettings()
+    }
+
     function setAutohide(val) {
-        root.visibilityMode = val ? "hover" : "always"
+        if (val) {
+            root.visibilityMode = root.preferredVisibilityMode || "hover"
+        } else {
+            if (root.visibilityMode === "hover" || root.visibilityMode === "keybind") {
+                root.preferredVisibilityMode = root.visibilityMode
+            }
+            root.visibilityMode = "always"
+        }
         saveSettings()
     }
 
     function setVisibilityMode(mode) {
-        root.visibilityMode = DockSettings.normalizeVisibilityMode(mode, false)
+        var norm = DockSettings.normalizeVisibilityMode(mode, false)
+        if (norm === "hover" || norm === "keybind") {
+            root.preferredVisibilityMode = norm
+        }
+        root.visibilityMode = norm
         saveSettings()
     }
 
@@ -1395,7 +1407,6 @@ Item {
     onShellChanged: {
         root.appRows = (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : []
         root.updateDockItems()
-        root.checkAndApplyTheme()
     }
 
     Connections {
@@ -2121,7 +2132,7 @@ Item {
                             root.dockDragActiveIndex = -1
                             root.dockDragTargetIndex = -1
                             root.currentMergeTargetIndex = -1
-                            root.setPinned(DockModel.mergeIntoStack(root.pinnedIds, root.dockItems, fromIdx, targetIdx))
+                            root.setPinned(DockModel.mergeIntoStack(root.pinnedIds, root.dockItems, fromIdx, targetIdx, root.appRows))
                         }
                     }
                 }
