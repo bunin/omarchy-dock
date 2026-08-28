@@ -26,6 +26,7 @@ Item {
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root.horizontalCorrection
         text: root.text
+        textFormat: Text.PlainText
         color: root.color
         font.family: root.fontFamily
         font.pixelSize: root.renderedFontSize

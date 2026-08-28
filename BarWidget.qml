@@ -214,9 +214,11 @@ BarWidget {
     }
     existingIds.sort(function(a, b) { return a - b })
     for (var j = 0; j < existingIds.length; j++) {
+      var id = existingIds[j]
+      var label = (id === 10 || id === 0) ? "Workspace 0" : ("Workspace " + id)
       opts.push({
-        value: String(existingIds[j]),
-        label: "Workspace " + existingIds[j]
+        value: String(id),
+        label: label
       })
     }
     return opts
@@ -307,6 +309,7 @@ BarWidget {
 
           Text {
             text: "Dock Settings"
+            textFormat: Text.PlainText
             font.family: Style.font.family
             font.pixelSize: 13
             font.bold: true
@@ -355,6 +358,7 @@ BarWidget {
                 Text {
                   Layout.fillWidth: true
                   text: "Enable dock"
+                  textFormat: Text.PlainText
                   font.family: Style.font.family
                   font.pixelSize: 12
                   font.bold: true
@@ -365,6 +369,7 @@ BarWidget {
                 Text {
                   Layout.fillWidth: true
                   text: "Show dock panel on screen"
+                  textFormat: Text.PlainText
                   font.family: Style.font.family
                   font.pixelSize: 10
                   color: Color.muted
@@ -458,6 +463,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Autohide dock"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
@@ -468,6 +474,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Reveal dock only on demand"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
@@ -533,6 +540,7 @@ BarWidget {
             Layout.fillWidth: true
             Layout.leftMargin: 6
             text: "Add to ~/.config/hypr/bindings.lua:"
+            textFormat: Text.PlainText
             font.family: Style.font.family
             font.pixelSize: 10
             font.bold: true
@@ -571,6 +579,7 @@ BarWidget {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 text: cmdPill.copied ? "✓ Copied to clipboard!" : "o.bind(\"SUPER + D\", \"Toggle Dock\",\n  \"omarchy-shell -q rosakodu.dock toggleReveal\")"
+                textFormat: Text.PlainText
                 font.family: !cmdPill.copied ? (Style.font.monospace || "monospace") : Style.font.family
                 font.pixelSize: !cmdPill.copied ? 9 : 10
                 lineHeight: 1.18
@@ -634,6 +643,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Overlay mode"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
@@ -644,6 +654,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Float on top of application windows"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
@@ -710,6 +721,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Notification badges"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
@@ -720,6 +732,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Show unread counter on app icons"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
@@ -786,6 +799,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Dock widgets"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 12
                 font.bold: true
@@ -796,6 +810,7 @@ BarWidget {
               Text {
                 Layout.fillWidth: true
                 text: "Integrate app menu and bar widgets"
+                textFormat: Text.PlainText
                 font.family: Style.font.family
                 font.pixelSize: 10
                 color: Color.muted
@@ -857,6 +872,7 @@ BarWidget {
           Text {
             anchors.centerIn: parent
             text: "Configure dock widgets"
+            textFormat: Text.PlainText
             font.family: Style.font.family
             font.pixelSize: 11
             font.bold: true

@@ -1422,29 +1422,43 @@ Item {
         function onActiveToplevelChanged() { root.updateDockItems() }
     }
 
+    Timer {
+        id: terminalSettleTimer
+        interval: 90
+        repeat: false
+        onTriggered: root.updateDockItems()
+    }
+
     Connections {
         target: (typeof Hyprland !== "undefined") ? Hyprland : null
         function onActiveToplevelChanged() { root.updateDockItems() }
         function onRawEvent(event) {
-            if (!event || !root.pendingFocusAppId) return
+            if (!event) return
             var name = String(event.name || "")
+            if (name === "windowtitle" || name === "windowtitlev2") {
+                root.updateDockItems()
+            }
             if (name === "openwindow") {
-                if (Date.now() - root.pendingFocusTimestamp > 8000) {
-                    root.pendingFocusAppId = ""
-                    return
-                }
-                var args = String(event.args || "")
-                var parts = args.split(",")
-                if (parts.length >= 3) {
-                    var addr = parts[0].trim()
-                    var winClass = parts[2].trim().toLowerCase()
-                    var pending = root.pendingFocusAppId.toLowerCase()
-                    var normClass = winClass.replace(/[^a-z0-9]/g, "")
-                    var normPending = pending.replace(/[^a-z0-9]/g, "")
-                    if (winClass === pending || (normPending.length > 0 && (normClass.indexOf(normPending) !== -1 || normPending.indexOf(normClass) !== -1))) {
+                root.updateDockItems()
+                terminalSettleTimer.restart()
+                if (root.pendingFocusAppId) {
+                    if (Date.now() - root.pendingFocusTimestamp > 8000) {
                         root.pendingFocusAppId = ""
-                        var cleanAddr = (addr.indexOf("0x") === 0) ? addr : ("0x" + addr)
-                        Util.execDetached("hyprctl dispatch focuswindow address:" + cleanAddr)
+                        return
+                    }
+                    var args = String(event.args || "")
+                    var parts = args.split(",")
+                    if (parts.length >= 3) {
+                        var addr = parts[0].trim()
+                        var winClass = parts[2].trim().toLowerCase()
+                        var pending = root.pendingFocusAppId.toLowerCase()
+                        var normClass = winClass.replace(/[^a-z0-9]/g, "")
+                        var normPending = pending.replace(/[^a-z0-9]/g, "")
+                        if (winClass === pending || (normPending.length > 0 && (normClass.indexOf(normPending) !== -1 || normPending.indexOf(normClass) !== -1))) {
+                            root.pendingFocusAppId = ""
+                            var cleanAddr = (addr.indexOf("0x") === 0) ? addr : ("0x" + addr)
+                            Util.execDetached("hyprctl dispatch focuswindow address:" + cleanAddr)
+                        }
                     }
                 }
             }
@@ -1899,6 +1913,7 @@ Item {
                                 visible: modelData === "omarchy.clock" && !root.isVertical
                                 anchors.centerIn: parent
                                 text: (leftWidgetLoader.item && leftWidgetLoader.item.displayText) ? leftWidgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
+                                textFormat: Text.PlainText
                                 font.family: Style.font.family
                                 font.pixelSize: 12
                                 font.weight: Font.Medium
@@ -1923,6 +1938,7 @@ Item {
                                         required property string modelData
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         text: modelData
+                                        textFormat: Text.PlainText
                                         font.family: Style.font.family
                                         font.pixelSize: modelData.length > 3 ? 9 : 10
                                         font.weight: Font.Medium
@@ -2193,6 +2209,7 @@ Item {
                                 visible: modelData === "omarchy.clock" && !root.isVertical
                                 anchors.centerIn: parent
                                 text: (rightWidgetLoader.item && rightWidgetLoader.item.displayText) ? rightWidgetLoader.item.displayText : (root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm"))
+                                textFormat: Text.PlainText
                                 font.family: Style.font.family
                                 font.pixelSize: 12
                                 font.weight: Font.Medium
@@ -2217,6 +2234,7 @@ Item {
                                         required property string modelData
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         text: modelData
+                                        textFormat: Text.PlainText
                                         font.family: Style.font.family
                                         font.pixelSize: modelData.length > 3 ? 9 : 10
                                         font.weight: Font.Medium

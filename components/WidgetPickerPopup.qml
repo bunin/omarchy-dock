@@ -93,6 +93,7 @@ PanelWindow {
 
                 Text {
                     text: "Dock Widgets"
+                    textFormat: Text.PlainText
                     font.family: Style.font.family
                     font.pixelSize: 14
                     font.bold: true
@@ -128,6 +129,7 @@ PanelWindow {
 
                         Text {
                             text: "App Menu position:"
+                            textFormat: Text.PlainText
                             font.family: Style.font.family
                             font.pixelSize: 11
                             font.bold: true
@@ -150,6 +152,7 @@ PanelWindow {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Left"
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 11
                                     font.bold: true
@@ -183,6 +186,7 @@ PanelWindow {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Right"
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 11
                                     font.bold: true
@@ -257,6 +261,7 @@ PanelWindow {
 
                             Text {
                                 text: "Apps"
+                                textFormat: Text.PlainText
                                 font.family: Style.font.family
                                 font.pixelSize: 12
                                 font.bold: true
@@ -275,6 +280,7 @@ PanelWindow {
                                     id: appBadgeText
                                     anchors.centerIn: parent
                                     text: appMenuItemRow.isInDock ? "Dock" : "Off"
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 9
                                     font.bold: true
@@ -350,6 +356,7 @@ PanelWindow {
 
                         Text {
                             text: "Widget position:"
+                            textFormat: Text.PlainText
                             font.family: Style.font.family
                             font.pixelSize: 11
                             font.bold: true
@@ -372,6 +379,7 @@ PanelWindow {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Left"
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 11
                                     font.bold: true
@@ -405,6 +413,7 @@ PanelWindow {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Right"
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 11
                                     font.bold: true
@@ -512,6 +521,7 @@ PanelWindow {
 
                                 Text {
                                     text: modelData.name
+                                    textFormat: Text.PlainText
                                     font.family: Style.font.family
                                     font.pixelSize: 12
                                     font.bold: true
@@ -530,6 +540,7 @@ PanelWindow {
                                         id: badgeText
                                         anchors.centerIn: parent
                                         text: rowItem.isInDock ? "Dock" : "Tray"
+                                        textFormat: Text.PlainText
                                         font.family: Style.font.family
                                         font.pixelSize: 9
                                         font.bold: true

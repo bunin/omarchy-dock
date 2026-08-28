@@ -66,12 +66,41 @@ var KNOWN_APP_DEFAULTS = {
     "yandex-music": { id: "Яндекс Музыка", icon: "yandex-music", rawIcon: "yandex-music", name: "Яндекс Музыка" },
     "music.yandex.ru": { id: "Яндекс Музыка", icon: "yandex-music", rawIcon: "yandex-music", name: "Яндекс Музыка" },
     "photoshop": { id: "Photoshop 2017", icon: "Photoshop2017", rawIcon: "Photoshop2017", name: "Photoshop 2017" },
-    "photoshop 2017": { id: "Photoshop 2017", icon: "Photoshop2017", rawIcon: "Photoshop2017", name: "Photoshop 2017" }
+    "photoshop 2017": { id: "Photoshop 2017", icon: "Photoshop2017", rawIcon: "Photoshop2017", name: "Photoshop 2017" },
+    "yazi": { id: "yazi", icon: "yazi", rawIcon: "yazi", name: "Yazi" },
+    "nvim": { id: "nvim", icon: "nvim", rawIcon: "nvim", name: "Neovim" },
+    "neovim": { id: "nvim", icon: "nvim", rawIcon: "nvim", name: "Neovim" },
+    "vim": { id: "vim", icon: "vim", rawIcon: "vim", name: "Vim" },
+    "nano": { id: "nano", icon: "nano", rawIcon: "nano", name: "GNU nano" },
+    "micro": { id: "micro", icon: "micro", rawIcon: "micro", name: "Micro" },
+    "helix": { id: "helix", icon: "helix", rawIcon: "helix", name: "Helix" },
+    "hx": { id: "helix", icon: "helix", rawIcon: "helix", name: "Helix" },
+    "btop": { id: "btop", icon: "btop", rawIcon: "btop", name: "btop" },
+    "htop": { id: "htop", icon: "htop", rawIcon: "htop", name: "htop" },
+    "ranger": { id: "ranger", icon: "ranger", rawIcon: "ranger", name: "Ranger" },
+    "mc": { id: "mc", icon: "mc", rawIcon: "mc", name: "Midnight Commander" },
+    "lazygit": { id: "lazygit", icon: "lazygit", rawIcon: "lazygit", name: "LazyGit" },
+    "fastfetch": { id: "fastfetch", icon: "fastfetch", rawIcon: "fastfetch", name: "Fastfetch" }
 };
 
 var FALLBACK_ICON_CANDIDATES = {
     "ghostty": ["com.mitchellh.ghostty", "ghostty"],
     "com.mitchellh.ghostty": ["com.mitchellh.ghostty", "ghostty"],
+    "yazi": ["yazi", "system-file-manager"],
+    "nvim": ["nvim", "neovim", "text-editor"],
+    "neovim": ["nvim", "neovim", "text-editor"],
+    "vim": ["vim", "text-editor"],
+    "nano": ["nano", "text-editor"],
+    "micro": ["micro", "text-editor"],
+    "helix": ["helix", "text-editor"],
+    "btop": ["btop", "utilities-system-monitor"],
+    "htop": ["htop", "utilities-system-monitor"],
+    "ranger": ["ranger", "system-file-manager"],
+    "mc": ["mc", "MidnightCommander", "system-file-manager"],
+    "lazygit": ["lazygit", "git"],
+    "lazydocker": ["lazydocker", "docker"],
+    "ncmpcpp": ["ncmpcpp", "audio-player", "multimedia-audio-player"],
+    "cmus": ["cmus", "audio-player", "multimedia-audio-player"],
     "code": ["com.visualstudio.code", "visual-studio-code", "visualstudiocode", "code-oss", "vscode", "code"],
     "vscode": ["com.visualstudio.code", "visual-studio-code", "visualstudiocode", "code-oss", "vscode", "code"],
     "com.visualstudio.code": ["com.visualstudio.code", "visual-studio-code", "visualstudiocode", "code-oss", "vscode", "code"],
@@ -400,7 +429,102 @@ function isBrowserApp(id) {
     return s === "google-chrome" || s === "google-chrome-stable" || s === "chromium" || s === "brave" || s === "brave-browser" || s === "microsoft-edge" || s === "opera" || s === "vivaldi";
 }
 
-function matchToplevel(toplevel, appId, entry) {
+var KNOWN_TERMINALS = [
+    "ghostty", "com.mitchellh.ghostty", "kitty", "alacritty", "org.alacritty",
+    "foot", "footclient", "wezterm", "org.wezfurlong.wezterm", "wezterm-gui",
+    "xterm", "uxterm", "gnome-terminal", "org.gnome.terminal", "konsole",
+    "org.kde.konsole", "xfce4-terminal", "tilix", "com.gexperts.tilix", "st",
+    "simple-terminal", "urxvt", "rxvt", "rxvt-unicode", "terminator",
+    "lxterminal", "contour", "rio", "blackbox", "com.raggesilver.blackbox",
+    "ptyxis", "org.gnome.ptyxis", "tabby", "hyper", "warp", "warp-terminal"
+];
+
+function isTerminalApp(id, entry) {
+    if (!id && !entry) return false;
+    var s = String(id || "").toLowerCase().trim();
+    if (s.slice(-8) === ".desktop") s = s.slice(0, -8);
+    for (var i = 0; i < KNOWN_TERMINALS.length; i++) {
+        if (s === KNOWN_TERMINALS[i]) return true;
+    }
+    if (entry) {
+        if (Array.isArray(entry.categories) && (entry.categories.indexOf("TerminalEmulator") !== -1 || entry.categories.indexOf("ConsoleOnly") !== -1)) {
+            return true;
+        }
+        var gen = String(entry.genericName || "").toLowerCase();
+        if (gen.indexOf("terminal") !== -1 || gen.indexOf("console") !== -1) {
+            return true;
+        }
+    }
+    return false;
+}
+
+var IGNORED_COMMAND_PREFIXES = [
+    "sudo", "doas", "pkexec", "pacman", "yay", "paru", "apt", "dnf", "zypper",
+    "cargo", "npm", "pnpm", "yarn", "bun", "git", "make", "ninja", "cmake",
+    "pip", "python", "python3", "node", "go", "rustc", "gcc", "clang",
+    "find", "grep", "cat", "less", "more", "tail", "journalctl", "systemctl",
+    "sh", "bash", "zsh", "fish", "exec", "run", "echo", "rm", "cp", "mv",
+    "which", "whereis", "man", "info", "curl", "wget", "tar", "unzip", "zip"
+];
+
+var KNOWN_CLI_COMMANDS = [
+    "yazi", "nvim", "neovim", "vim", "nano", "micro", "helix", "hx", "emacs",
+    "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "nvtop",
+    "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc",
+    "lazygit", "lazydocker", "tig", "gitui", "k9s",
+    "ncmpcpp", "cmus", "mocp", "cava",
+    "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock"
+];
+
+function extractCliApp(title) {
+    if (!title) return "";
+    var raw = String(title).toLowerCase().trim();
+    var rawTokens = raw.split(/[\s:,\-_/\\()\[\]{}|]+/);
+    var tokens = [];
+    for (var k = 0; k < rawTokens.length; k++) {
+        if (rawTokens[k].length > 0) tokens.push(rawTokens[k]);
+    }
+    if (tokens.length === 0) return "";
+
+    var first = tokens[0];
+    if (IGNORED_COMMAND_PREFIXES.indexOf(first) !== -1) {
+        return "";
+    }
+
+    if (KNOWN_CLI_COMMANDS.indexOf(first) !== -1) {
+        if (first === "neovim" || first === "vim") return "nvim";
+        if (first === "hx") return "helix";
+        if (first === "btm") return "bottom";
+        return first;
+    }
+
+    // Special title patterns like 'filename - NVIM' or '[No Name] - NVIM'
+    if (raw.indexOf("nvim") !== -1 && tokens.indexOf("nvim") !== -1) {
+        return "nvim";
+    }
+
+    return "";
+}
+
+function hasRealDesktopEntry(entries, appId) {
+    if (!entries || !appId) return false;
+    var target = stripDesktop(appId).toLowerCase().trim();
+    var list = toArray(entries);
+    for (var i = 0; i < list.length; i++) {
+        var e = unwrapEntry(list[i]);
+        if (!e) continue;
+        var eId = stripDesktop(e.id || "").toLowerCase();
+        var eName = String(e.name || "").toLowerCase();
+        var exec = String(e.exec || "").toLowerCase();
+        var execBin = exec.split(/\s+/)[0].split("/").pop();
+        if (eId === target || eName === target || execBin === target) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function matchToplevel(toplevel, appId, entry, desktopEntries) {
     if (!toplevel) return false;
     var appClass = String(toplevel.appId || "").toLowerCase().trim();
     var title = String(toplevel.title || "").toLowerCase().trim();
@@ -418,6 +542,36 @@ function matchToplevel(toplevel, appId, entry) {
     // Standard web browser dock items (Google Chrome, Chromium, Brave) should NOT swallow it!
     if (isWebAppWindow && isBrowserApp(cleanId)) {
         return false;
+    }
+
+    // Terminal CLI / TUI application matching:
+    // If a window is running in a terminal emulator (e.g. foot, ghostty, kitty):
+    if (isTerminalApp(appClass)) {
+        var cliApp = extractCliApp(title);
+        // Case A: Dock item is a specific CLI app (e.g. yazi, nvim, btop):
+        if (cliApp && !isTerminalApp(cleanId)) {
+            var normCliApp = normalizeKey(cliApp);
+            var normTargetId = normalizeKey(cleanId);
+            if (cleanId === cliApp || normTargetId === normCliApp) return true;
+            if (entry) {
+                var eId = stripDesktop(entry.id || "").toLowerCase();
+                var eName = String(entry.name || "").toLowerCase();
+                if (eId === cliApp || normalizeKey(eId) === normCliApp) return true;
+                if (eName === cliApp || normalizeKey(eName) === normCliApp) return true;
+            }
+        }
+        // Case B: Dock item is a generic terminal emulator, but window is running a dedicated CLI app (e.g. yazi):
+        // Only yield if that CLI app actually has an installed desktop entry on the system!
+        if (cliApp && isTerminalApp(cleanId)) {
+            if (desktopEntries && hasRealDesktopEntry(desktopEntries, cliApp)) {
+                return false;
+            }
+        }
+        // Case C: Startup handshake state (title is still empty or equal to terminal binary name e.g. "foot", "ghostty"):
+        // Prevent generic terminal from prematurely claiming the window before the CLI app sets its title!
+        if (isTerminalApp(cleanId) && (!title || title === appClass || title === "terminal" || title === "foot" || title === "ghostty" || title === "kitty" || title === "alacritty")) {
+            return false;
+        }
     }
 
     // 1. Direct class match (with and without .desktop / .exe)
@@ -641,7 +795,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 for (var st = 0; st < toplevels.length; st++) {
                     var sTop = toplevels[st];
                     var stKey = getTopKey(sTop, st);
-                    if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry)) {
+                    if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry, entries)) {
                         sTops.push(sTop);
                         assignedTops[stKey] = true;
                         try {
@@ -721,7 +875,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             for (var t = 0; t < toplevels.length; t++) {
                 var top = toplevels[t];
                 var tKey = getTopKey(top, t);
-                if (!assignedTops[tKey] && matchToplevel(top, appId, entry)) {
+                if (!assignedTops[tKey] && matchToplevel(top, appId, entry, entries)) {
                     matching.push(top);
                     assignedTops[tKey] = true;
                     try {
@@ -776,6 +930,14 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             rTitle = topItem.title || "";
         } catch (e) {}
 
+        // If window is running inside a terminal emulator and executes a recognized CLI app with a valid installed desktop entry:
+        if (isTerminalApp(rAppId)) {
+            var rCliApp = extractCliApp(rTitle);
+            if (rCliApp && !isTerminalApp(rCliApp) && hasRealDesktopEntry(entries, rCliApp)) {
+                rAppId = rCliApp;
+            }
+        }
+
         var rEntry = entryFor(rAppId);
         var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : (rAppId || "application-x-executable");
         var rIcon = resolveIcon(rEntry, rAppId, appLibrary);
@@ -791,7 +953,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         for (var k = 0; k < toplevels.length; k++) {
             var candidate = toplevels[k];
             var cKey = getTopKey(candidate, k);
-            if (!assignedTops[cKey] && matchToplevel(candidate, rAppId, rEntry)) {
+            if (!assignedTops[cKey] && matchToplevel(candidate, rAppId, rEntry, entries)) {
                 rMatching.push(candidate);
                 assignedTops[cKey] = true;
                 try {

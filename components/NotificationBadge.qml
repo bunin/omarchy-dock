@@ -75,6 +75,7 @@ Item {
             id: badgeText
             anchors.centerIn: parent
             text: root.count > 99 ? "99+" : String(root.count)
+            textFormat: Text.PlainText
             color: root.textColor
             font.family: Style.font.family
             font.pixelSize: root.badgeFontSize

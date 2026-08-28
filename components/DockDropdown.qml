@@ -56,6 +56,7 @@ Item {
     Text {
       visible: root.showLabel && root.label !== ""
       text: root.label
+      textFormat: Text.PlainText
       color: Qt.darker(root.foreground, 1.4)
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -102,6 +103,7 @@ Item {
         anchors.leftMargin: trigger.borderLeft + Style.spacing.controlPaddingX
         anchors.rightMargin: trigger.borderRight + Style.spacing.md
         text: root.currentLabel()
+        textFormat: Text.PlainText
         color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
@@ -114,6 +116,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.rightMargin: trigger.borderRight + Style.spacing.controlGap
         text: "󰅀"
+        textFormat: Text.PlainText
         color: popup.opened ? root.accent : Qt.darker(root.foreground, 1.2)
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
@@ -223,6 +226,7 @@ Item {
               anchors.leftMargin: Style.spacing.controlPaddingX
               anchors.rightMargin: Style.spacing.controlPaddingX
               text: root.optionLabel(modelData)
+              textFormat: Text.PlainText
               color: index === optionList.currentIndex ? Style.hoverStateColor(root.foreground, root.accent) : root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.body

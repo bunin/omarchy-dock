@@ -45,6 +45,8 @@ function legacyAutohide(visibilityMode) {
 function workspaceMatches(selector, workspaceId, workspaceName) {
     var normalized = normalizeVisibleWorkspace(selector)
     if (normalized === "all") return true
+    if (normalized === "0" && (String(workspaceId) === "10" || String(workspaceName) === "10")) return true
+    if (normalized === "10" && (String(workspaceId) === "0" || String(workspaceName) === "0")) return true
     return String(workspaceId) === normalized || String(workspaceName) === normalized
 }
 

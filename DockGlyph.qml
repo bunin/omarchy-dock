@@ -29,6 +29,7 @@ Item {
         anchors.horizontalCenterOffset: root.horizontalCorrection
         anchors.verticalCenterOffset: root.verticalCorrection
         text: root.text
+        textFormat: Text.PlainText
         color: root.color
         font.family: root.fontFamily
         font.pixelSize: root.renderedFontSize

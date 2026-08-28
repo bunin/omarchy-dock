@@ -76,6 +76,8 @@ TestCase {
     function test_workspaceMatching() {
         verify(DockSettings.workspaceMatches("all", 1, "1"))
         verify(DockSettings.workspaceMatches("2", 2, "2"))
+        verify(DockSettings.workspaceMatches("0", 10, "10"))
+        verify(DockSettings.workspaceMatches("10", 10, "10"))
         verify(DockSettings.workspaceMatches("special:scratch", -99, "special:scratch"))
         verify(!DockSettings.workspaceMatches("3", 2, "2"))
     }

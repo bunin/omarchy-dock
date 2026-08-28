@@ -234,6 +234,7 @@ PanelWindow {
                             x: titleContainer.needsMarquee ? titleContainer.marqueeOffset : Math.round((parent.width - implicitWidth) / 2)
                             anchors.verticalCenter: parent.verticalCenter
                             text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
+                            textFormat: Text.PlainText
                             font.family: Style.font.family
                             font.pixelSize: 12
                             font.bold: true
