@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Services.Pipewire
+import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
@@ -316,8 +318,12 @@ Item {
             try {
                 var cfg = JSON.parse(text())
                 if (cfg && cfg.bar) {
-                    if (cfg.bar.position) root.detectedBarPosition = cfg.bar.position
-                    if (cfg.bar.transparent !== undefined) root.detectedBarTransparent = (cfg.bar.transparent === true)
+                    if (cfg.bar.position && root.detectedBarPosition !== cfg.bar.position) {
+                        root.detectedBarPosition = cfg.bar.position
+                    }
+                    if (cfg.bar.transparent !== undefined && root.detectedBarTransparent !== (cfg.bar.transparent === true)) {
+                        root.detectedBarTransparent = (cfg.bar.transparent === true)
+                    }
                 }
             } catch(e) {}
         }
@@ -327,11 +333,14 @@ Item {
             try {
                 var cfg = JSON.parse(text())
                 if (cfg && cfg.bar) {
-                    if (cfg.bar.position) root.detectedBarPosition = cfg.bar.position
-                    if (cfg.bar.transparent !== undefined) root.detectedBarTransparent = (cfg.bar.transparent === true)
+                    if (cfg.bar.position && root.detectedBarPosition !== cfg.bar.position) {
+                        root.detectedBarPosition = cfg.bar.position
+                    }
+                    if (cfg.bar.transparent !== undefined && root.detectedBarTransparent !== (cfg.bar.transparent === true)) {
+                        root.detectedBarTransparent = (cfg.bar.transparent === true)
+                    }
                 }
             } catch(e) {}
-            root.refreshLayers()
         }
     }
 
@@ -391,6 +400,36 @@ Item {
         return monitor ? root.screenForMonitorName(monitor.name) : null
     }
 
+    function screenShowsDock(screen) {
+        if (!screen) return false
+        var target = DockSettings.dockScreenTarget(
+            root.visibleWorkspace,
+            root.visibilityMode,
+            root.visibilityOverride
+        )
+        var configuredName = (root.configuredWorkspace && root.configuredWorkspace.monitor)
+            ? String(root.configuredWorkspace.monitor.name || "")
+            : ""
+        var focusedName = Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+        return DockSettings.screenShowsDock(
+            target,
+            screen.name,
+            configuredName,
+            root.keyboardTargetMonitorName,
+            focusedName
+        )
+    }
+
+    function anyDockSurfaceHovered() {
+        var instances = dockVariants.instances
+        if (!instances) return false
+        for (var i = 0; i < instances.length; i++) {
+            var handler = instances[i] ? instances[i].hoverHandler : null
+            if (handler && handler.hovered) return true
+        }
+        return false
+    }
+
     function focusedWorkspaceForKeyboardToggle() {
         var monitorWorkspace = Hyprland.focusedMonitor
             ? Hyprland.focusedMonitor.activeWorkspace
@@ -425,6 +464,10 @@ Item {
         if (target === "captured") {
             var keyboardScreen = root.screenForMonitorName(root.keyboardTargetMonitorName)
             if (keyboardScreen) return keyboardScreen
+        }
+        if (target === "all") {
+            var focusedForAll = root.screenForMonitor(Hyprland.focusedMonitor)
+            if (focusedForAll) return focusedForAll
         }
         if (target === "focused") {
             var focusedScreen = root.screenForMonitor(Hyprland.focusedMonitor)
@@ -462,29 +505,96 @@ Item {
 
     property var loadedWidgetItems: []
 
+    property string currentMinuteString: Qt.formatDateTime(new Date(), "dddd HH:mm")
+    property string currentHourString: Qt.formatDateTime(new Date(), "HH")
+    property string currentMinutePart: Qt.formatDateTime(new Date(), "mm")
+
+    Timer {
+        id: clockTimer
+        interval: 1000
+        repeat: true
+        running: root.hasClockWidget
+        onTriggered: {
+            var now = new Date()
+            var minStr = Qt.formatDateTime(now, "dddd HH:mm")
+            if (root.currentMinuteString !== minStr) {
+                root.currentMinuteString = minStr
+                root.currentHourString = Qt.formatDateTime(now, "HH")
+                root.currentMinutePart = Qt.formatDateTime(now, "mm")
+            }
+        }
+    }
+
     function checkWidgetPanelsOpen() {
         if (widgetPicker && widgetPicker.opened) return true
-        for (var i = 0; i < root.loadedWidgetItems.length; i++) {
-            var w = root.loadedWidgetItems[i]
-            if (w) {
-                if (w.opened === true) return true
-                if (w.panelLoader && w.panelLoader.item && w.panelLoader.item.opened === true) return true
-                if (w.panel && w.panel.open === true) return true
+        if (root.loadedWidgetItems) {
+            for (var i = 0; i < root.loadedWidgetItems.length; i++) {
+                var w = root.loadedWidgetItems[i]
+                if (w) {
+                    if (w.opened === true) return true
+                    if (w.panelLoader && w.panelLoader.item && w.panelLoader.item.opened === true) return true
+                    if (w.panel && w.panel.open === true) return true
+                }
+            }
+        }
+        if (root.shell && root.shell.openPanelIds) {
+            for (var k in root.shell.openPanelIds) {
+                if (root.shell.openPanelIds[k] === true) return true
             }
         }
         return false
     }
 
+    function closeAllWidgetPanels() {
+        if (widgetPicker && widgetPicker.opened) widgetPicker.close()
+        if (root.shell && typeof root.shell.closeAllPanels === "function") {
+            root.shell.closeAllPanels()
+        }
+        if (root.loadedWidgetItems) {
+            for (var i = 0; i < root.loadedWidgetItems.length; i++) {
+                var w = root.loadedWidgetItems[i]
+                if (w) {
+                    if (typeof w.close === "function") {
+                        w.close()
+                    }
+                    if (w.panelLoader && w.panelLoader.item && typeof w.panelLoader.item.close === "function") {
+                        w.panelLoader.item.close()
+                    }
+                    if (w.panel && typeof w.panel.close === "function") {
+                        w.panel.close()
+                    }
+                }
+            }
+        }
+    }
+
     function evaluateHoverState() {
         if (!root.autohide) return
         var anyOpenWidget = checkWidgetPanelsOpen()
-        var isDockWinHovered = !root.shouldSlideOut && dockHoverHandler && dockHoverHandler.hovered
+        var isDockWinHovered = !root.shouldSlideOut && root.anyDockSurfaceHovered()
         var anyHover = isDockWinHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
         if (anyHover) {
             autohideLeaveTimer.stop()
             root.isDockHovered = true
         } else {
             autohideLeaveTimer.restart()
+        }
+    }
+
+    Timer {
+        id: autohideLeaveTimer
+        interval: 1500
+        repeat: false
+        onTriggered: {
+            if (!root.autohide) return
+            var anyOpenWidget = root.checkWidgetPanelsOpen()
+            var anyHover = root.anyDockSurfaceHovered() || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+            if (!anyHover) {
+                root.isDockHovered = false
+                if (DockSettings.shouldAutoDismissKeyboardReveal(root.visibilityMode, root.visibilityOverride)) {
+                    root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_FOLLOW
+                }
+            }
         }
     }
 
@@ -534,23 +644,6 @@ Item {
         root.isDockActive,
         root.isWorkspaceEmpty
     )
-
-    function closeAllWidgetPanels() {
-        for (var i = 0; i < root.loadedWidgetItems.length; i++) {
-            var w = root.loadedWidgetItems[i]
-            if (w) {
-                if (typeof w.close === "function") {
-                    w.close()
-                }
-                if (w.panelLoader && w.panelLoader.item && typeof w.panelLoader.item.close === "function") {
-                    w.panelLoader.item.close()
-                }
-                if (w.panel && typeof w.panel.close === "function") {
-                    w.panel.close()
-                }
-            }
-        }
-    }
 
     function closeDockPopups() {
         root.activeStackItem = null
@@ -632,8 +725,12 @@ Item {
         root.keyboardTargetMonitorName = ""
     }
 
+    property var lastRemapScreen: null
     onEffectiveDockScreenChanged: {
-        remapTimer.restart()
+        if (root.lastRemapScreen !== root.effectiveDockScreen) {
+            root.lastRemapScreen = root.effectiveDockScreen
+            remapTimer.restart()
+        }
     }
 
     readonly property var widgetLayout: DockModel.getDockWidgetLayout(root.showAppMenu, root.appMenuPosition, root.widgetsEnabled, root.dockWidgets, root.widgetPosition)
@@ -654,7 +751,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: 12
         font.weight: Font.Medium
-        text: root.clockDisplayText !== "" ? root.clockDisplayText : Qt.formatDateTime(new Date(), "dddd HH:mm")
+        text: root.clockDisplayText !== "" ? root.clockDisplayText : root.currentMinuteString
     }
 
     readonly property real clockSlotWidth: (hasClockWidget && !root.isVertical)
@@ -706,7 +803,11 @@ Item {
     readonly property real itemsWidth: (root.dockItems.length * root.slotSize)
 
     // Dynamic max items limit for dock bar based on logical screen dimensions & scale (15 items on 1080p @ 1.6x, scales dynamically for Ultrawide 21:9 / 32:9)
-    readonly property var activeScreen: (dockWindow && dockWindow.screen) ? dockWindow.screen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
+    readonly property var activeScreen: {
+        var focused = root.screenForMonitor(Hyprland.focusedMonitor)
+        if (focused) return focused
+        return (Quickshell.screens && Quickshell.screens.length > 0) ? Quickshell.screens[0] : null
+    }
     readonly property real logicalScreenWidth: (activeScreen && activeScreen.width > 0) ? activeScreen.width : 1200
     readonly property real logicalScreenHeight: (activeScreen && activeScreen.height > 0) ? activeScreen.height : 675
     readonly property int maxDockItems: {
@@ -951,6 +1052,103 @@ Item {
         return "file:///usr/share/omarchy/shell/plugins/panels/" + name + "/BarWidget.qml"
     }
 
+    function configureHostedWidget(item, widgetId, anchorItem) {
+        if (!item) return
+        if (root.loadedWidgetItems.indexOf(item) === -1) root.loadedWidgetItems.push(item)
+        if ("bar" in item) item.bar = dockBarContext
+        if ("shell" in item) item.shell = root.shell
+        if ("widgetId" in item) item.widgetId = widgetId
+        if ("moduleName" in item) item.moduleName = widgetId
+
+        function applyToPanel(p) {
+            if (!p) return
+            if ("centerOnBar" in p) {
+                p.centerOnBar = true
+            }
+            if ("bar" in p) {
+                p.bar = dockBarContext
+            }
+            if ("anchorItem" in p) {
+                p.anchorItem = anchorItem || (root.dockWindow ? root.dockWindow.contentItem : null)
+            }
+            if ("opened" in p && p.openedChanged) {
+                p.openedChanged.connect(function() {
+                    root.evaluateHoverState()
+                })
+            }
+            if ("open" in p && p.openChanged) {
+                p.openChanged.connect(function() {
+                    root.evaluateHoverState()
+                })
+            }
+        }
+
+        function scan(obj) {
+            if (!obj) return
+            applyToPanel(obj)
+            if (obj.panel) {
+                applyToPanel(obj.panel)
+            }
+            if (obj.data) {
+                for (var i = 0; i < obj.data.length; i++) {
+                    var d = obj.data[i]
+                    if (d) {
+                        applyToPanel(d)
+                        if (d.panel) applyToPanel(d.panel)
+                    }
+                }
+            }
+            if (obj.children) {
+                for (var j = 0; j < obj.children.length; j++) {
+                    var c = obj.children[j]
+                    if (c) {
+                        applyToPanel(c)
+                        if (c.panel) applyToPanel(c.panel)
+                    }
+                }
+            }
+        }
+
+        scan(item)
+
+        if (item.panelLoader) {
+            var handlePanelLoader = function() {
+                if (item.panelLoader && item.panelLoader.item) {
+                    scan(item.panelLoader.item)
+                }
+            }
+            handlePanelLoader()
+            item.panelLoader.loaded.connect(handlePanelLoader)
+        }
+    }
+
+    // Proxy Bar context for hosted widgets
+    QtObject {
+        id: dockBarContext
+        property bool vertical: root.isVertical
+        property int barSize: root.slotSize + 8
+        property int barH: root.slotSize + 8
+        property int barW: root.slotSize + 8
+        property string position: root.dockScreenPosition
+        property var screen: (root.dockWindow && root.dockWindow.screen) ? root.dockWindow.screen : null
+        property var shell: root.shell
+        property color foreground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
+        property color barForeground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
+        property color urgent: Color.urgent
+        property color muted: Color.muted
+        property color accent: Color.accent
+        property bool foregroundAnimationEnabled: true
+        property string fontFamily: Style.font.family
+        property var activePopout: null
+        function showTooltip(item, text) {}
+        function hideTooltip(item) {}
+        function requestPopout(key) { activePopout = key }
+        function releasePopout(key) { if (activePopout === key) activePopout = null }
+        function isBarWidgetOpen(id) { return false }
+        function switchPanelFrom(panel, dir) { return false }
+        function run(cmd) { Util.execDetached(cmd) }
+    }
+
     function getWidgetIcon(widgetId, item) {
         if (!widgetId) return "󰒓"
         if (widgetId === "omarchy.apps") return "󰀻"
@@ -963,38 +1161,78 @@ Item {
             if (item && item.icon) return item.icon
             return "󰖩"
         }
-        if (widgetId === "omarchy.audio") {
-            if (item && typeof item.outputIcon === "function") {
-                var _snk = item.sink
-                var _vol = item.outputVolume
-                var _mut = item.outputMuted
-                return item.outputIcon()
-            }
-            return "󰕾"
-        }
-        if (widgetId === "omarchy.power") {
-            if (item && typeof item.batteryIcon === "function") {
-                var _chg = item.charging
-                var _dis = item.discharging
-                var _bf = item.batteryFraction
-                return item.batteryIcon()
-            }
-            return "󰁹"
-        }
         if (widgetId === "omarchy.bluetooth") {
             if (item && item.icon) return item.icon
             return "󰂯"
         }
         if (widgetId === "omarchy.weather") {
-            if (item) {
-                if (item.panelLoader && item.panelLoader.item && item.panelLoader.item.label) return item.panelLoader.item.label
-                if (item.label) return item.label
-                if (item.symbol) return item.symbol
-            }
+            if (item && item.icon) return item.icon
             return "󰖐"
         }
-        if (item && item.icon) return item.icon
+        if (widgetId === "omarchy.system-update") return "󰚰"
+        if (widgetId === "omarchy.keyboard-layout" || widgetId === "nomarkoo.keyboard-layout" || widgetId === "glafeara.languages") return "󰌌"
+        if (widgetId === "omarchy.tray") return "󰇙"
+        if (widgetId === "omarchy.agents") return "󰚩"
+        if (widgetId === "omarchy.indicators") return "󰂚"
+        if (widgetId === "silvaio.gamemode") return "󰊴"
+        if (widgetId === "lgse.sandman") return "󰒲"
+        if (widgetId === "omarchy.audio") {
+            try {
+                var sink = Pipewire.defaultAudioSink
+                if (sink && sink.audio) {
+                    if (sink.audio.muted || sink.audio.volume <= 0.01) return "󰝟"
+                    if (sink.audio.volume < 0.33) return "󰕿"
+                    if (sink.audio.volume < 0.66) return "󰖀"
+                    return "󰕾"
+                }
+            } catch(e) {}
+            return "󰕾"
+        }
+        if (widgetId === "omarchy.power") {
+            try {
+                var dev = UPower.displayDevice
+                if (dev && dev.isPresent) {
+                    if (dev.state === UPowerDeviceState.Charging) return "󰂄"
+                    var frac = dev.percentage / 100.0
+                    if (frac < 0.15) return "󰁺"
+                    if (frac < 0.30) return "󰁻"
+                    if (frac < 0.50) return "󰁽"
+                    if (frac < 0.70) return "󰁾"
+                    if (frac < 0.90) return "󰁿"
+                    return "󰁹"
+                }
+            } catch(e) {}
+            return "󰁹"
+        }
         return "󰒓"
+    }
+
+    function handleWidgetSlotClick(widgetId, mouse) {
+        if (root.isEditMode) {
+            if (mouse.button === Qt.RightButton) {
+                root.isEditMode = false
+            }
+            return
+        }
+        if (widgetId === "omarchy.apps") {
+            if (mouse.button === Qt.RightButton) {
+                Util.execDetached("omarchy-menu toggle root")
+            } else {
+                Util.execDetached("omarchy-menu toggle apps")
+            }
+            return
+        }
+        if (widgetId === "omarchy.clock") {
+            if (mouse.button === Qt.MiddleButton) {
+                Util.execDetached("omarchy-menu-timezone")
+                return
+            }
+        }
+        if (root.shell && typeof root.shell.togglePlugin === "function") {
+            root.shell.togglePlugin(widgetId)
+        } else {
+            Util.execDetached("omarchy-shell shell toggle " + widgetId)
+        }
     }
 
     Connections {
@@ -1010,14 +1248,18 @@ Item {
         repeat: false
     }
 
+    property string lastRemapBarPosition: ""
     onBarPositionChanged: {
-        remapTimer.restart()
+        if (root.lastRemapBarPosition !== root.barPosition) {
+            root.lastRemapBarPosition = root.barPosition
+            remapTimer.restart()
+        }
     }
 
     // Periodic sync timer for guaranteed real-time layer alignment
     Timer {
         id: syncPollTimer
-        interval: 1000
+        interval: 15000
         repeat: true
         running: true
         onTriggered: {
@@ -1077,7 +1319,6 @@ Item {
                     if (isFinite(n) && n >= 0) {
                         if (root.systemRounding !== n) {
                             root.systemRounding = n
-                            root.doUpdateDockItems()
                         }
                     }
                 } catch(e) {}
@@ -1097,7 +1338,6 @@ Item {
                     if (isFinite(n) && n >= 0) {
                         if (root.systemBorderSize !== n) {
                             root.systemBorderSize = n
-                            root.doUpdateDockItems()
                         }
                     }
                 } catch(e) {}
@@ -1724,7 +1964,7 @@ Item {
     HyprlandFocusGrab {
         id: editGrab
         active: root.isEditMode && !root.isStackOpen && !root.isMenuOpen
-        windows: [dockWindow]
+        windows: dockVariants.instances
         onCleared: {
             root.isEditMode = false
         }
@@ -1732,7 +1972,8 @@ Item {
 
     onIsEditModeChanged: {
         if (isEditMode) {
-            dockSurface.forceActiveFocus()
+            var win = root.dockWindow
+            if (win && win.surface) win.surface.forceActiveFocus()
         }
     }
 
@@ -1757,62 +1998,69 @@ Item {
         }
     }
 
-    // 1. The Main Solid Dock Window
-    PanelWindow {
-        id: dockWindow
-        screen: root.effectiveDockScreen
-        visible: root.dockMapped
-
-        WlrLayershell.namespace: "omarchy-dock"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-        exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
-        color: "transparent"
-
-        anchors {
-            top: root.barPosition === "bottom"
-            bottom: root.barPosition === "top"
-            left: root.barPosition === "right"
-            right: root.barPosition === "left"
+    readonly property var dockWindow: {
+        var instances = dockVariants.instances
+        var count = instances ? instances.length : 0
+        var focusedName = Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name || "") : ""
+        for (var i = 0; i < count; i++) {
+            var win = instances[i]
+            if (win && win.screen && String(win.screen.name || "") === focusedName)
+                return win
         }
+        return count > 0 ? instances[0] : null
+    }
 
-        margins {
-            bottom: (!root.isVertical && root.barPosition === "top") ? (Style.gapsOut || 5) : 0
-            top: (!root.isVertical && root.barPosition === "bottom") ? (Style.gapsOut || 5) : 0
-            right: (root.isVertical && root.barPosition === "left") ? (Style.gapsOut || 5) : 0
-            left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
-        }
+    // 1. The Main Solid Dock Window (One layer surface per output, matching Omarchy bar)
+    Variants {
+        id: dockVariants
+        model: Quickshell.screens
 
-        implicitWidth: root.isVertical ? (root.slotSize + 8) : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
-        implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : (root.slotSize + 8)
+        delegate: Component {
+            PanelWindow {
+                id: dockLayer
+                required property var modelData
+                property alias surface: dockSurface
+                property alias hoverHandler: dockHoverHandler
+                screen: modelData
+                visible: root.dockMapped && root.screenShowsDock(modelData) && !remapGuard.remapping
 
-        HoverHandler {
-            id: dockHoverHandler
-            enabled: root.autohide && !root.shouldSlideOut
-            onHoveredChanged: {
-                root.evaluateHoverState()
-            }
-        }
+                ScreenMoveRemap {
+                    id: remapGuard
+                    window: dockLayer
+                }
 
-        // 1.5-second delay before dock autohides when cursor leaves all dock/folder/widget elements
-        Timer {
-            id: autohideLeaveTimer
-            interval: 1500
-            repeat: false
-            onTriggered: {
-                if (!root.autohide) return
-                var anyOpenWidget = root.checkWidgetPanelsOpen()
-                var anyHover = (dockHoverHandler && dockHoverHandler.hovered) || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
-                if (!anyHover) {
-                    root.isDockHovered = false
-                    if (DockSettings.shouldAutoDismissKeyboardReveal(root.visibilityMode, root.visibilityOverride)) {
-                        root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_FOLLOW
+                WlrLayershell.namespace: "omarchy-dock"
+                WlrLayershell.layer: WlrLayer.Top
+                WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+                exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
+                color: "transparent"
+
+                anchors {
+                    top: root.barPosition === "bottom"
+                    bottom: root.barPosition === "top"
+                    left: root.barPosition === "right"
+                    right: root.barPosition === "left"
+                }
+
+                margins {
+                    bottom: (!root.isVertical && root.barPosition === "top") ? (Style.gapsOut || 5) : 0
+                    top: (!root.isVertical && root.barPosition === "bottom") ? (Style.gapsOut || 5) : 0
+                    right: (root.isVertical && root.barPosition === "left") ? (Style.gapsOut || 5) : 0
+                    left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
+                }
+
+                implicitWidth: root.isVertical ? (root.slotSize + 8) : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
+                implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : (root.slotSize + 8)
+
+                HoverHandler {
+                    id: dockHoverHandler
+                    enabled: root.autohide && !root.shouldSlideOut
+                    onHoveredChanged: {
+                        root.evaluateHoverState()
                     }
                 }
-            }
-        }
 
-        // Main Visual Dock Card
+                // Main Visual Dock Card
         Rectangle {
             id: dockSurface
             anchors.centerIn: parent
@@ -1901,11 +2149,10 @@ Item {
 
                         Item {
                             id: leftWidgetWrapper
-                            x: Math.round((parent.width - width) / 2)
-                            y: Math.round((parent.height - height) / 2) - 1
+                            anchors.centerIn: parent
                             width: (modelData === "omarchy.clock" && !root.isVertical) ? (leftWidgetSlotRoot.width - 10) : root.iconBaseSize
                             height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
-                            scale: leftWidgetSlotMouse.containsMouse ? 1.10 : 1.0
+                            scale: root.isEditMode ? 0.82 : 1.0
                             Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
                             Text {
@@ -1930,9 +2177,7 @@ Item {
                                 spacing: 1
 
                                 Repeater {
-                                    model: (leftWidgetLoader.item && leftWidgetLoader.item.verticalLines && leftWidgetLoader.item.verticalLines.length > 0)
-                                           ? leftWidgetLoader.item.verticalLines
-                                           : [Qt.formatDateTime(new Date(), "HH"), Qt.formatDateTime(new Date(), "mm")]
+                                    model: [root.currentHourString, root.currentMinutePart]
 
                                     Text {
                                         required property string modelData
@@ -1969,7 +2214,7 @@ Item {
                                 source: root.getWidgetSource(modelData)
                                 onLoaded: {
                                     if (item) {
-                                        root.configureHostedWidget(item, modelData)
+                                        root.configureHostedWidget(item, modelData, leftWidgetSlotRoot)
                                         if (modelData === "omarchy.clock") {
                                             if (item.displayText !== undefined) root.clockDisplayText = item.displayText
                                             if (item.displayTextChanged) {
@@ -2006,10 +2251,14 @@ Item {
                                 }
                                 var target = leftWidgetLoader.item
                                 if (target) {
-                                    root.configureHostedWidget(target, modelData)
+                                    root.configureHostedWidget(target, modelData, leftWidgetSlotRoot)
                                     if (mouse.button === Qt.RightButton) {
                                         if (typeof target.cycleFormat === "function") {
                                             target.cycleFormat()
+                                        } else if (typeof target.toggleAllMuted === "function") {
+                                            target.toggleAllMuted()
+                                        } else if (typeof target.toggleBluetooth === "function") {
+                                            target.toggleBluetooth()
                                         }
                                     } else if (mouse.button === Qt.MiddleButton) {
                                         if (target.bar && typeof target.bar.run === "function") {
@@ -2018,15 +2267,24 @@ Item {
                                             Util.execDetached("omarchy-menu-timezone")
                                         }
                                     } else {
-                                        if (typeof target.togglePanel === "function") {
-                                            target.togglePanel()
-                                        } else if (typeof target.toggle === "function") {
+                                        if (typeof target.toggle === "function") {
                                             target.toggle()
+                                        } else if (typeof target.togglePanel === "function") {
+                                            target.togglePanel()
                                         } else if (typeof target.open === "function") {
                                             if (target.opened) target.close()
                                             else target.open()
+                                        } else if (target.panel && typeof target.panel.open === "function") {
+                                            if (target.panel.open) target.panel.close()
+                                            else target.panel.open()
+                                        } else if ("opened" in target) {
+                                            target.opened = !target.opened
+                                        } else {
+                                            root.handleWidgetSlotClick(modelData, mouse)
                                         }
                                     }
+                                } else {
+                                    root.handleWidgetSlotClick(modelData, mouse)
                                 }
                             }
                         }
@@ -2197,11 +2455,10 @@ Item {
 
                         Item {
                             id: rightWidgetWrapper
-                            x: Math.round((parent.width - width) / 2)
-                            y: Math.round((parent.height - height) / 2) - 1
+                            anchors.centerIn: parent
                             width: (modelData === "omarchy.clock" && !root.isVertical) ? (rightWidgetSlotRoot.width - 10) : root.iconBaseSize
                             height: (modelData === "omarchy.clock" && root.isVertical) ? (root.slotSize - 8) : root.iconBaseSize
-                            scale: rightWidgetSlotMouse.containsMouse ? 1.10 : 1.0
+                            scale: root.isEditMode ? 0.82 : 1.0
                             Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
                             Text {
@@ -2226,9 +2483,7 @@ Item {
                                 spacing: 1
 
                                 Repeater {
-                                    model: (rightWidgetLoader.item && rightWidgetLoader.item.verticalLines && rightWidgetLoader.item.verticalLines.length > 0)
-                                           ? rightWidgetLoader.item.verticalLines
-                                           : [Qt.formatDateTime(new Date(), "HH"), Qt.formatDateTime(new Date(), "mm")]
+                                    model: [root.currentHourString, root.currentMinutePart]
 
                                     Text {
                                         required property string modelData
@@ -2265,7 +2520,7 @@ Item {
                                 source: root.getWidgetSource(modelData)
                                 onLoaded: {
                                     if (item) {
-                                        root.configureHostedWidget(item, modelData)
+                                        root.configureHostedWidget(item, modelData, rightWidgetSlotRoot)
                                         if (modelData === "omarchy.clock") {
                                             if (item.displayText !== undefined) root.clockDisplayText = item.displayText
                                             if (item.displayTextChanged) {
@@ -2302,10 +2557,14 @@ Item {
                                 }
                                 var target = rightWidgetLoader.item
                                 if (target) {
-                                    root.configureHostedWidget(target, modelData)
+                                    root.configureHostedWidget(target, modelData, rightWidgetSlotRoot)
                                     if (mouse.button === Qt.RightButton) {
                                         if (typeof target.cycleFormat === "function") {
                                             target.cycleFormat()
+                                        } else if (typeof target.toggleAllMuted === "function") {
+                                            target.toggleAllMuted()
+                                        } else if (typeof target.toggleBluetooth === "function") {
+                                            target.toggleBluetooth()
                                         }
                                     } else if (mouse.button === Qt.MiddleButton) {
                                         if (target.bar && typeof target.bar.run === "function") {
@@ -2314,133 +2573,40 @@ Item {
                                             Util.execDetached("omarchy-menu-timezone")
                                         }
                                     } else {
-                                        if (typeof target.togglePanel === "function") {
-                                            target.togglePanel()
-                                        } else if (typeof target.toggle === "function") {
+                                        if (typeof target.toggle === "function") {
                                             target.toggle()
+                                        } else if (typeof target.togglePanel === "function") {
+                                            target.togglePanel()
                                         } else if (typeof target.open === "function") {
                                             if (target.opened) target.close()
                                             else target.open()
+                                        } else if (target.panel && typeof target.panel.open === "function") {
+                                            if (target.panel.open) target.panel.close()
+                                            else target.panel.open()
+                                        } else if ("opened" in target) {
+                                            target.opened = !target.opened
+                                        } else {
+                                            root.handleWidgetSlotClick(modelData, mouse)
                                         }
                                     }
+                                } else {
+                                    root.handleWidgetSlotClick(modelData, mouse)
                                 }
                             }
                         }
                     }
                 }
             }
-
-            // Invisible anchor for strictly center-of-screen popup panels
-            Item {
-                id: screenCenterAnchor
-                anchors.centerIn: parent
-                width: root.slotSize
-                height: root.slotSize
-                visible: false
-            }
         }
     }
-
-    function configureHostedWidget(item, widgetId) {
-        if (!item) return
-        if (root.loadedWidgetItems.indexOf(item) === -1) root.loadedWidgetItems.push(item)
-        if ("bar" in item) item.bar = dockBarContext
-        if ("moduleName" in item) item.moduleName = widgetId
-
-        function applyToPanel(p) {
-            if (!p) return
-            if ("centerOnBar" in p) {
-                p.centerOnBar = true
-            }
-            if ("bar" in p) {
-                p.bar = dockBarContext
-            }
-            if ("anchorItem" in p) {
-                p.anchorItem = screenCenterAnchor
-            }
-            if ("opened" in p && p.openedChanged) {
-                p.openedChanged.connect(function() {
-                    root.evaluateHoverState()
-                })
-            }
-            if ("open" in p && p.openChanged) {
-                p.openChanged.connect(function() {
-                    root.evaluateHoverState()
-                })
-            }
-        }
-
-        function scan(obj) {
-            if (!obj) return
-            applyToPanel(obj)
-            if (obj.panel) {
-                applyToPanel(obj.panel)
-            }
-            if (obj.data) {
-                for (var i = 0; i < obj.data.length; i++) {
-                    var d = obj.data[i]
-                    if (d) {
-                        applyToPanel(d)
-                        if (d.panel) applyToPanel(d.panel)
-                    }
-                }
-            }
-            if (obj.children) {
-                for (var j = 0; j < obj.children.length; j++) {
-                    var c = obj.children[j]
-                    if (c) {
-                        applyToPanel(c)
-                        if (c.panel) applyToPanel(c.panel)
-                    }
-                }
-            }
-        }
-
-        scan(item)
-
-        if (item.panelLoader) {
-            var handlePanelLoader = function() {
-                if (item.panelLoader && item.panelLoader.item) {
-                    scan(item.panelLoader.item)
-                }
-            }
-            handlePanelLoader()
-            item.panelLoader.loaded.connect(handlePanelLoader)
-        }
     }
-
-    // Proxy Bar context for hosted widgets (places popup strictly in screen center horizontally/vertically, with Style.gapsOut)
-    QtObject {
-        id: dockBarContext
-        property bool vertical: root.isVertical
-        property int barSize: root.slotSize + 8
-        property int barH: root.slotSize + 8
-        property int barW: root.slotSize + 8
-        property string position: root.dockScreenPosition
-        property var screen: (root.dockWindow && root.dockWindow.screen) ? root.dockWindow.screen : null
-        property var shell: root.shell
-        property color foreground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
-        property color barForeground: Color.composed("bar.text", "bar.text-alpha", Color.text, 0.9)
-        property color urgent: Color.urgent
-        property color muted: Color.muted
-        property color accent: Color.accent
-        property bool foregroundAnimationEnabled: true
-        property string fontFamily: Style.font.family
-        property var activePopout: null
-        function showTooltip(item, text) {}
-        function hideTooltip(item) {}
-        function requestPopout(key) { activePopout = key }
-        function releasePopout(key) { if (activePopout === key) activePopout = null }
-        function isBarWidgetOpen(id) { return false }
-        function switchPanelFrom(panel, dir) { return false }
-        function run(cmd) { Util.execDetached(cmd) }
     }
 
     // 2. The Isolated Action Card Popup Overlay Window (Folder Icon Picker)
     FolderMenu {
         id: menuWindow
         root: root
-        dockWindow: dockWindow
+        dockWindow: root.dockWindow
         stackWindow: stackWindow
     }
 
@@ -2448,65 +2614,74 @@ Item {
     FolderPopup {
         id: stackWindow
         root: root
-        dockWindow: dockWindow
+        dockWindow: root.dockWindow
     }
 
     // 4. Widget Picker Popup Menu
     WidgetPickerPopup {
         id: widgetPicker
         root: root
-        dockWindow: dockWindow
+        dockWindow: root.dockWindow
         shell: root.shell
     }
 
     // 5. Autohide Edge Trigger — thin invisible strip at screen edge, activates dock reveal
     //    Recreate its input handler after each reveal so stale hover state cannot block re-arming.
-    PanelWindow {
-        id: edgeTriggerWindow
-        screen: dockWindow.screen
-        visible: root.dockAvailable
-                 && root.visibilityMode === "hover"
-                 && root.shouldSlideOut
+    Variants {
+        id: edgeVariants
+        model: Quickshell.screens
 
-        WlrLayershell.namespace: "omarchy-dock-edge"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-        exclusionMode: ExclusionMode.Ignore
-        color: "transparent"
-        mask: Region { item: edgeTriggerLoader }
+        delegate: Component {
+            PanelWindow {
+                id: edgeTriggerWindow
+                required property var modelData
+                screen: modelData
+                visible: root.dockAvailable
+                         && root.visibilityMode === "hover"
+                         && root.shouldSlideOut
+                         && root.screenShowsDock(modelData)
 
-        // Anchor to the same edge as the dock, no margins — hug the screen edge
-        anchors {
-            top:    root.dockScreenPosition === "top"
-            bottom: root.dockScreenPosition === "bottom"
-            left:   root.dockScreenPosition === "left"
-            right:  root.dockScreenPosition === "right"
-        }
+                WlrLayershell.namespace: "omarchy-dock-edge"
+                WlrLayershell.layer: WlrLayer.Top
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+                exclusionMode: ExclusionMode.Ignore
+                color: "transparent"
+                mask: Region { item: edgeTriggerLoader }
 
-        margins {
-            top: 0
-            bottom: 0
-            left: 0
-            right: 0
-        }
+                // Anchor to the same edge as the dock, no margins — hug the screen edge
+                anchors {
+                    top:    root.dockScreenPosition === "top"
+                    bottom: root.dockScreenPosition === "bottom"
+                    left:   root.dockScreenPosition === "left"
+                    right:  root.dockScreenPosition === "right"
+                }
 
-        implicitWidth:  root.isVertical ? root.effectiveAutohideEdgeDepth : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
-        implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : root.effectiveAutohideEdgeDepth
+                margins {
+                    top: 0
+                    bottom: 0
+                    left: 0
+                    right: 0
+                }
 
-        Loader {
-            id: edgeTriggerLoader
-            anchors.fill: parent
-            active: edgeTriggerWindow.visible
+                implicitWidth:  root.isVertical ? root.effectiveAutohideEdgeDepth : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
+                implicitHeight: root.isVertical ? Math.max(root.slotSize + 8, root.totalDockDimension + 14) : root.effectiveAutohideEdgeDepth
 
-            sourceComponent: Component {
-                MouseArea {
+                Loader {
+                    id: edgeTriggerLoader
                     anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                    onEntered: {
-                        // Cursor reached the screen edge — show the dock
-                        root.isDockHovered = true
-                        autohideLeaveTimer.restart()
+                    active: edgeTriggerWindow.visible
+
+                    sourceComponent: Component {
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                            onEntered: {
+                                // Cursor reached the screen edge — show the dock
+                                root.isDockHovered = true
+                                autohideLeaveTimer.restart()
+                            }
+                        }
                     }
                 }
             }

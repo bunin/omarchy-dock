@@ -284,8 +284,7 @@ BarWidget {
     bar: root.bar
     centerOnBar: true
     contentWidth: (Style && typeof Style.space === "function") ? Style.space(410) : 410
-    contentHeight: (root.autohide && root.effectiveMode === "keybind") ? 480 : 410
-    Behavior on contentHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+    contentHeight: (root.autohide && root.effectiveMode === "keybind") ? 550 : 480
     borderSpec: Border.localOrSurfaceSpec("popups", "border", Color.accent, Color.accent, Math.max(1, Style.space(2)))
 
     ColumnLayout {
@@ -530,11 +529,9 @@ BarWidget {
           Layout.bottomMargin: (root.autohide && root.effectiveMode === "keybind") ? 4 : 0
           Layout.preferredHeight: (root.autohide && root.effectiveMode === "keybind") ? 64 : 0
           clip: true
-          visible: Layout.preferredHeight > 0.1
+          visible: (root.autohide && root.effectiveMode === "keybind")
           opacity: (root.autohide && root.effectiveMode === "keybind") ? 1.0 : 0.0
           spacing: 4
-          Behavior on Layout.preferredHeight { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-          Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
           Text {
             Layout.fillWidth: true

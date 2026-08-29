@@ -25,7 +25,21 @@ var FALLBACK_MAP = {
     "discord": "discord",
     "obsidian": "obsidian",
     "spotify": "spotify",
-    "steam": "steam"
+    "x": "twitter-x",
+    "x.com": "twitter-x",
+    "twitter": "twitter-x",
+    "whatsapp": "whatsapp",
+    "web.whatsapp.com": "whatsapp",
+    "zoom": "zoom",
+    "basecamp": "basecamp",
+    "launchpad.37signals.com": "basecamp",
+    "hey": "hey",
+    "cursor": "cursor",
+    "google-contacts": "google-contacts",
+    "google-maps": "google-maps",
+    "google-messages": "google-messages",
+    "google-photos": "google-photos",
+    "youtube": "youtube"
 };
 
 function sanitizeName(name) {
