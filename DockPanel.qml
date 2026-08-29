@@ -1111,6 +1111,27 @@ Item {
 
         scan(item)
 
+        if (item) {
+            if ("iconChanged" in item && item.iconChanged && typeof item.iconChanged.connect === "function") {
+                item.iconChanged.connect(function() { root.widgetIconRevision++ })
+            }
+            if ("displayTextChanged" in item && item.displayTextChanged && typeof item.displayTextChanged.connect === "function") {
+                item.displayTextChanged.connect(function() { root.widgetIconRevision++ })
+            }
+            if ("playIconChanged" in item && item.playIconChanged && typeof item.playIconChanged.connect === "function") {
+                item.playIconChanged.connect(function() { root.widgetIconRevision++ })
+            }
+            if ("updateAvailableChanged" in item && item.updateAvailableChanged && typeof item.updateAvailableChanged.connect === "function") {
+                item.updateAvailableChanged.connect(function() { root.widgetIconRevision++ })
+            }
+            if ("activeChanged" in item && item.activeChanged && typeof item.activeChanged.connect === "function") {
+                item.activeChanged.connect(function() { root.widgetIconRevision++ })
+            }
+            if ("mutedChanged" in item && item.mutedChanged && typeof item.mutedChanged.connect === "function") {
+                item.mutedChanged.connect(function() { root.widgetIconRevision++ })
+            }
+        }
+
         if (item.panelLoader) {
             var handlePanelLoader = function() {
                 if (item.panelLoader && item.panelLoader.item) {
@@ -1149,14 +1170,39 @@ Item {
         function run(cmd) { Util.execDetached(cmd) }
     }
 
+    // Reactive tracking for hardware and system states
+    property int widgetIconRevision: 0
+
+    PwObjectTracker {
+        objects: [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource]
+    }
+
+    readonly property var pipewireDefaultSinkAudio: (Pipewire.defaultAudioSink && Pipewire.defaultAudioSink.audio) ? Pipewire.defaultAudioSink.audio : null
+    readonly property real pipewireSinkVolume: pipewireDefaultSinkAudio ? pipewireDefaultSinkAudio.volume : 1.0
+    readonly property bool pipewireSinkMuted: pipewireDefaultSinkAudio ? pipewireDefaultSinkAudio.muted : false
+
+    readonly property var pipewireDefaultSourceAudio: (Pipewire.defaultAudioSource && Pipewire.defaultAudioSource.audio) ? Pipewire.defaultAudioSource.audio : null
+    readonly property bool pipewireSourceMuted: pipewireDefaultSourceAudio ? pipewireDefaultSourceAudio.muted : true
+
+    readonly property var upowerDisplayDev: UPower.displayDevice
+    readonly property real upowerBatteryPercentage: (upowerDisplayDev && upowerDisplayDev.isPresent) ? upowerDisplayDev.percentage : 100.0
+    readonly property int upowerBatteryState: (upowerDisplayDev && upowerDisplayDev.isPresent) ? upowerDisplayDev.state : 0
+    readonly property bool upowerBatteryPresent: (upowerDisplayDev && upowerDisplayDev.isPresent) ? true : false
+
+    readonly property int screenCount: Quickshell.screens ? Quickshell.screens.length : 1
+
     function getWidgetIcon(widgetId, item) {
+        var _rev = root.widgetIconRevision
         if (!widgetId) return "󰒓"
         if (widgetId === "omarchy.apps") return "󰀻"
         if (widgetId === "omarchy.monitor") {
-            return (Quickshell.screens && Quickshell.screens.length > 1) ? "󰍺" : "󰍹"
+            return (root.screenCount > 1) ? "󰍺" : "󰍹"
         }
         if (widgetId === "omarchy.clock") return "󰥔"
-        if (widgetId === "omarchy.tailscale") return "󰖂"
+        if (widgetId === "omarchy.tailscale") {
+            if (item && item.icon) return item.icon
+            return "󰖂"
+        }
         if (widgetId === "omarchy.network") {
             if (item && item.icon) return item.icon
             return "󰖩"
@@ -1170,40 +1216,54 @@ Item {
             return "󰖐"
         }
         if (widgetId === "omarchy.system-update") return "󰚰"
-        if (widgetId === "omarchy.keyboard-layout" || widgetId === "nomarkoo.keyboard-layout" || widgetId === "glafeara.languages") return "󰌌"
+        if (widgetId === "omarchy.microphone") {
+            if (item && item.muted !== undefined) return item.muted ? "󰍭" : "󰍬"
+            return root.pipewireSourceMuted ? "󰍭" : "󰍬"
+        }
+        if (widgetId === "omarchy.media") {
+            if (item && item.playIcon) return item.playIcon
+            return "󰐊"
+        }
+        if (widgetId === "omarchy.keyboard-layout" || widgetId === "nomarkoo.keyboard-layout" || widgetId === "glafeara.languages") {
+            if (item && item.icon) return item.icon
+            if (item && item.displayText) return item.displayText
+            return "󰌌"
+        }
         if (widgetId === "omarchy.tray") return "󰇙"
         if (widgetId === "omarchy.agents") return "󰚩"
         if (widgetId === "omarchy.indicators") return "󰂚"
         if (widgetId === "silvaio.gamemode") return "󰊴"
         if (widgetId === "lgse.sandman") return "󰒲"
         if (widgetId === "omarchy.audio") {
-            try {
-                var sink = Pipewire.defaultAudioSink
-                if (sink && sink.audio) {
-                    if (sink.audio.muted || sink.audio.volume <= 0.01) return "󰝟"
-                    if (sink.audio.volume < 0.33) return "󰕿"
-                    if (sink.audio.volume < 0.66) return "󰖀"
-                    return "󰕾"
-                }
-            } catch(e) {}
+            if (item && typeof item.outputIcon === "function") {
+                try {
+                    var out = item.outputIcon()
+                    if (out) return out
+                } catch(e) {}
+            }
+            if (root.pipewireSinkMuted || root.pipewireSinkVolume <= 0.01) return "󰝟"
+            if (root.pipewireSinkVolume < 0.33) return "󰕿"
+            if (root.pipewireSinkVolume < 0.66) return "󰖀"
             return "󰕾"
         }
         if (widgetId === "omarchy.power") {
-            try {
-                var dev = UPower.displayDevice
-                if (dev && dev.isPresent) {
-                    if (dev.state === UPowerDeviceState.Charging) return "󰂄"
-                    var frac = dev.percentage / 100.0
-                    if (frac < 0.15) return "󰁺"
-                    if (frac < 0.30) return "󰁻"
-                    if (frac < 0.50) return "󰁽"
-                    if (frac < 0.70) return "󰁾"
-                    if (frac < 0.90) return "󰁿"
-                    return "󰁹"
-                }
-            } catch(e) {}
+            if (item && typeof item.batteryIcon === "function") {
+                try {
+                    var bIcon = item.batteryIcon()
+                    if (bIcon) return bIcon
+                } catch(e) {}
+            }
+            if (!root.upowerBatteryPresent) return "󰚥"
+            if (root.upowerBatteryState === UPowerDeviceState.Charging) return "󰂄"
+            var frac = root.upowerBatteryPercentage / 100.0
+            if (frac < 0.15) return "󰁺"
+            if (frac < 0.30) return "󰁻"
+            if (frac < 0.50) return "󰁽"
+            if (frac < 0.70) return "󰁾"
+            if (frac < 0.90) return "󰁿"
             return "󰁹"
         }
+        if (item && item.icon) return item.icon
         return "󰒓"
     }
 
@@ -2348,7 +2408,17 @@ Item {
                                 anchors.centerIn: parent
                                 width: root.iconBaseSize
                                 height: root.iconBaseSize
-                                text: root.getWidgetIcon(modelData, leftWidgetLoader.item)
+                                text: {
+                                    var _rev = root.widgetIconRevision
+                                    var _v = root.pipewireSinkVolume
+                                    var _m = root.pipewireSinkMuted
+                                    var _sm = root.pipewireSourceMuted
+                                    var _bp = root.upowerBatteryPercentage
+                                    var _bs = root.upowerBatteryState
+                                    var it = leftWidgetLoader.item
+                                    var _ic = it ? (it.icon || it.displayText || it.playIcon || "") : ""
+                                    return root.getWidgetIcon(modelData, it)
+                                }
                                 fontFamily: Style.font.family
                                 fontSize: 22
                                 color: leftWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
@@ -2654,7 +2724,17 @@ Item {
                                 anchors.centerIn: parent
                                 width: root.iconBaseSize
                                 height: root.iconBaseSize
-                                text: root.getWidgetIcon(modelData, rightWidgetLoader.item)
+                                text: {
+                                    var _rev = root.widgetIconRevision
+                                    var _v = root.pipewireSinkVolume
+                                    var _m = root.pipewireSinkMuted
+                                    var _sm = root.pipewireSourceMuted
+                                    var _bp = root.upowerBatteryPercentage
+                                    var _bs = root.upowerBatteryState
+                                    var it = rightWidgetLoader.item
+                                    var _ic = it ? (it.icon || it.displayText || it.playIcon || "") : ""
+                                    return root.getWidgetIcon(modelData, it)
+                                }
                                 fontFamily: Style.font.family
                                 fontSize: 22
                                 color: rightWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
