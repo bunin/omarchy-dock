@@ -19,7 +19,7 @@ Item {
     property real slotSize: 42
     property real iconBaseSize: 24
     property int systemBorderSize: Style.normalBorderWidth > 0 ? Style.normalBorderWidth : 2
-    property int systemRounding: Style.cornerRadius > 0 ? Style.cornerRadius : 12
+    property int systemRounding: Style.cornerRadius >= 0 ? Style.cornerRadius : 12
     property bool isSelected: false
     property bool isMergeTarget: false
     property bool isEditMode: false

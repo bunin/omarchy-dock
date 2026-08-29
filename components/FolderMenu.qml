@@ -174,11 +174,23 @@ PanelWindow {
         color: menuWindow.root.isBarTransparent
             ? Util.alpha(Color.popups.background, 0.45)
             : Color.popups.background
-        border.width: menuWindow.root.isBarTransparent ? 0 : menuWindow.root.systemBorderSize
-        border.color: menuWindow.root.isBarTransparent ? "transparent" : Color.accent
+        border.width: (Border.canUseNative(menuWindow.root.dockBorderSpec) && !menuWindow.root.isBarTransparent) ? Border.uniformWidth(menuWindow.root.dockBorderSpec) : 0
+        border.color: (Border.canUseNative(menuWindow.root.dockBorderSpec) && !menuWindow.root.isBarTransparent) ? Border.color(menuWindow.root.dockBorderSpec) : "transparent"
         radius: Math.min(10, menuWindow.root.systemRounding)
         antialiasing: true
         smooth: true
+
+        Loader {
+            anchors.fill: parent
+            active: !menuWindow.root.isBarTransparent && Border.needsOverlay(menuWindow.root.dockBorderSpec)
+            sourceComponent: DockBorderOverlay {
+                anchors.fill: parent
+                radius: Math.min(10, menuWindow.root.systemRounding)
+                borderSpec: menuWindow.root.dockBorderSpec
+                animated: menuWindow.root.borderAngleAnimationEnabled
+                animationDuration: menuWindow.root.borderAngleAnimationDuration
+            }
+        }
 
         Behavior on color { ColorAnimation { duration: 300; easing.type: Easing.InOutCubic } }
         Behavior on border.color { ColorAnimation { duration: 300; easing.type: Easing.InOutCubic } }

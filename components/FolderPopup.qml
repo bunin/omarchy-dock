@@ -107,11 +107,23 @@ PanelWindow {
             color: stackWindow.root.isBarTransparent
                 ? Util.alpha(Color.popups.background, 0.45)
                 : Color.popups.background
-            border.width: stackWindow.root.isBarTransparent ? 0 : stackWindow.root.systemBorderSize
-            border.color: stackWindow.root.isBarTransparent ? "transparent" : Color.accent
+            border.width: (Border.canUseNative(stackWindow.root.dockBorderSpec) && !stackWindow.root.isBarTransparent) ? Border.uniformWidth(stackWindow.root.dockBorderSpec) : 0
+            border.color: (Border.canUseNative(stackWindow.root.dockBorderSpec) && !stackWindow.root.isBarTransparent) ? Border.color(stackWindow.root.dockBorderSpec) : "transparent"
             radius: stackWindow.root.systemRounding
             antialiasing: true
             smooth: true
+
+            Loader {
+                anchors.fill: parent
+                active: !stackWindow.root.isBarTransparent && Border.needsOverlay(stackWindow.root.dockBorderSpec)
+                sourceComponent: DockBorderOverlay {
+                    anchors.fill: parent
+                    radius: stackWindow.root.systemRounding
+                    borderSpec: stackWindow.root.dockBorderSpec
+                    animated: stackWindow.root.borderAngleAnimationEnabled
+                    animationDuration: stackWindow.root.borderAngleAnimationDuration
+                }
+            }
 
             MouseArea {
                 anchors.fill: parent
