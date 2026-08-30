@@ -6,3 +6,5 @@
 AGENTS.md
 docs/
 *.psd
+__pycache__/
+*.pyc
