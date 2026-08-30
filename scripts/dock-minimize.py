@@ -146,7 +146,7 @@ def main():
 
     mode = "minimize"
     arg_start = 1
-    if sys.argv[1] in ("minimize", "restore", "restore-or-launch"):
+    if sys.argv[1] in ("minimize", "restore", "restore-or-launch", "toggle-active", "toggle-or-cycle"):
         mode = sys.argv[1]
         arg_start = 2
 
@@ -172,6 +172,23 @@ def main():
         if mode == "restore-or-launch":
             launch_fallback(queries)
         return
+
+    target_index = -1
+    filtered_queries = []
+    for q in queries:
+        if q.startswith("--index="):
+            try:
+                target_index = int(q.split("=")[1])
+            except Exception:
+                pass
+        elif q.isdigit() and target_index == -1:
+            try:
+                target_index = int(q)
+            except Exception:
+                pass
+        else:
+            filtered_queries.append(q)
+    queries = filtered_queries
 
     norm_queries = [normalize(q) for q in queries]
     raw_queries = [q.lower() for q in queries]
@@ -262,8 +279,14 @@ def main():
         else:
             visible_windows.append(c)
 
-    if mode == "minimize":
-        if visible_windows:
+    if mode in ("toggle-instance", "toggle", "toggle-active", "minimize"):
+        if not matching:
+            return
+
+        target_c = None
+        if target_index >= 0 and target_index < len(matching):
+            target_c = matching[target_index]
+        else:
             active_addr = ""
             try:
                 active_raw = hypr_cmd(sock_path, "j/activewindow")
@@ -271,85 +294,129 @@ def main():
                     active_obj = json.loads(active_raw)
                     active_addr = str(active_obj.get("address", "")).lower()
             except Exception:
-                active_addr = ""
+                pass
+            active_matches = [c for c in matching if str(c.get("address", "")).lower() == active_addr]
+            if active_matches:
+                target_c = active_matches[0]
+            elif visible_windows:
+                target_c = visible_windows[0]
+            elif minimized_windows:
+                target_c = minimized_windows[0]
+            else:
+                target_c = matching[0]
 
-            minimized_had_focus = False
-            for c in visible_windows:
-                addr = c["address"]
-                if active_addr and str(addr).lower() == active_addr:
-                    minimized_had_focus = True
-                ws_obj = c.get("workspace", {})
-                orig_ws = str(ws_obj.get("name") or ws_obj.get("id") or focused_ws)
-                if orig_ws.startswith("special:"):
-                    orig_ws = focused_ws
-                saved[addr] = orig_ws
+        addr = target_c["address"]
+        is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
 
-                cmd = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "special:minimized" }})'
-                res = hypr_cmd(sock_path, cmd)
-                if "error" in res.lower():
-                    hypr_cmd(sock_path, f"dispatch movetoworkspacesilent special:minimized,address:{addr}")
+        if is_min:
+            # RESTORE target_c
+            target_ws = focused_ws
+            if not target_ws or str(target_ws).startswith("special:"):
+                target_ws = saved.get(addr, "1")
+            if str(target_ws).startswith("special:"):
+                target_ws = "1"
+
+            cmd_move = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "{target_ws}" }})'
+            res = hypr_cmd(sock_path, cmd_move)
+            if "error" in res.lower():
+                hypr_cmd(sock_path, f"dispatch movetoworkspacesilent {target_ws},address:{addr}")
+
+            cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
+            res_focus = hypr_cmd(sock_path, cmd_focus)
+            if "error" in res_focus.lower():
+                hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
+
+            saved.pop(addr, None)
+            close_any_special(sock_path)
+        else:
+            # MINIMIZE target_c
+            ws_obj = target_c.get("workspace", {})
+            orig_ws = str(ws_obj.get("name") or ws_obj.get("id") or focused_ws)
+            if orig_ws.startswith("special:"):
+                orig_ws = focused_ws
+            saved[addr] = orig_ws
+
+            cmd = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "special:minimized" }})'
+            res = hypr_cmd(sock_path, cmd)
+            if "error" in res.lower():
+                hypr_cmd(sock_path, f"dispatch movetoworkspacesilent special:minimized,address:{addr}")
 
             close_any_special(sock_path)
-            # Focus handling:
-            # 1. If the window that was minimized had active focus -> focus the adjacent visible window on the workspace!
-            # 2. If minimizing a background window or a window on another workspace -> preserve your active window focus untouched!
-            minimized_addrs = [str(c["address"]).lower() for c in visible_windows]
-            if minimized_had_focus:
-                # Find remaining visible windows on the active workspace
+
+            other_visible = [c for c in visible_windows if str(c.get("address", "")).lower() != str(addr).lower()]
+            if other_visible:
+                target_addr = other_visible[0]["address"]
+                cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{target_addr}" }})'
+                res_focus = hypr_cmd(sock_path, cmd_focus)
+                if "error" in res_focus.lower():
+                    hypr_cmd(sock_path, f"dispatch focuswindow address:{target_addr}")
+            else:
                 remaining = [
                     c for c in clients
-                    if str(c.get("address", "")).lower() not in minimized_addrs
+                    if str(c.get("address", "")).lower() != str(addr).lower()
                     and not str(c.get("workspace", {}).get("name", "")).startswith("special:")
                     and str(c.get("workspace", {}).get("name") or c.get("workspace", {}).get("id") or "") == focused_ws
                 ]
                 if remaining:
                     target_addr = remaining[0]["address"]
                     hypr_cmd(sock_path, f'dispatch hl.dsp.focus({{ window = "address:{target_addr}" }})')
-            elif active_addr:
-                hypr_cmd(sock_path, f'dispatch hl.dsp.focus({{ window = "address:{active_addr}" }})')
-            try:
-                with open(cache_file, "w") as f:
-                    json.dump(saved, f)
-            except Exception:
-                pass
+
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(saved, f)
+        except Exception:
+            pass
         return
 
-    elif mode in ("restore", "restore-or-launch"):
-        if minimized_windows:
-            for c in minimized_windows:
-                addr = c["address"]
-                target_ws = focused_ws
-                if not target_ws or str(target_ws).startswith("special:"):
-                    target_ws = saved.get(addr, "1")
-                if str(target_ws).startswith("special:"):
-                    target_ws = "1"
+    elif mode in ("activate-instance", "activate", "restore", "restore-or-launch"):
+        if not matching:
+            launch_fallback(queries)
+            return
 
-                cmd_move = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "{target_ws}" }})'
-                res = hypr_cmd(sock_path, cmd_move)
-                if "error" in res.lower():
-                    hypr_cmd(sock_path, f"dispatch movetoworkspacesilent {target_ws},address:{addr}")
+        target_c = None
+        if target_index >= 0 and target_index < len(matching):
+            target_c = matching[target_index]
+        else:
+            if visible_windows:
+                target_c = visible_windows[0]
+            elif minimized_windows:
+                target_c = minimized_windows[0]
+            else:
+                target_c = matching[0]
 
-                cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
-                res_focus = hypr_cmd(sock_path, cmd_focus)
-                if "error" in res_focus.lower():
-                    hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
+        addr = target_c["address"]
+        is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
 
-                saved.pop(addr, None)
+        if is_min:
+            target_ws = focused_ws
+            if not target_ws or str(target_ws).startswith("special:"):
+                target_ws = saved.get(addr, "1")
+            if str(target_ws).startswith("special:"):
+                target_ws = "1"
 
+            cmd_move = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "{target_ws}" }})'
+            res = hypr_cmd(sock_path, cmd_move)
+            if "error" in res.lower():
+                hypr_cmd(sock_path, f"dispatch movetoworkspacesilent {target_ws},address:{addr}")
+
+            cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
+            res_focus = hypr_cmd(sock_path, cmd_focus)
+            if "error" in res_focus.lower():
+                hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
+
+            saved.pop(addr, None)
             close_any_special(sock_path)
             try:
                 with open(cache_file, "w") as f:
                     json.dump(saved, f)
             except Exception:
                 pass
-            return
-        elif visible_windows:
-            addr = visible_windows[0]["address"]
-            hypr_cmd(sock_path, f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})')
-            return
         else:
-            if mode == "restore-or-launch":
-                launch_fallback(queries)
+            cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
+            res_focus = hypr_cmd(sock_path, cmd_focus)
+            if "error" in res_focus.lower():
+                hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
+        return
 
 if __name__ == "__main__":
     main()

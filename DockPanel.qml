@@ -1600,28 +1600,14 @@ Item {
         }
     }
 
-    property var minimizedMap: ({})
-
-    function minimizeItem(itemData) {
+    function minimizeItem(itemData, targetIndex) {
         if (!itemData) return
-        var clean = DockModel.stripDesktop(itemData.appId || "").toLowerCase()
-        if (clean) {
-            var next = Object.assign({}, root.minimizedMap)
-            next[clean] = true
-            root.minimizedMap = next
-        }
-        var args = ["minimize"]
+        var args = ["toggle-instance"]
         if (itemData.appId) args.push(itemData.appId)
         if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
         if (itemData.exec) args.push(itemData.exec)
-        if (itemData.toplevels && itemData.toplevels.length > 0) {
-            for (var t = 0; t < itemData.toplevels.length; t++) {
-                var top = itemData.toplevels[t]
-                if (top) {
-                    if (top.address) args.push(String(top.address))
-                    if (top.appId) args.push(String(top.appId))
-                }
-            }
+        if (typeof targetIndex === "number" && targetIndex >= 0) {
+            args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
         var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
@@ -1633,26 +1619,14 @@ Item {
         root.updateDockItems()
     }
 
-    function restoreOrLaunchItem(itemData) {
+    function restoreOrLaunchItem(itemData, targetIndex) {
         if (!itemData) return
-        var clean = DockModel.stripDesktop(itemData.appId || "").toLowerCase()
-        if (clean && root.minimizedMap[clean]) {
-            var next = Object.assign({}, root.minimizedMap)
-            delete next[clean]
-            root.minimizedMap = next
-        }
-        var args = ["restore-or-launch"]
+        var args = ["activate-instance"]
         if (itemData.appId) args.push(itemData.appId)
         if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
         if (itemData.exec) args.push(itemData.exec)
-        if (itemData.toplevels && itemData.toplevels.length > 0) {
-            for (var t = 0; t < itemData.toplevels.length; t++) {
-                var top = itemData.toplevels[t]
-                if (top) {
-                    if (top.address) args.push(String(top.address))
-                    if (top.appId) args.push(String(top.appId))
-                }
-            }
+        if (typeof targetIndex === "number" && targetIndex >= 0) {
+            args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
         var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
@@ -1864,7 +1838,7 @@ Item {
         var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
             ? DesktopEntries.applications.values
             : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
-        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems, root.minimizedMap)
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems)
 
         // Refresh active stack item contents if open
         if (root.activeStackItem) {
@@ -2655,8 +2629,12 @@ Item {
                             root.requestFocusOnLaunch(appId)
                         }
 
-                        onRestoreOrLaunchRequested: function(item) {
-                            root.restoreOrLaunchItem(item)
+                        onRestoreOrLaunchRequested: function(item, targetIndex) {
+                            root.restoreOrLaunchItem(item, targetIndex)
+                        }
+
+                        onMinimizeRequested: function(item, targetIndex) {
+                            root.minimizeItem(item, targetIndex)
                         }
 
                         onDissolveRequested: function(stackId) {

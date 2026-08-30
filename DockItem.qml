@@ -37,7 +37,8 @@ Item {
     signal togglePinRequested(string appId)
     signal dissolveRequested(string stackId)
     signal originalAppLaunched(string appId)
-    signal restoreOrLaunchRequested(var itemData)
+    signal restoreOrLaunchRequested(var itemData, int targetIndex)
+    signal minimizeRequested(var itemData, int targetIndex)
     signal dragStarted(int fromIndex)
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
@@ -166,7 +167,7 @@ Item {
         if (root.isEditMode) return true
         if (root.itemData) {
             if (root.itemData.isStack) return true
-            if (root.itemData.isRunning && !root.itemData.isMinimized) return true
+            if (root.itemData.isRunning) return true
         }
         return false
     }
@@ -614,9 +615,9 @@ Item {
                     if (root.itemData.isStack) {
                         clickEffectAnim.restart()
                         root.itemRightClicked(root.itemData, root)
-                    } else if (root.itemData.isRunning && !root.itemData.isMinimized) {
+                    } else if (root.itemData.isRunning) {
                         clickEffectAnim.restart()
-                        root.itemRightClicked(root.itemData, root)
+                        root.minimizeRequested(root.itemData, root.effectiveTopIndex)
                     }
                 }
             }
@@ -763,13 +764,19 @@ Item {
                     }
                     return
                 }
-                if (root.itemData && root.itemData.isStack) {
-                    root.itemLeftClicked(root.itemData)
-                    return
-                }
                 if (root.itemData) {
                     root.itemLeftClicked(root.itemData)
-                    root.restoreOrLaunchRequested(root.itemData)
+                    if (root.previewTopIndex >= 0) {
+                        root.restoreOrLaunchRequested(root.itemData, root.previewTopIndex)
+                    } else {
+                        var tops = root.itemData.toplevels || []
+                        if (tops.length >= 2 && root.itemData.isActive) {
+                            var nextIdx = (root.realActiveTopIndex + 1) % tops.length
+                            root.restoreOrLaunchRequested(root.itemData, nextIdx)
+                        } else {
+                            root.restoreOrLaunchRequested(root.itemData, root.realActiveTopIndex)
+                        }
+                    }
                     root.previewTopIndex = -1
                 }
             } else if (mouse.button === Qt.RightButton) {

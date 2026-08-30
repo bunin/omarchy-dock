@@ -419,7 +419,7 @@ PanelWindow {
                                 if (!subMouse.pressed) return false
                                 if (subMouse.pressedButtons & (Qt.LeftButton | Qt.MiddleButton)) return true
                                 if (stackWindow.root.isEditMode) return true
-                                if (modelData && modelData.isRunning && !modelData.isMinimized) return true
+                                if (modelData && modelData.isRunning) return true
                                 return false
                             }
 
@@ -739,9 +739,9 @@ PanelWindow {
                                             return
                                         }
                                         if (modelData) {
-                                            if (modelData.isRunning && !modelData.isMinimized) {
+                                            if (modelData.isRunning) {
                                                 subClickEffectAnim.restart()
-                                                stackWindow.root.minimizeItem(modelData)
+                                                stackWindow.root.minimizeItem(modelData, subItemRoot.subEffectiveTopIndex)
                                             }
                                         }
                                     }
@@ -828,7 +828,17 @@ PanelWindow {
                                             return
                                         }
                                         if (modelData) {
-                                            stackWindow.root.restoreOrLaunchItem(modelData)
+                                            if (subItemRoot.subPreviewTopIndex >= 0) {
+                                                stackWindow.root.restoreOrLaunchItem(modelData, subItemRoot.subPreviewTopIndex)
+                                            } else {
+                                                var subTops = modelData.toplevels || []
+                                                if (subTops.length >= 2 && modelData.isActive) {
+                                                    var subNextIdx = (subItemRoot.subRealActiveTopIndex + 1) % subTops.length
+                                                    stackWindow.root.restoreOrLaunchItem(modelData, subNextIdx)
+                                                } else {
+                                                    stackWindow.root.restoreOrLaunchItem(modelData, subItemRoot.subRealActiveTopIndex)
+                                                }
+                                            }
                                             subItemRoot.subPreviewTopIndex = -1
                                         }
                                     } else if (mouse.button === Qt.RightButton) {

@@ -776,19 +776,13 @@ function getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId) 
     return { count: count, hasUrgent: isUrgent };
 }
 
-function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems, minimizedMap) {
+function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems) {
     var pinned = Array.isArray(pinnedList) ? pinnedList : [];
     var toplevels = toArray(toplevelsList);
     var entries = toArray(desktopEntries);
 
     var items = [];
     var assignedTops = {};
-
-    function isAppMinimized(appId) {
-        if (!minimizedMap || !appId) return false;
-        var clean = stripDesktop(appId).toLowerCase();
-        return !!minimizedMap[clean];
-    }
 
     function getTopKey(top, idx) {
         if (!top) return "top_" + idx;
@@ -840,9 +834,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     }
                 }
 
-                var isSubMin = isAppMinimized(sAppId);
-                if (sTops.length > 0 || isSubMin) isAnySubRunning = true;
-                if (sActive && !isSubMin) isAnySubActive = true;
+                if (sTops.length > 0) isAnySubRunning = true;
+                if (sActive) isAnySubActive = true;
 
                 var sInfo = getBadgeInfo(badgeCounts, urgentCounts, sAppId, sEntry, sName, sDesktopId);
 
@@ -855,9 +848,9 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     rawIcon: sRawIcon,
                     iconSource: sIconSource,
                     isPinned: true,
-                    isRunning: (sTops.length > 0 || isSubMin),
-                    isActive: (sActive && !isSubMin),
-                    isMinimized: isSubMin,
+                    isRunning: sTops.length > 0,
+                    isActive: sActive,
+                    isMinimized: false,
                     activeTopIndex: sActiveIdx,
                     windowCount: sTops.length,
                     badgeCount: sInfo.count,
@@ -922,7 +915,6 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 }
             }
 
-            var isMin = isAppMinimized(appId);
             var itemInfo = getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId);
 
             items.push({
@@ -937,9 +929,9 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isStack: false,
                 isPinned: true,
                 isDuplicate: false,
-                isRunning: (matching.length > 0 || isMin),
-                isActive: (isAnyActive && !isMin),
-                isMinimized: isMin,
+                isRunning: matching.length > 0,
+                isActive: isAnyActive,
+                isMinimized: false,
                 activeTopIndex: activeIdx,
                 windowCount: matching.length,
                 badgeCount: itemInfo.count,
