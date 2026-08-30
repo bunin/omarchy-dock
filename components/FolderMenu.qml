@@ -19,11 +19,15 @@ PanelWindow {
     screen: menuWindow.dockWindow ? menuWindow.dockWindow.screen : null
 
     readonly property bool isDirectDockPopup: !menuWindow.root.isMenuFromFolder
+    readonly property int dockThickness: menuWindow.root.slotSize + 8
+    readonly property int dockGap: (Style.gapsOut || 5)
+    readonly property int dockOffset: dockGap + dockThickness + dockGap
+    readonly property int stackOffset: (stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.height + 6 : 186
 
     WlrLayershell.namespace: "omarchy-dock-menu"
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: menuWindow.root.isMenuOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Auto
+    exclusionMode: ExclusionMode.Ignore
     color: "transparent"
 
     anchors {
@@ -35,16 +39,16 @@ PanelWindow {
 
     margins {
         bottom: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "top")
-            ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + (stackWindow && stackWindow.stackCard ? stackWindow.stackCard.height : 180) + 6))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + stackOffset))
             : 0
         top: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "bottom")
-            ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + (stackWindow && stackWindow.stackCard ? stackWindow.stackCard.height : 180) + 6))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + stackOffset))
             : 0
         right: (menuWindow.root.isVertical && menuWindow.root.barPosition === "left")
-            ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + (stackWindow && stackWindow.stackCard ? stackWindow.stackCard.width : 180) + 6))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186)))
             : 0
         left: (menuWindow.root.isVertical && menuWindow.root.barPosition === "right")
-            ? (isDirectDockPopup ? (Style.gapsOut || 5) : ((Style.gapsOut || 5) + 54 + 6 + (stackWindow && stackWindow.stackCard ? stackWindow.stackCard.width : 180) + 6))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186)))
             : 0
     }
 

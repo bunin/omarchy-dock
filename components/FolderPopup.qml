@@ -18,27 +18,31 @@ PanelWindow {
 
     visible: stackWindow.root.isStackOpen && stackWindow.root.dockRevealed
 
-        WlrLayershell.namespace: "omarchy-dock-stack"
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: stackWindow.root.isEditingFolderTitle
-            ? WlrKeyboardFocus.Exclusive
-            : (stackWindow.root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
-        exclusionMode: ExclusionMode.Auto
-        color: "transparent"
+    readonly property int dockThickness: stackWindow.root.slotSize + 8
+    readonly property int dockGap: (Style.gapsOut || 5)
+    readonly property int dockOffset: dockGap + dockThickness + dockGap
 
-        anchors {
-            top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? true : (stackWindow.root.isVertical ? true : false)
-            bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? true : (stackWindow.root.isVertical ? true : false)
-            left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? true : (!stackWindow.root.isVertical ? true : false)
-            right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? true : (!stackWindow.root.isVertical ? true : false)
-        }
+    WlrLayershell.namespace: "omarchy-dock-stack"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: stackWindow.root.isEditingFolderTitle
+        ? WlrKeyboardFocus.Exclusive
+        : (stackWindow.root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
+    exclusionMode: ExclusionMode.Ignore
+    color: "transparent"
 
-        margins {
-            bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? (Style.gapsOut || 5) : 0
-            top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? (Style.gapsOut || 5) : 0
-            right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? (Style.gapsOut || 5) : 0
-            left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? (Style.gapsOut || 5) : 0
-        }
+    anchors {
+        top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? true : (stackWindow.root.isVertical ? true : false)
+        bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? true : (stackWindow.root.isVertical ? true : false)
+        left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? true : (!stackWindow.root.isVertical ? true : false)
+        right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? true : (!stackWindow.root.isVertical ? true : false)
+    }
+
+    margins {
+        bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? dockOffset : 0
+        top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? dockOffset : 0
+        right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? dockOffset : 0
+        left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? dockOffset : 0
+    }
 
         implicitWidth: stackWindow.root.isVertical ? stackCard.width : (dockWindow.screen ? dockWindow.screen.width : 1920)
         implicitHeight: stackWindow.root.isVertical ? (dockWindow.screen ? dockWindow.screen.height : 1080) : stackCard.height
