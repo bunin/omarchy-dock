@@ -574,7 +574,8 @@ Item {
         if (!root.autohide) return
         var anyOpenWidget = checkWidgetPanelsOpen()
         var isDockWinHovered = !root.shouldSlideOut && root.anyDockSurfaceHovered()
-        var anyHover = isDockWinHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+        var anyPopupsActive = root.isStackOpen || root.isMenuOpen || root.isEditingFolderTitle || root.isEditMode || (root.widgetPicker && root.widgetPicker.opened)
+        var anyHover = isDockWinHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget || anyPopupsActive
         if (anyHover) {
             autohideLeaveTimer.stop()
             root.isDockHovered = true
@@ -590,7 +591,8 @@ Item {
         onTriggered: {
             if (!root.autohide) return
             var anyOpenWidget = root.checkWidgetPanelsOpen()
-            var anyHover = root.anyDockSurfaceHovered() || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget
+            var anyPopupsActive = root.isStackOpen || root.isMenuOpen || root.isEditingFolderTitle || root.isEditMode || (root.widgetPicker && root.widgetPicker.opened)
+            var anyHover = root.anyDockSurfaceHovered() || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || anyOpenWidget || anyPopupsActive
             if (!anyHover) {
                 root.isDockHovered = false
                 if (DockSettings.shouldAutoDismissKeyboardReveal(root.visibilityMode, root.visibilityOverride)) {
@@ -639,7 +641,17 @@ Item {
     }
 
     readonly property bool isWorkspaceEmpty: root.activeWorkspaceWindowCount === 0
-    readonly property bool isDockActive: root.isDockHovered || root.isStackHovered || root.isMenuHovered || root.isWidgetPanelHovered || root.checkWidgetPanelsOpen() || (root.dockDragActiveIndex >= 0)
+    readonly property bool isDockActive: root.isDockHovered
+        || root.isStackHovered
+        || root.isMenuHovered
+        || root.isWidgetPanelHovered
+        || root.isStackOpen
+        || root.isMenuOpen
+        || root.isEditingFolderTitle
+        || root.isEditMode
+        || (root.widgetPicker && root.widgetPicker.opened)
+        || root.checkWidgetPanelsOpen()
+        || (root.dockDragActiveIndex >= 0)
     readonly property bool shouldSlideOut: DockSettings.shouldSlideOut(
         root.visibilityMode,
         root.visibilityOverride,

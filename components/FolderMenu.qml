@@ -23,7 +23,7 @@ PanelWindow {
     WlrLayershell.namespace: "omarchy-dock-menu"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: menuWindow.root.isMenuOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Auto
+    exclusionMode: ExclusionMode.Ignore
     color: "transparent"
 
     anchors {

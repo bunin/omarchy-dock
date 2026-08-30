@@ -23,7 +23,7 @@ PanelWindow {
         WlrLayershell.keyboardFocus: stackWindow.root.isEditingFolderTitle
             ? WlrKeyboardFocus.Exclusive
             : (stackWindow.root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
-        exclusionMode: ExclusionMode.Auto
+        exclusionMode: ExclusionMode.Ignore
         color: "transparent"
 
         anchors {
