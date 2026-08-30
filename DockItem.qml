@@ -42,14 +42,6 @@ Item {
     signal dragStarted(int fromIndex)
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
-    property int lastBadgeCount: 0
-
-    onBadgeCountChanged: {
-        if (badgeCount > lastBadgeCount && badgeCount > 0) {
-            clickEffectAnim.restart()
-        }
-        lastBadgeCount = badgeCount
-    }
 
     readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
