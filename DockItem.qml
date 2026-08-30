@@ -775,5 +775,14 @@ Item {
                 return
             }
         }
+
+        onDoubleClicked: function(mouse) {
+            if (mouse.button === Qt.LeftButton) {
+                clickEffectAnim.restart()
+                if (root.itemData && root.itemData.isStack) {
+                    root.itemLeftClicked(root.itemData)
+                }
+            }
+        }
     }
 }
