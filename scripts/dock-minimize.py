@@ -3,6 +3,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -101,41 +102,49 @@ def close_any_special(sock_path):
     except Exception:
         pass
 
+def parse_desktop_exec_argv(exec_str):
+    if not exec_str or not isinstance(exec_str, str):
+        return []
+    # Remove FreeDesktop field codes (%f, %F, %u, %U, %i, %c, %k, %v, %m, %d, %D, %n, %N, %v)
+    raw = re.sub(r'%%', '\x00', exec_str)
+    raw = re.sub(r'%[a-zA-Z]', '', raw)
+    raw = raw.replace('\x00', '%').strip()
+    if not raw:
+        return []
+    try:
+        return shlex.split(raw)
+    except Exception:
+        return raw.split()
+
 def launch_fallback(queries):
-    # Try finding desktop id or exec to launch via uwsm-app
+    # 1. First priority: desktop entry files via gtk-launch
     for q in queries:
-        if not q or q.startswith("0x"):
+        if not q or q.startswith("0x") or q.startswith("--"):
             continue
-        if q.endswith(".desktop"):
+        desktop_id = q if q.endswith(".desktop") else (q + ".desktop" if "/" not in q and " " not in q else "")
+        if desktop_id:
             try:
-                subprocess.Popen(["uwsm-app", "--", "gtk-launch", q], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["uwsm-app", "--", "gtk-launch", desktop_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return
             except Exception:
                 try:
-                    subprocess.Popen(["gtk-launch", q], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(["gtk-launch", desktop_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     return
                 except Exception:
                     pass
+
+    # 2. Second priority: executable argv lists without shell=True
     for q in queries:
-        if not q or q.startswith("0x"):
+        if not q or q.startswith("0x") or q.startswith("--"):
             continue
-        if " " in q or "/" in q:
+        argv = parse_desktop_exec_argv(q)
+        if argv:
             try:
-                subprocess.Popen(f"uwsm-app -- {q}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["uwsm-app", "--"] + argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 return
             except Exception:
                 try:
-                    subprocess.Popen(q, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    return
-                except Exception:
-                    pass
-        elif len(q) >= 2:
-            try:
-                subprocess.Popen(["uwsm-app", "--", "gtk-launch", q], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return
-            except Exception:
-                try:
-                    subprocess.Popen(["uwsm-app", "--", q], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     return
                 except Exception:
                     pass
