@@ -30,6 +30,7 @@ PanelWindow {
     WlrLayershell.keyboardFocus: menuWindow.root.isMenuOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     exclusionMode: isOverlay ? ExclusionMode.Ignore : ExclusionMode.Auto
     color: "transparent"
+    mask: Region { item: menuCard }
 
     anchors {
         top: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "bottom") ? true : (menuWindow.root.isVertical ? true : false)

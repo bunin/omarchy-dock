@@ -756,6 +756,10 @@ Item {
                     }
                     return
                 }
+                if (root.itemData && root.itemData.isStack) {
+                    root.itemLeftClicked(root.itemData)
+                    return
+                }
                 if (root.itemData) {
                     root.itemLeftClicked(root.itemData)
                     if (root.previewTopIndex >= 0) {

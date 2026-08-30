@@ -30,6 +30,7 @@ PanelWindow {
         : (stackWindow.root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
     exclusionMode: isOverlay ? ExclusionMode.Ignore : ExclusionMode.Auto
     color: "transparent"
+    mask: Region { item: stackCard }
 
     anchors {
         top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? true : (stackWindow.root.isVertical ? true : false)
