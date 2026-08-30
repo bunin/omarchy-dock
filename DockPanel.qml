@@ -362,6 +362,8 @@ Item {
     readonly property int effectiveAutohideEdgeDepth: Math.max(4, Math.min(64, root.autohideEdgeDepth))
     property bool showFolderTitles: true
     property bool showBadges: true
+    property bool glassmorphism: false
+    property real blurOpacity: 0.68
     readonly property bool showAppMenu: root.widgetsEnabled && root.dockWidgets && (root.dockWidgets.indexOf("omarchy.apps") !== -1)
     property string appMenuPosition: "left"
     property bool widgetsEnabled: true
@@ -893,6 +895,13 @@ Item {
                 if (s.showBadges !== undefined) {
                     root.showBadges = (s.showBadges === true)
                 }
+                if (s.glassmorphism !== undefined) {
+                    root.glassmorphism = (s.glassmorphism === true)
+                }
+                if (s.blurOpacity !== undefined) {
+                    var bo = Number(s.blurOpacity)
+                    if (isFinite(bo) && bo >= 0.1 && bo <= 1.0) root.blurOpacity = bo
+                }
                 if (s.appMenuPosition !== undefined) {
                     root.appMenuPosition = s.appMenuPosition
                 }
@@ -931,6 +940,8 @@ Item {
             autohideEdgeDepth: root.autohideEdgeDepth,
             showFolderTitles: root.showFolderTitles,
             showBadges: root.showBadges,
+            glassmorphism: root.glassmorphism,
+            blurOpacity: root.blurOpacity,
             widgetsEnabled: root.widgetsEnabled,
             appMenuPosition: root.appMenuPosition || "left",
             widgetPosition: root.widgetPosition || "right",
@@ -1589,6 +1600,72 @@ Item {
         }
     }
 
+    property var minimizedMap: ({})
+
+    function minimizeItem(itemData) {
+        if (!itemData) return
+        var clean = DockModel.stripDesktop(itemData.appId || "").toLowerCase()
+        if (clean) {
+            var next = Object.assign({}, root.minimizedMap)
+            next[clean] = true
+            root.minimizedMap = next
+        }
+        var args = ["minimize"]
+        if (itemData.appId) args.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
+        if (itemData.exec) args.push(itemData.exec)
+        if (itemData.toplevels && itemData.toplevels.length > 0) {
+            for (var t = 0; t < itemData.toplevels.length; t++) {
+                var top = itemData.toplevels[t]
+                if (top) {
+                    if (top.address) args.push(String(top.address))
+                    if (top.appId) args.push(String(top.appId))
+                }
+            }
+        }
+        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
+        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+        for (var i = 0; i < args.length; i++) {
+            var a = String(args[i])
+            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+        }
+        Util.execDetached(cmd)
+        root.updateDockItems()
+    }
+
+    function restoreOrLaunchItem(itemData) {
+        if (!itemData) return
+        var clean = DockModel.stripDesktop(itemData.appId || "").toLowerCase()
+        if (clean && root.minimizedMap[clean]) {
+            var next = Object.assign({}, root.minimizedMap)
+            delete next[clean]
+            root.minimizedMap = next
+        }
+        var args = ["restore-or-launch"]
+        if (itemData.appId) args.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
+        if (itemData.exec) args.push(itemData.exec)
+        if (itemData.toplevels && itemData.toplevels.length > 0) {
+            for (var t = 0; t < itemData.toplevels.length; t++) {
+                var top = itemData.toplevels[t]
+                if (top) {
+                    if (top.address) args.push(String(top.address))
+                    if (top.appId) args.push(String(top.appId))
+                }
+            }
+        }
+        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
+        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+        for (var i = 0; i < args.length; i++) {
+            var a = String(args[i])
+            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+        }
+        var launchId = itemData.desktopId || itemData.appId || ""
+        root.requestFocusOnLaunch(launchId)
+        Util.execDetached(cmd)
+        root.updateDockItems()
+    }
+
     // Right-Click Menu State
     property var activeMenuItem: null
     property int activeMenuItemIndex: 0
@@ -1787,7 +1864,7 @@ Item {
         var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
             ? DesktopEntries.applications.values
             : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
-        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems)
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems, root.minimizedMap)
 
         // Refresh active stack item contents if open
         if (root.activeStackItem) {
@@ -2578,6 +2655,10 @@ Item {
                             root.requestFocusOnLaunch(appId)
                         }
 
+                        onRestoreOrLaunchRequested: function(item) {
+                            root.restoreOrLaunchItem(item)
+                        }
+
                         onDissolveRequested: function(stackId) {
                             root.setPinned(DockModel.dissolveStack(root.pinnedIds, stackId))
                             root.isEditMode = false
@@ -2601,8 +2682,12 @@ Item {
                                 root.isEditMode = false
                                 return
                             }
-                            if (item && (item.isStack || (item.isRunning && item.toplevels && item.toplevels.length >= 2))) {
+                            if (item && item.isStack) {
                                 root.toggleMenu(item, index, false)
+                                return
+                            }
+                            if (item) {
+                                root.minimizeItem(item)
                             }
                         }
 

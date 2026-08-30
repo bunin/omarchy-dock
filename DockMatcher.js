@@ -477,11 +477,11 @@ function isTerminalApp(id, entry) {
         if (s === KNOWN_TERMINALS[i]) return true;
     }
     if (entry) {
-        if (Array.isArray(entry.categories) && (entry.categories.indexOf("TerminalEmulator") !== -1 || entry.categories.indexOf("ConsoleOnly") !== -1)) {
+        if (Array.isArray(entry.categories) && entry.categories.indexOf("TerminalEmulator") !== -1) {
             return true;
         }
         var gen = String(entry.genericName || "").toLowerCase();
-        if (gen.indexOf("terminal") !== -1 || gen.indexOf("console") !== -1) {
+        if (gen.indexOf("terminal emulator") !== -1 || gen === "terminal") {
             return true;
         }
     }
@@ -576,10 +576,10 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
 
     // Terminal CLI / TUI application matching:
     // If a window is running in a terminal emulator (e.g. foot, ghostty, kitty):
-    if (isTerminalApp(appClass)) {
+    if (isTerminalApp(appClass, null)) {
         var cliApp = extractCliApp(title);
         // Case A: Dock item is a specific CLI app (e.g. yazi, nvim, btop):
-        if (cliApp && !isTerminalApp(cleanId)) {
+        if (cliApp && !isTerminalApp(cleanId, entry)) {
             var normCliApp = normalizeKey(cliApp);
             var normTargetId = normalizeKey(cleanId);
             if (cleanId === cliApp || normTargetId === normCliApp) return true;
@@ -590,16 +590,13 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
                 if (eName === cliApp || normalizeKey(eName) === normCliApp) return true;
             }
         }
-        // Case B: Dock item is a generic terminal emulator, but window is running a dedicated CLI app (e.g. yazi):
-        // Only yield if that CLI app actually has an installed desktop entry on the system!
-        if (cliApp && isTerminalApp(cleanId)) {
-            if (desktopEntries && hasRealDesktopEntry(desktopEntries, cliApp)) {
-                return false;
-            }
+        // Case B: Dock item is a generic terminal emulator, but window is running a dedicated CLI app (e.g. yazi, nvim, btop):
+        if (cliApp && isTerminalApp(cleanId, entry)) {
+            return false;
         }
         // Case C: Startup handshake state (title is still empty or equal to terminal binary name e.g. "foot", "ghostty"):
         // Prevent generic terminal from prematurely claiming the window before the CLI app sets its title!
-        if (isTerminalApp(cleanId) && (!title || title === appClass || title === "terminal" || title === "foot" || title === "ghostty" || title === "kitty" || title === "alacritty")) {
+        if (isTerminalApp(cleanId, entry) && (!title || title === appClass || title === "terminal" || title === "foot" || title === "ghostty" || title === "kitty" || title === "alacritty")) {
             return false;
         }
     }
@@ -779,13 +776,19 @@ function getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId) 
     return { count: count, hasUrgent: isUrgent };
 }
 
-function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems) {
+function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems, minimizedMap) {
     var pinned = Array.isArray(pinnedList) ? pinnedList : [];
     var toplevels = toArray(toplevelsList);
     var entries = toArray(desktopEntries);
 
     var items = [];
     var assignedTops = {};
+
+    function isAppMinimized(appId) {
+        if (!minimizedMap || !appId) return false;
+        var clean = stripDesktop(appId).toLowerCase();
+        return !!minimizedMap[clean];
+    }
 
     function getTopKey(top, idx) {
         if (!top) return "top_" + idx;
@@ -837,8 +840,9 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     }
                 }
 
-                if (sTops.length > 0) isAnySubRunning = true;
-                if (sActive) isAnySubActive = true;
+                var isSubMin = isAppMinimized(sAppId);
+                if (sTops.length > 0 || isSubMin) isAnySubRunning = true;
+                if (sActive && !isSubMin) isAnySubActive = true;
 
                 var sInfo = getBadgeInfo(badgeCounts, urgentCounts, sAppId, sEntry, sName, sDesktopId);
 
@@ -851,8 +855,9 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     rawIcon: sRawIcon,
                     iconSource: sIconSource,
                     isPinned: true,
-                    isRunning: sTops.length > 0,
-                    isActive: sActive,
+                    isRunning: (sTops.length > 0 || isSubMin),
+                    isActive: (sActive && !isSubMin),
+                    isMinimized: isSubMin,
                     activeTopIndex: sActiveIdx,
                     windowCount: sTops.length,
                     badgeCount: sInfo.count,
@@ -917,6 +922,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 }
             }
 
+            var isMin = isAppMinimized(appId);
             var itemInfo = getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId);
 
             items.push({
@@ -931,8 +937,9 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isStack: false,
                 isPinned: true,
                 isDuplicate: false,
-                isRunning: matching.length > 0,
-                isActive: isAnyActive,
+                isRunning: (matching.length > 0 || isMin),
+                isActive: (isAnyActive && !isMin),
+                isMinimized: isMin,
                 activeTopIndex: activeIdx,
                 windowCount: matching.length,
                 badgeCount: itemInfo.count,

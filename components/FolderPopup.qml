@@ -543,7 +543,7 @@ PanelWindow {
                                             model: subDuplicateCapsule.winCount
                                             Rectangle {
                                                 readonly property int targetWinIdx: subDuplicateCapsule.getSubSlotWindowIndex(index)
-                                                readonly property bool isAppActive: (modelData && modelData.isActive === true)
+                                                readonly property bool isAppActive: (modelData && modelData.isActive === true && !modelData.isMinimized)
                                                 readonly property bool isPreviewing: (subItemRoot.subPreviewTopIndex >= 0)
                                                 readonly property bool isSlotHighlighted: (isAppActive || isPreviewing) && (targetWinIdx === subItemRoot.subEffectiveTopIndex)
                                                 readonly property bool isOriginalApp: (targetWinIdx === 0)
@@ -573,10 +573,10 @@ PanelWindow {
                                     anchors.topMargin: 2
                                     anchors.horizontalCenter: parent.horizontalCenter
 
-                                    width: modelData.isActive ? 10 : 4
+                                    width: (modelData && modelData.isActive && !modelData.isMinimized) ? 10 : 4
                                     height: 2
                                     radius: 1
-                                    color: modelData.isActive ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
+                                    color: (modelData && modelData.isActive && !modelData.isMinimized) ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
                                     antialiasing: true
                                     smooth: true
 
@@ -724,6 +724,15 @@ PanelWindow {
                                         if (stackWindow.root.activeStackItem) {
                                             subLongPressTimer.restart()
                                         }
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        subClickEffectAnim.restart()
+                                        if (stackWindow.root.isEditMode) {
+                                            stackWindow.root.isEditMode = false
+                                            return
+                                        }
+                                        if (modelData) {
+                                            stackWindow.root.minimizeItem(modelData)
+                                        }
                                     }
                                 }
 
@@ -807,29 +816,12 @@ PanelWindow {
                                         if (stackWindow.root.isEditMode) {
                                             return
                                         }
-                                        // 1. If not running, launch it (Folder stays open!)
-                                        if (!modelData.isRunning || !modelData.toplevels || modelData.toplevels.length === 0) {
-                                            var launchId = modelData.desktopId || modelData.appId || ""
-                                            stackWindow.root.requestFocusOnLaunch(launchId)
-                                            DockModel.launchApp(stackWindow.root.shell, modelData, Util)
-                                            return
+                                        if (modelData) {
+                                            stackWindow.root.restoreOrLaunchItem(modelData)
+                                            subItemRoot.subPreviewTopIndex = -1
                                         }
-
-                                        // 2. If running: activate chosen window (LMB focuses/switches)
-                                        var tops = modelData.toplevels
-                                        var targetIdx = subItemRoot.subEffectiveTopIndex
-                                        if (targetIdx < 0 || targetIdx >= tops.length) targetIdx = 0
-
-                                        var chosenWin = tops[targetIdx]
-                                        if (chosenWin && typeof chosenWin.activate === "function") {
-                                            chosenWin.activate()
-                                        }
-                                        subItemRoot.subPreviewTopIndex = -1
                                     } else if (mouse.button === Qt.RightButton) {
-                                        if (stackWindow.root.isEditMode) {
-                                            stackWindow.root.isEditMode = false
-                                            return
-                                        }
+                                        return
                                     }
                                 }
                             }

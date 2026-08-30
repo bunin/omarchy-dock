@@ -14,7 +14,7 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 - 🔀 **Fluid 1D & 2D Drag & Drop** — Smooth rail displacement physics when dragging apps across the dock or within folder grids. Effortlessly extract apps from folders back to the main dock.
 - 🔄 **Multi-Instance Sliding Viewport (Infinite Wheel Scrolling)** — Hover over any running app with duplicate windows and scroll the mouse wheel to cycle through instances. The status capsule uses a smooth 3-slot sliding viewport: the original app is always a distinct wide dash (`━`), while duplicates are round dots (`•`). As you scroll deeper into duplicates, the original dash smoothly scrolls out of view and reappears when looping back.
 - 🎯 **Real-Time Hyprland IPC Focus Sync** — Moving the mouse cursor over any window tile on the desktop (`follow_mouse = 1`) or switching focus instantly syncs and highlights the corresponding slot on the dock in real time without lag.
-- ⚡ **Dedicated Controls (LMB & Middle-Click)** — Left-click opens closed apps or focuses/activates running windows. Middle-click (pressing the mouse wheel) instantly spawns a new duplicate instance anytime.
+- ⚡ **Dedicated Controls (LMB, RMB & Middle-Click)** — Left-click opens closed apps or focuses/restores running windows. Right-click minimizes active/visible windows to a special minimized state. Middle-click (pressing the mouse wheel) instantly spawns a new duplicate instance anytime.
 - 👁️ **Smart Cursor Hiding** — The mouse cursor is automatically hidden (`Qt.BlankCursor`) during mouse wheel scrolling and folder title hover to ensure an unobstructed view of the status capsule and animations.
 - 🌐 **Full Web Apps (PWA) Support** — Automatic domain matching for Chrome/Chromium web apps (Google Maps, Google Contacts, WhatsApp, YouTube, Discord, etc.) with native GTK theme icons.
 - ⚡ **Zero-Flicker Boot & Tile Lift** — Two-phase initialization instantly reserves Hyprland exclusive space to lift tiled windows smoothly, followed by a monolithic fade-in once all vector theme icons are loaded.
@@ -32,7 +32,8 @@ A modern, highly polished, and fully native application dock plugin for **Omarch
 
 | Action | Control | Description |
 | :--- | :--- | :--- |
-| **Open / Focus Window** | `Left-Click` / `Enter` | Opens the application if closed, or activates and focuses the chosen window tile/duplicate. |
+| **Open / Restore / Focus Window** | `Left-Click` / `Enter` | Opens the application if closed, restores if minimized, or focuses the chosen window tile/duplicate. |
+| **Minimize Window** | `Right-Click` *(on App)* | Minimizes visible application windows to special minimized workspace. |
 | **Launch Duplicate** | `Middle-Click` / `Tab` | Instantly spawns a new duplicate instance of the application with immediate focus. |
 | **Cycle Duplicates** | `Mouse Wheel` / `←` `→` Arrow Keys | Cycles through duplicate windows via 3-slot sliding viewport (original dash `━` and duplicate dots `•`). |
 | **Open Widget Panel** | `Left-Click` *(on Widget)* | Opens the hosted system widget panel (Audio, Wi-Fi, BT, Power, Monitor, etc.) centered on screen. |

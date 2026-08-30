@@ -37,6 +37,7 @@ Item {
     signal togglePinRequested(string appId)
     signal dissolveRequested(string stackId)
     signal originalAppLaunched(string appId)
+    signal restoreOrLaunchRequested(var itemData)
     signal dragStarted(int fromIndex)
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
@@ -475,7 +476,7 @@ Item {
                 model: duplicateCapsule.winCount
                 Rectangle {
                     readonly property int targetWinIdx: duplicateCapsule.getSlotWindowIndex(index)
-                    readonly property bool isAppActive: (root.itemData && root.itemData.isActive === true)
+                    readonly property bool isAppActive: (root.itemData && root.itemData.isActive === true && !root.itemData.isMinimized)
                     readonly property bool isPreviewing: (root.previewTopIndex >= 0)
                     readonly property bool isSlotHighlighted: (isAppActive || isPreviewing) && (targetWinIdx === root.effectiveTopIndex)
                     readonly property bool isOriginalApp: (targetWinIdx === 0)
@@ -506,9 +507,9 @@ Item {
         z: root.isDragging ? 101 : 1
 
         height: 2
-        width: root.itemData.isActive ? 10 : 4
+        width: (root.itemData && root.itemData.isActive && !root.itemData.isMinimized) ? 10 : 4
         radius: 1
-        color: root.itemData.isActive ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
+        color: (root.itemData && root.itemData.isActive && !root.itemData.isMinimized) ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.6)
         antialiasing: true
         smooth: true
 
@@ -592,6 +593,15 @@ Item {
                 didDrag = false
                 didLongPress = false
                 longPressTimer.restart()
+            } else if (mouse.button === Qt.RightButton) {
+                clickEffectAnim.restart()
+                if (root.isEditMode) {
+                    root.editModeExitRequested()
+                    return
+                }
+                if (root.itemData) {
+                    root.itemRightClicked(root.itemData, root)
+                }
             }
         }
 
@@ -741,35 +751,12 @@ Item {
                     return
                 }
                 if (root.itemData) {
-                    // 1. If not running, launch it
-                    if (!root.itemData.isRunning || !root.itemData.toplevels || root.itemData.toplevels.length === 0) {
-                        var launchId = root.itemData.desktopId || root.itemData.appId || ""
-                        root.originalAppLaunched(launchId)
-                        DockModel.launchApp(root.shell, root.itemData, Util)
-                        return
-                    }
-
-                    // 2. If running: activate chosen window (LMB focuses/switches, Middle Click creates duplicates)
-                    var tops = root.itemData.toplevels
-                    var targetWindowIdx = root.effectiveTopIndex
-                    if (targetWindowIdx < 0 || targetWindowIdx >= tops.length) targetWindowIdx = 0
-
-                    var chosenWindow = tops[targetWindowIdx]
-                    if (chosenWindow && typeof chosenWindow.activate === "function") {
-                        chosenWindow.activate()
-                    }
+                    root.itemLeftClicked(root.itemData)
+                    root.restoreOrLaunchRequested(root.itemData)
                     root.previewTopIndex = -1
                 }
             } else if (mouse.button === Qt.RightButton) {
-                clickEffectAnim.restart()
-                if (root.isEditMode) {
-                    root.editModeExitRequested()
-                    return
-                }
-                // Right click only opens menu for Folders (Stacks) to customize folder icon
-                if (root.itemData && root.itemData.isStack) {
-                    root.itemRightClicked(root.itemData, root)
-                }
+                return
             }
         }
     }
