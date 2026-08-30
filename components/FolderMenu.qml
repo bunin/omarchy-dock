@@ -18,16 +18,17 @@ PanelWindow {
     property alias menuCard: menuCard
     screen: menuWindow.dockWindow ? menuWindow.dockWindow.screen : null
 
+    readonly property bool isOverlay: menuWindow.root.overlayMode === true
     readonly property bool isDirectDockPopup: !menuWindow.root.isMenuFromFolder
     readonly property int dockThickness: menuWindow.root.slotSize + 8
     readonly property int dockGap: (Style.gapsOut || 5)
-    readonly property int dockOffset: dockGap + dockThickness + dockGap
+    readonly property int dockOffset: isOverlay ? (dockGap + dockThickness + dockGap) : dockGap
     readonly property int stackOffset: (stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.height + 6 : 186
 
     WlrLayershell.namespace: "omarchy-dock-menu"
-    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.layer: isOverlay ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: menuWindow.root.isMenuOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Ignore
+    exclusionMode: isOverlay ? ExclusionMode.Ignore : ExclusionMode.Auto
     color: "transparent"
 
     anchors {
@@ -39,16 +40,16 @@ PanelWindow {
 
     margins {
         bottom: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "top")
-            ? (isDirectDockPopup ? dockOffset : (dockOffset + stackOffset))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? stackOffset : ((Style.gapsOut || 5) + 54 + 6 + stackOffset))))
             : 0
         top: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "bottom")
-            ? (isDirectDockPopup ? dockOffset : (dockOffset + stackOffset))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? stackOffset : ((Style.gapsOut || 5) + 54 + 6 + stackOffset))))
             : 0
         right: (menuWindow.root.isVertical && menuWindow.root.barPosition === "left")
-            ? (isDirectDockPopup ? dockOffset : (dockOffset + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186)))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186) : ((Style.gapsOut || 5) + 54 + 6 + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width : 180) + 6))))
             : 0
         left: (menuWindow.root.isVertical && menuWindow.root.barPosition === "right")
-            ? (isDirectDockPopup ? dockOffset : (dockOffset + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186)))
+            ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186) : ((Style.gapsOut || 5) + 54 + 6 + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width : 180) + 6))))
             : 0
     }
 

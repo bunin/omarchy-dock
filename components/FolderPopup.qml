@@ -18,16 +18,17 @@ PanelWindow {
 
     visible: stackWindow.root.isStackOpen && stackWindow.root.dockRevealed
 
+    readonly property bool isOverlay: stackWindow.root.overlayMode === true
     readonly property int dockThickness: stackWindow.root.slotSize + 8
     readonly property int dockGap: (Style.gapsOut || 5)
-    readonly property int dockOffset: dockGap + dockThickness + dockGap
+    readonly property int dockOffset: isOverlay ? (dockGap + dockThickness + dockGap) : dockGap
 
     WlrLayershell.namespace: "omarchy-dock-stack"
-    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.layer: isOverlay ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: stackWindow.root.isEditingFolderTitle
         ? WlrKeyboardFocus.Exclusive
         : (stackWindow.root.isStackOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
-    exclusionMode: ExclusionMode.Ignore
+    exclusionMode: isOverlay ? ExclusionMode.Ignore : ExclusionMode.Auto
     color: "transparent"
 
     anchors {
