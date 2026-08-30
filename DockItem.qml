@@ -160,6 +160,17 @@ Item {
     readonly property real clampedDragOffsetX: root.isVertical ? 0 : Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, dragOffset.x))
     readonly property real clampedDragOffsetY: root.isVertical ? Math.max(-root.itemIndex * root.slotSize, Math.min((root.totalCount - 1 - root.itemIndex) * root.slotSize, dragOffset.y)) : 0
 
+    readonly property bool isPressVisualActive: {
+        if (!mouseArea.pressed) return false
+        if (mouseArea.pressedButtons & (Qt.LeftButton | Qt.MiddleButton)) return true
+        if (root.isEditMode) return true
+        if (root.itemData) {
+            if (root.itemData.isStack) return true
+            if (root.itemData.isRunning && !root.itemData.isMinimized) return true
+        }
+        return false
+    }
+
     // Main animated icon wrapper (smooth, buttery rail motion)
     Item {
         id: iconWrapper
@@ -169,7 +180,7 @@ Item {
         height: root.iconBaseSize
         z: 1
 
-        scale: (root.isDragging ? 1.15 : (root.isEditMode ? 0.82 : (root.isMergeTarget ? 0.94 : (mouseArea.pressed ? 0.92 : (mouseArea.containsMouse ? 1.10 : 1.0))))) * root.clickScaleFactor
+        scale: (root.isDragging ? 1.15 : (root.isEditMode ? 0.82 : (root.isMergeTarget ? 0.94 : (root.isPressVisualActive ? 0.92 : (mouseArea.containsMouse ? 1.10 : 1.0))))) * root.clickScaleFactor
         opacity: root.iconsReady ? (root.isDragging ? 0.92 : 1.0) : 0.0
 
         Behavior on scale {
@@ -594,13 +605,19 @@ Item {
                 didLongPress = false
                 longPressTimer.restart()
             } else if (mouse.button === Qt.RightButton) {
-                clickEffectAnim.restart()
                 if (root.isEditMode) {
+                    clickEffectAnim.restart()
                     root.editModeExitRequested()
                     return
                 }
                 if (root.itemData) {
-                    root.itemRightClicked(root.itemData, root)
+                    if (root.itemData.isStack) {
+                        clickEffectAnim.restart()
+                        root.itemRightClicked(root.itemData, root)
+                    } else if (root.itemData.isRunning && !root.itemData.isMinimized) {
+                        clickEffectAnim.restart()
+                        root.itemRightClicked(root.itemData, root)
+                    }
                 }
             }
         }

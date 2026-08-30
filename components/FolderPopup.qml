@@ -415,6 +415,14 @@ PanelWindow {
                                 NumberAnimation { target: subItemRoot; property: "subClickScaleFactor"; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
                             }
 
+                            readonly property bool isSubPressVisualActive: {
+                                if (!subMouse.pressed) return false
+                                if (subMouse.pressedButtons & (Qt.LeftButton | Qt.MiddleButton)) return true
+                                if (stackWindow.root.isEditMode) return true
+                                if (modelData && modelData.isRunning && !modelData.isMinimized) return true
+                                return false
+                            }
+
                             // Independent Drag Offset for folder items
                             Item {
                                 id: subDragOffset
@@ -428,7 +436,7 @@ PanelWindow {
                                 y: (parent.height - height) / 2 + Math.max(- Math.floor(index / stackCard.gridCols) * 50, Math.min((stackCard.gridRows - 1 - Math.floor(index / stackCard.gridCols)) * 50, subDragOffset.y))
                                 width: 34
                                 height: 34
-                                scale: ((stackWindow.root.folderDragActiveIndex === index) ? 1.15 : (stackWindow.root.isEditMode ? 0.82 : (subMouse.pressed ? 0.92 : (subMouse.containsMouse ? 1.10 : 1.0)))) * subItemRoot.subClickScaleFactor
+                                scale: ((stackWindow.root.folderDragActiveIndex === index) ? 1.15 : (stackWindow.root.isEditMode ? 0.82 : (subItemRoot.isSubPressVisualActive ? 0.92 : (subMouse.containsMouse ? 1.10 : 1.0)))) * subItemRoot.subClickScaleFactor
                                 opacity: (stackWindow.root.folderDragActiveIndex === index) ? 0.92 : 1.0
                                 Behavior on scale {
                                     enabled: !subClickEffectAnim.running && (subMouse.containsMouse || subMouse.pressed || stackWindow.root.isEditMode || stackWindow.root.folderDragActiveIndex >= 0)
@@ -725,13 +733,16 @@ PanelWindow {
                                             subLongPressTimer.restart()
                                         }
                                     } else if (mouse.button === Qt.RightButton) {
-                                        subClickEffectAnim.restart()
                                         if (stackWindow.root.isEditMode) {
+                                            subClickEffectAnim.restart()
                                             stackWindow.root.isEditMode = false
                                             return
                                         }
                                         if (modelData) {
-                                            stackWindow.root.minimizeItem(modelData)
+                                            if (modelData.isRunning && !modelData.isMinimized) {
+                                                subClickEffectAnim.restart()
+                                                stackWindow.root.minimizeItem(modelData)
+                                            }
                                         }
                                     }
                                 }
