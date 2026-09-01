@@ -676,13 +676,15 @@ function extractCliApp(title, desktopEntries) {
         return "nvim";
     }
 
-    // Special patterns for cliamp Winamp scrolling marquee ("really whips", "whips the terminal's ass", "cliamp")
-    if (raw.indexOf("whips") !== -1 || raw.indexOf("terminal's ass") !== -1 || raw.indexOf("cliamp") !== -1) {
+    // Special patterns for cliamp Winamp scrolling marquee ("really whips", "whips the terminal's ass", "cliamp", "it really", "really whip")
+    if (raw.indexOf("whips") !== -1 || raw.indexOf("terminal's ass") !== -1 || raw.indexOf("cliamp") !== -1 || raw.indexOf("really whip") !== -1 || raw.indexOf("it really") !== -1) {
         return "cliamp";
     }
 
     return "";
 }
+
+var persistentCliAppMap = {};
 
 function hasRealDesktopEntry(entries, appId) {
     if (!entries || !appId) return false;
@@ -966,6 +968,14 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         return app + "___" + title + "___" + idx;
     }
 
+    function getStableTopKey(top, idx) {
+        if (!top) return "top_" + idx;
+        if (top.address) return String(top.address);
+        if (top.handle) return String(top.handle);
+        if (top.id) return String(top.id);
+        return String(top.appId || "") + "___" + idx;
+    }
+
     function entryFor(id) {
         return findEntry(entries, id);
     }
@@ -976,7 +986,16 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var topObj = toplevels[tc];
         if (topObj && isTerminalApp(topObj.appId || "")) {
             var tk = getTopKey(topObj, tc);
-            toplevelCliApps[tk] = extractCliApp(topObj.title || "", entries);
+            var stableKey = getStableTopKey(topObj, tc);
+            var detected = extractCliApp(topObj.title || "", entries);
+            if (detected) {
+                persistentCliAppMap[stableKey] = detected;
+                toplevelCliApps[tk] = detected;
+            } else if (persistentCliAppMap[stableKey]) {
+                toplevelCliApps[tk] = persistentCliAppMap[stableKey];
+            } else {
+                toplevelCliApps[tk] = "";
+            }
         }
     }
 

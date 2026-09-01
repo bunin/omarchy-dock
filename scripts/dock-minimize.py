@@ -20,12 +20,23 @@ def normalize(s):
     return "".join(c for c in val if c.isalnum())
 
 KNOWN_CLI_COMMANDS = [
-    "yazi", "nvim", "neovim", "vim", "nano", "micro", "helix", "hx", "emacs",
-    "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "nvtop",
-    "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc",
-    "lazygit", "lazydocker", "tig", "gitui", "k9s",
-    "ncmpcpp", "cmus", "mocp", "cava",
-    "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock"
+    "yazi", "nvim", "neovim", "vim", "nano", "micro", "helix", "hx", "emacs", "kakoune", "kak", "amp",
+    "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "bpytop", "nvtop", "gotop",
+    "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc", "midnight-commander", "clifm",
+    "lazygit", "lazydocker", "tig", "gitui", "k9s", "ox", "bandwhich", "gping",
+    "ncmpcpp", "cmus", "mocp", "cava", "cliamp", "rmpc", "spotify-tui", "spt", "mopidy", "musikcube",
+    "weechat", "irssi", "profanity", "neomutt", "mutt", "aerc", "gomuks", "senpai",
+    "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock", "peaclock", "termshark", "glow", "curseofwar"
+]
+
+IGNORED_COMMAND_PREFIXES = [
+    "sudo", "doas", "pkexec", "pacman", "yay", "paru", "apt", "dnf", "zypper",
+    "cargo", "npm", "pnpm", "yarn", "bun", "git", "make", "ninja", "cmake",
+    "pip", "python", "python3", "node", "go", "rustc", "gcc", "clang",
+    "find", "grep", "cat", "less", "more", "tail", "journalctl", "systemctl",
+    "sh", "bash", "zsh", "fish", "exec", "run", "echo", "rm", "cp", "mv",
+    "which", "whereis", "man", "info", "curl", "wget", "tar", "unzip", "zip",
+    "home", "user", "usr", "etc", "bin", "tmp", "var", "opt", "desktop", "documents", "downloads", "music", "pictures", "videos"
 ]
 
 KNOWN_TERMINALS = [
@@ -34,22 +45,85 @@ KNOWN_TERMINALS = [
     "xterm", "urxvt", "rxvt", "termite", "tilix", "st", "rio"
 ]
 
-def extract_cli_app(title):
+def get_terminal_child_app(pid):
+    if not pid or not isinstance(pid, int) or pid <= 0:
+        return ""
+    try:
+        # Check command line of terminal (e.g. "foot -e cliamp", "ghostty -e yazi")
+        cmd_path = f"/proc/{pid}/cmdline"
+        if os.path.exists(cmd_path):
+            with open(cmd_path, "rb") as f:
+                cmd_raw = f.read().decode("utf-8", errors="ignore").replace("\x00", " ").strip()
+            cmd_tokens = [t for t in re.split(r'[\s:,\-_/\\()\[\]{}|]+', cmd_raw.lower()) if t]
+            for t in cmd_tokens:
+                if (t in KNOWN_CLI_COMMANDS or t == "cliamp") and not is_terminal_identifier(t):
+                    if t in ("neovim", "vim"): return "nvim"
+                    if t == "hx": return "helix"
+                    if t == "btm": return "bottom"
+                    return t
+
+        # Check child processes
+        children_path = f"/proc/{pid}/task/{pid}/children"
+        if os.path.exists(children_path):
+            with open(children_path, "r") as f:
+                child_pids = f.read().split()
+            for cpid in child_pids:
+                comm_path = f"/proc/{cpid}/comm"
+                if os.path.exists(comm_path):
+                    with open(comm_path, "r") as f:
+                        comm = f.read().strip().lower()
+                    if comm in KNOWN_CLI_COMMANDS or comm == "cliamp":
+                        if comm in ("neovim", "vim"): return "nvim"
+                        if comm == "hx": return "helix"
+                        if comm == "btm": return "bottom"
+                        return comm
+                c_cmd_path = f"/proc/{cpid}/cmdline"
+                if os.path.exists(c_cmd_path):
+                    with open(c_cmd_path, "rb") as f:
+                        c_cmd_raw = f.read().decode("utf-8", errors="ignore").replace("\x00", " ").strip()
+                    c_tokens = [t for t in re.split(r'[\s:,\-_/\\()\[\]{}|]+', c_cmd_raw.lower()) if t]
+                    for ct in c_tokens:
+                        if (ct in KNOWN_CLI_COMMANDS or ct == "cliamp") and not is_terminal_identifier(ct):
+                            if ct in ("neovim", "vim"): return "nvim"
+                            if ct == "hx": return "helix"
+                            if ct == "btm": return "bottom"
+                            return ct
+    except Exception:
+        pass
+    return ""
+
+def extract_cli_app(title, pid=None):
+    if pid:
+        proc_app = get_terminal_child_app(pid)
+        if proc_app:
+            return proc_app
+
     if not title:
         return ""
     raw = str(title).lower().strip()
     tokens = [t for t in re.split(r'[\s:,\-_/\\()\[\]{}|]+', raw) if t]
     if not tokens:
         return ""
-    first = tokens[0]
-    if first in KNOWN_CLI_COMMANDS:
-        if first in ("neovim", "vim"):
-            return "nvim"
-        if first == "hx":
-            return "helix"
-        if first == "btm":
-            return "bottom"
-        return first
+    
+    # 1. Check all tokens against known commands
+    for tok in tokens:
+        if tok in IGNORED_COMMAND_PREFIXES:
+            continue
+        if tok in KNOWN_CLI_COMMANDS or tok == "cliamp":
+            if tok in ("neovim", "vim"):
+                return "nvim"
+            if tok == "hx":
+                return "helix"
+            if tok == "btm":
+                return "bottom"
+            return tok
+
+    # 2. Check special phrases
+    if "nvim" in raw and "nvim" in tokens:
+        return "nvim"
+    if "whips" in raw or "terminal's ass" in raw or "cliamp" in raw:
+        return "cliamp"
+
     return ""
 
 def is_terminal_identifier(s):
@@ -203,13 +277,36 @@ def main():
     raw_queries = [q.lower() for q in queries]
     addr_queries = [q.lower() for q in queries if q.startswith("0x") or (len(q) > 4 and all(c in "0123456789abcdef" for c in q.lower().replace("0x", "")))]
 
-    is_terminal_query = any(is_terminal_identifier(q) for q in queries)
+    is_terminal_query = bool(queries and is_terminal_identifier(queries[0]))
     target_cli = ""
     for q in queries:
         norm_q = normalize(q)
+        clean_q = q.replace(".desktop", "").lower().strip()
+        if clean_q in KNOWN_CLI_COMMANDS or clean_q == "cliamp":
+            target_cli = clean_q
+            if target_cli in ("neovim", "vim"): target_cli = "nvim"
+            elif target_cli == "hx": target_cli = "helix"
+            elif target_cli == "btm": target_cli = "bottom"
+            break
         if norm_q in KNOWN_CLI_COMMANDS:
             target_cli = norm_q
+            if target_cli in ("neovim", "vim"): target_cli = "nvim"
+            elif target_cli == "hx": target_cli = "helix"
+            elif target_cli == "btm": target_cli = "bottom"
             break
+        exec_tokens = [t for t in re.split(r'[\s:,\-_/\\()\[\]{}|]+', q.lower()) if t]
+        for et in exec_tokens:
+            if (et in KNOWN_CLI_COMMANDS or et == "cliamp") and not is_terminal_identifier(et):
+                target_cli = et
+                if target_cli in ("neovim", "vim"): target_cli = "nvim"
+                elif target_cli == "hx": target_cli = "helix"
+                elif target_cli == "btm": target_cli = "bottom"
+                break
+        if target_cli:
+            break
+
+    if target_cli:
+        is_terminal_query = False
 
     matching = []
     for c in clients:
@@ -220,8 +317,9 @@ def main():
         
         c_norm_class = normalize(c_class)
         c_norm_init = normalize(c_init_class)
+        c_pid = c.get("pid")
         is_client_terminal = is_terminal_identifier(c_class) or is_terminal_identifier(c_init_class)
-        cli_app = extract_cli_app(c_title) if is_client_terminal else ""
+        cli_app = extract_cli_app(c_title, c_pid) if is_client_terminal else ""
 
         if addr_queries:
             if c_addr in addr_queries:
