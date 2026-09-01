@@ -684,8 +684,6 @@ function extractCliApp(title, desktopEntries) {
     return "";
 }
 
-var persistentCliAppMap = {};
-
 function hasRealDesktopEntry(entries, appId) {
     if (!entries || !appId) return false;
     var target = stripDesktop(appId).toLowerCase().trim();
@@ -944,14 +942,6 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         return app + "___" + title + "___" + idx;
     }
 
-    function getStableTopKey(top, idx) {
-        if (!top) return "top_" + idx;
-        if (top.address) return String(top.address);
-        if (top.handle) return String(top.handle);
-        if (top.id) return String(top.id);
-        return String(top.appId || "") + "___" + idx;
-    }
-
     function entryFor(id) {
         return findEntry(entries, id);
     }
@@ -962,16 +952,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var topObj = toplevels[tc];
         if (topObj && isTerminalApp(topObj.appId || "")) {
             var tk = getTopKey(topObj, tc);
-            var stableKey = getStableTopKey(topObj, tc);
-            var detected = extractCliApp(topObj.title || "", entries);
-            if (detected) {
-                persistentCliAppMap[stableKey] = detected;
-                toplevelCliApps[tk] = detected;
-            } else if (persistentCliAppMap[stableKey]) {
-                toplevelCliApps[tk] = persistentCliAppMap[stableKey];
-            } else {
-                toplevelCliApps[tk] = "";
-            }
+            toplevelCliApps[tk] = extractCliApp(topObj.title || "", entries);
         }
     }
 
