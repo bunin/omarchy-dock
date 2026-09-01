@@ -633,6 +633,11 @@ function extractCliApp(title) {
         return "nvim";
     }
 
+    // Special patterns for cliamp Winamp scrolling marquee ("really whips", "whips the terminal's ass", "cliamp")
+    if (raw.indexOf("whips") !== -1 || raw.indexOf("terminal's ass") !== -1 || raw.indexOf("cliamp") !== -1) {
+        return "cliamp";
+    }
+
     return "";
 }
 
