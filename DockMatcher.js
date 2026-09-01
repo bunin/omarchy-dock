@@ -95,7 +95,23 @@ var KNOWN_APP_DEFAULTS = {
     "chrome-web.whatsapp.com__-default": { id: "WhatsApp", icon: "whatsapp", rawIcon: "whatsapp", name: "WhatsApp" },
     "zoom": { id: "Zoom", icon: "zoom", rawIcon: "zoom", name: "Zoom" },
     "cursor": { id: "Cursor", icon: "cursor", rawIcon: "cursor", name: "Cursor" },
-    "chrome-appgkjomdnhhdolojlpkjafpklojikld-default": { id: "Cursor", icon: "cursor", rawIcon: "cursor", name: "Cursor" }
+    "chrome-appgkjomdnhhdolojlpkjafpklojikld-default": { id: "Cursor", icon: "cursor", rawIcon: "cursor", name: "Cursor" },
+    "xdg-desktop-portal-gtk": { id: "xdg-desktop-portal-gtk", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.gtk": { id: "org.freedesktop.impl.portal.desktop.gtk", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal-gnome": { id: "xdg-desktop-portal-gnome", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.gnome": { id: "org.freedesktop.impl.portal.desktop.gnome", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal-kde": { id: "xdg-desktop-portal-kde", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.kde": { id: "org.freedesktop.impl.portal.desktop.kde", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal-lxqt": { id: "xdg-desktop-portal-lxqt", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.lxqt": { id: "org.freedesktop.impl.portal.desktop.lxqt", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal-hyprland": { id: "xdg-desktop-portal-hyprland", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.hyprland": { id: "org.freedesktop.impl.portal.desktop.hyprland", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal-wlr": { id: "xdg-desktop-portal-wlr", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.impl.portal.desktop.wlr": { id: "org.freedesktop.impl.portal.desktop.wlr", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "xdg-desktop-portal": { id: "xdg-desktop-portal", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "org.freedesktop.portal": { id: "org.freedesktop.portal", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
+    "zenity": { id: "zenity", icon: "dialog-information", rawIcon: "dialog-information", name: "Dialog" },
+    "kdialog": { id: "kdialog", icon: "dialog-information", rawIcon: "dialog-information", name: "Dialog" }
 };
 
 var FALLBACK_ICON_CANDIDATES = {
@@ -188,7 +204,23 @@ var FALLBACK_ICON_CANDIDATES = {
     "yandex-music": ["yandex-music", "music-yandex"],
     "music.yandex.ru": ["yandex-music", "music-yandex"],
     "photoshop": ["Photoshop2017", "photoshop", "adobe-photoshop"],
-    "photoshop 2017": ["Photoshop2017", "photoshop", "adobe-photoshop"]
+    "photoshop 2017": ["Photoshop2017", "photoshop", "adobe-photoshop"],
+    "xdg-desktop-portal-gtk": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.gnome.Nautilus", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.gtk": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.gnome.Nautilus", "file-manager", "folder"],
+    "xdg-desktop-portal-gnome": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.gnome.Nautilus", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.gnome": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.gnome.Nautilus", "file-manager", "folder"],
+    "xdg-desktop-portal-kde": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.kde.dolphin", "dolphin", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.kde": ["document-open", "document-save-as", "document-save", "system-file-manager", "org.kde.dolphin", "dolphin", "file-manager", "folder"],
+    "xdg-desktop-portal-lxqt": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.lxqt": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "xdg-desktop-portal-hyprland": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.hyprland": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "xdg-desktop-portal-wlr": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "org.freedesktop.impl.portal.desktop.wlr": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "xdg-desktop-portal": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "org.freedesktop.portal": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
+    "zenity": ["dialog-information", "dialog-question", "dialog-warning", "utilities-terminal"],
+    "kdialog": ["dialog-information", "dialog-question", "dialog-warning", "utilities-terminal"]
 };
 
 function getCandidates(rawIcon, icon, appId) {
@@ -215,6 +247,17 @@ function getCandidates(rawIcon, icon, appId) {
     if (FALLBACK_ICON_CANDIDATES[lastPart]) {
         var fb2 = FALLBACK_ICON_CANDIDATES[lastPart];
         for (var j = 0; j < fb2.length; j++) add(fb2[j]);
+    }
+
+    if (clean.indexOf("portal") !== -1 || clean.indexOf("file-chooser") !== -1 || clean.indexOf("filechooser") !== -1 || clean.indexOf("file-picker") !== -1) {
+        add("document-open");
+        add("document-save-as");
+        add("document-save");
+        add("system-file-manager");
+        add("org.gnome.Nautilus");
+        add("org.kde.dolphin");
+        add("file-manager");
+        add("folder");
     }
 
     if (clean.indexOf("org.omarchy.") === 0 || clean.indexOf("omarchy-") === 0 || clean.indexOf("omarchy.") === 0) {
