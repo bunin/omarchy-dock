@@ -134,7 +134,9 @@ var KNOWN_APP_DEFAULTS = {
     "org.pwmt.zathura": { id: "zathura", icon: "document-viewer", rawIcon: "document-viewer", name: "Zathura" },
     "galculator": { id: "galculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" },
     "gnome-calculator": { id: "gnome-calculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" },
-    "org.gnome.Calculator": { id: "gnome-calculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" }
+    "org.gnome.Calculator": { id: "gnome-calculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" },
+    "cliamp": { id: "cliamp", icon: "cliamp", rawIcon: "cliamp", name: "cliamp" },
+    "org.omarchy.cliamp": { id: "cliamp", icon: "cliamp", rawIcon: "cliamp", name: "cliamp" }
 };
 
 var FALLBACK_ICON_CANDIDATES = {
@@ -266,7 +268,9 @@ var FALLBACK_ICON_CANDIDATES = {
     "org.pwmt.zathura": ["document-viewer", "application-pdf", "org.pwmt.zathura"],
     "galculator": ["accessories-calculator", "calc", "calculator"],
     "gnome-calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"],
-    "org.gnome.Calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"]
+    "org.gnome.Calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"],
+    "cliamp": ["cliamp", "audio-player", "multimedia-audio-player", "music"],
+    "org.omarchy.cliamp": ["cliamp", "audio-player", "multimedia-audio-player", "music"]
 };
 
 function getCandidates(rawIcon, icon, appId) {
@@ -591,7 +595,7 @@ var KNOWN_CLI_COMMANDS = [
     "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "nvtop",
     "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc",
     "lazygit", "lazydocker", "tig", "gitui", "k9s",
-    "ncmpcpp", "cmus", "mocp", "cava",
+    "ncmpcpp", "cmus", "mocp", "cava", "cliamp",
     "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock"
 ];
 
@@ -606,15 +610,22 @@ function extractCliApp(title) {
     if (tokens.length === 0) return "";
 
     var first = tokens[0];
-    if (IGNORED_COMMAND_PREFIXES.indexOf(first) !== -1) {
-        return "";
-    }
-
-    if (KNOWN_CLI_COMMANDS.indexOf(first) !== -1) {
+    if (IGNORED_COMMAND_PREFIXES.indexOf(first) === -1 && KNOWN_CLI_COMMANDS.indexOf(first) !== -1) {
         if (first === "neovim" || first === "vim") return "nvim";
         if (first === "hx") return "helix";
         if (first === "btm") return "bottom";
         return first;
+    }
+
+    // Check all tokens in title for known CLI app names
+    for (var t = 0; t < tokens.length; t++) {
+        var tok = tokens[t];
+        if (KNOWN_CLI_COMMANDS.indexOf(tok) !== -1) {
+            if (tok === "neovim" || tok === "vim") return "nvim";
+            if (tok === "hx") return "helix";
+            if (tok === "btm") return "bottom";
+            return tok;
+        }
     }
 
     // Special title patterns like 'filename - NVIM' or '[No Name] - NVIM'
