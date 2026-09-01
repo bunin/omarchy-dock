@@ -590,6 +590,9 @@ function isTerminalApp(id, entry) {
         if (Array.isArray(entry.categories) && entry.categories.indexOf("TerminalEmulator") !== -1) {
             return true;
         }
+        if (typeof entry.categories === "string" && entry.categories.indexOf("TerminalEmulator") !== -1) {
+            return true;
+        }
         var gen = String(entry.genericName || "").toLowerCase();
         if (gen.indexOf("terminal emulator") !== -1 || gen === "terminal") {
             return true;
@@ -604,7 +607,8 @@ var IGNORED_COMMAND_PREFIXES = [
     "pip", "python", "python3", "node", "go", "rustc", "gcc", "clang",
     "find", "grep", "cat", "less", "more", "tail", "journalctl", "systemctl",
     "sh", "bash", "zsh", "fish", "exec", "run", "echo", "rm", "cp", "mv",
-    "which", "whereis", "man", "info", "curl", "wget", "tar", "unzip", "zip"
+    "which", "whereis", "man", "info", "curl", "wget", "tar", "unzip", "zip",
+    "home", "user", "usr", "etc", "bin", "tmp", "var", "opt", "desktop", "documents", "downloads", "music", "pictures", "videos"
 ];
 
 var KNOWN_CLI_COMMANDS = [
@@ -650,7 +654,8 @@ function extractCliApp(title, desktopEntries) {
     // Dynamic scanning: check if any token in title matches an installed desktop entry
     if (desktopEntries) {
         var list = toArray(desktopEntries);
-        for (var i = 0; i < tokens.length; i++) {
+        var scanLimit = Math.min(tokens.length, 3);
+        for (var i = 0; i < scanLimit; i++) {
             var token = tokens[i];
             if (token.length < 3 || IGNORED_COMMAND_PREFIXES.indexOf(token) !== -1) continue;
             for (var d = 0; d < list.length; d++) {
@@ -697,7 +702,7 @@ function hasRealDesktopEntry(entries, appId) {
     return false;
 }
 
-function matchToplevel(toplevel, appId, entry, desktopEntries) {
+function matchToplevel(toplevel, appId, entry, desktopEntries, cachedCliApp) {
     if (!toplevel) return false;
     var appClass = String(toplevel.appId || "").toLowerCase().trim();
     var title = String(toplevel.title || "").toLowerCase().trim();
@@ -720,7 +725,7 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
     // Terminal CLI / TUI application matching:
     // If a window is running in a terminal emulator (e.g. foot, ghostty, kitty):
     if (isTerminalApp(appClass, null)) {
-        var cliApp = extractCliApp(title, desktopEntries);
+        var cliApp = (cachedCliApp !== undefined) ? cachedCliApp : extractCliApp(title, desktopEntries);
         // Case A: Dock item is a specific CLI app (e.g. yazi, nvim, btop):
         if (cliApp && !isTerminalApp(cleanId, entry)) {
             var normCliApp = normalizeKey(cliApp);
@@ -733,14 +738,37 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
                 if (eName === cliApp || normalizeKey(eName) === normCliApp) return true;
             }
         }
-        // Case B: Dock item is a generic terminal emulator, but window is running a dedicated CLI app (e.g. yazi, nvim, btop):
+        // Case B: Dock item is a generic terminal emulator, but window is running a dedicated CLI app:
         if (cliApp && isTerminalApp(cleanId, entry)) {
             return false;
         }
-        // Case C: Startup handshake state (title is still empty or equal to terminal binary name e.g. "foot", "ghostty"):
-        // Prevent generic terminal from prematurely claiming the window before the CLI app sets its title!
-        if (isTerminalApp(cleanId, entry) && (!title || title === appClass || title === "terminal" || title === "foot" || title === "ghostty" || title === "kitty" || title === "alacritty")) {
-            return false;
+        // Case C: Dock item IS a terminal emulator — only match pure shell sessions.
+        // A "pure shell" is when the title contains a shell name (bash, zsh, fish, sh),
+        // a user@host pattern, or a path like ~ or /.
+        // All other cases (CLI apps, handshake/empty titles) are blocked.
+        if (isTerminalApp(cleanId, entry)) {
+            if (!title || title === appClass || title === cleanId || title === "terminal") {
+                return false;
+            }
+            var shellPatterns = ["bash", "zsh", "fish", "sh", "nu", "nushell", "elvish", "pwsh", "dash", "csh", "tcsh", "ksh"];
+            var isShellSession = false;
+            if (title.indexOf("@") !== -1 || title.indexOf("~") !== -1 || title.indexOf(":/") !== -1 || title.charAt(0) === "/") {
+                isShellSession = true;
+            } else {
+                var titleTokens = title.split(/[\s\-_.:;\/\\]+/);
+                for (var sp = 0; sp < shellPatterns.length; sp++) {
+                    for (var tt = 0; tt < titleTokens.length; tt++) {
+                        if (titleTokens[tt] === shellPatterns[sp]) {
+                            isShellSession = true;
+                            break;
+                        }
+                    }
+                    if (isShellSession) break;
+                }
+            }
+            if (!isShellSession) {
+                return false;
+            }
         }
     }
 
@@ -773,7 +801,7 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
         if (entry.exec) {
             var execStr = String(entry.exec).trim().toLowerCase();
             var execBase = execStr.split(/\s+/)[0].split("/").pop();
-            if (execBase && !isWebAppWindow && (appClass === execBase || appClassClean === execBase)) return true;
+            if (execBase && execBase !== "env" && execBase !== "sh" && execBase !== "bash" && execBase !== "flatpak" && execBase !== "bwrap" && execBase !== "wine" && execBase !== "uwsm-app" && !isWebAppWindow && (appClass === execBase || appClassClean === execBase)) return true;
         }
     }
 
@@ -942,6 +970,16 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         return findEntry(entries, id);
     }
 
+    // Precalculate CLI app recognition once per toplevel to avoid O(P * T * E) repeated loops
+    var toplevelCliApps = {};
+    for (var tc = 0; tc < toplevels.length; tc++) {
+        var topObj = toplevels[tc];
+        if (topObj && isTerminalApp(topObj.appId || "")) {
+            var tk = getTopKey(topObj, tc);
+            toplevelCliApps[tk] = extractCliApp(topObj.title || "", entries);
+        }
+    }
+
     // 1. Process Pinned Items
     for (var i = 0; i < pinned.length; i++) {
         var p = pinned[i];
@@ -965,7 +1003,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 for (var st = 0; st < toplevels.length; st++) {
                     var sTop = toplevels[st];
                     var stKey = getTopKey(sTop, st);
-                    if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry, entries)) {
+                    if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry, entries, toplevelCliApps[stKey])) {
                         sTops.push(sTop);
                         assignedTops[stKey] = true;
                         try {
@@ -1046,7 +1084,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             for (var t = 0; t < toplevels.length; t++) {
                 var top = toplevels[t];
                 var tKey = getTopKey(top, t);
-                if (!assignedTops[tKey] && matchToplevel(top, appId, entry, entries)) {
+                if (!assignedTops[tKey] && matchToplevel(top, appId, entry, entries, toplevelCliApps[tKey])) {
                     matching.push(top);
                     assignedTops[tKey] = true;
                     try {
@@ -1104,13 +1142,14 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
         // If window is running inside a terminal emulator and executes a recognized CLI app with a valid installed desktop entry:
         if (isTerminalApp(rAppId)) {
-            var rCliApp = extractCliApp(rTitle, entries);
+            var rCliApp = (toplevelCliApps[topItemKey] !== undefined) ? toplevelCliApps[topItemKey] : extractCliApp(rTitle, entries);
             if (rCliApp && !isTerminalApp(rCliApp) && hasRealDesktopEntry(entries, rCliApp)) {
                 rAppId = rCliApp;
             } else if (!rTitle || rTitle === rAppId || rTitle === "foot" || rTitle === "ghostty" || rTitle === "kitty" || rTitle === "alacritty" || rTitle === "terminal") {
                 var isPinnedTerm = false;
-                for (var pt = 0; pt < pinnedIds.length; pt++) {
-                    if (isTerminalApp(stripDesktop(pinnedIds[pt]))) {
+                for (var pt = 0; pt < pinned.length; pt++) {
+                    var pinnedId = (typeof pinned[pt] === "string") ? pinned[pt] : (pinned[pt] && pinned[pt].id ? pinned[pt].id : "");
+                    if (isTerminalApp(stripDesktop(pinnedId))) {
                         isPinnedTerm = true;
                         break;
                     }

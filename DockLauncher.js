@@ -70,29 +70,18 @@ function launchApp(shell, itemData, util) {
 
     // 2. Fallback: Launch via gtk-launch or individually-escaped argv
     var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : "";
-    var quote = (util && typeof util.shellQuote === "function") ? util.shellQuote : escapeShellArg;
     var argv = parseDesktopExec(itemData.exec);
 
-    var fallbackCmd = "";
-    if (argv.length > 0) {
+    if (target && util && typeof util.execDetached === "function") {
+        util.execDetached("uwsm-app -- gtk-launch " + escapeShellArg(target));
+        return;
+    }
+
+    if (argv.length > 0 && util && typeof util.execDetached === "function") {
         var escapedArgs = [];
         for (var a = 0; a < argv.length; a++) {
-            escapedArgs.push(quote(argv[a]));
+            escapedArgs.push(escapeShellArg(argv[a]));
         }
-        fallbackCmd = "uwsm-app -- " + escapedArgs.join(" ");
-    }
-
-    var cmd = "";
-    if (target) {
-        cmd = "uwsm-app -- gtk-launch " + quote(target);
-        if (fallbackCmd) {
-            cmd += " || (" + fallbackCmd + ")";
-        }
-    } else if (fallbackCmd) {
-        cmd = fallbackCmd;
-    }
-
-    if (cmd && util && typeof util.execDetached === "function") {
-        util.execDetached(cmd);
+        util.execDetached("uwsm-app -- " + escapedArgs.join(" "));
     }
 }

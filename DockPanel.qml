@@ -253,14 +253,16 @@ Item {
     function toggleMenu(item, index, fromFolder) {
         if (!item || !item.isStack) {
             root.activeMenuItem = null
+            root.isMenuFromFolder = false
             return
         }
         var appId = item.appId || item.id || ""
         if (root.activeMenuItem && root.activeMenuItem.appId === appId) {
             root.activeMenuItem = null
+            root.isMenuFromFolder = false
         } else {
             root.activeStackItem = null
-            root.isMenuFromFolder = false
+            root.isMenuFromFolder = !!fromFolder
             root.activeMenuItemIndex = index
             root.activeMenuItem = item
         }
@@ -660,12 +662,7 @@ Item {
     )
 
     function closeDockPopups() {
-        root.activeStackItem = null
-        root.activeMenuItem = null
-        root.isEditingFolderTitle = false
-        root.isEditMode = false
-        if (widgetPicker) widgetPicker.opened = false
-        root.closeAllWidgetPanels()
+        root.closePopups()
     }
 
     property double lastToggleRevealTime: 0
@@ -1614,41 +1611,43 @@ Item {
 
     function minimizeItem(itemData, targetIndex) {
         if (!itemData) return
-        var args = ["toggle-instance"]
-        if (itemData.appId) args.push(itemData.appId)
-        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
-        if (itemData.exec) args.push(itemData.exec)
-        if (typeof targetIndex === "number" && targetIndex >= 0) {
-            args.push("--index=" + targetIndex)
-        }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
-        for (var i = 0; i < args.length; i++) {
-            var a = String(args[i])
-            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+        var cmdArgs = ["python3", scriptPath, "toggle-instance"]
+        if (itemData.appId) cmdArgs.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) cmdArgs.push(itemData.desktopId)
+        if (itemData.exec) cmdArgs.push(itemData.exec)
+        if (typeof targetIndex === "number" && targetIndex >= 0) {
+            cmdArgs.push("--index=" + targetIndex)
         }
-        Util.execDetached(cmd)
+        var escaped = []
+        for (var i = 0; i < cmdArgs.length; i++) {
+            escaped.push("\"$" + (i + 1) + "\"")
+        }
+        var shCmd = escaped.join(" ")
+        var fullArgs = ["sh", "-c", shCmd, "--"].concat(cmdArgs)
+        Util.execDetached(fullArgs.join(" "))
         root.updateDockItems()
     }
 
     function restoreOrLaunchItem(itemData, targetIndex) {
         if (!itemData) return
-        var args = ["activate-instance"]
-        if (itemData.appId) args.push(itemData.appId)
-        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
-        if (itemData.exec) args.push(itemData.exec)
-        if (typeof targetIndex === "number" && targetIndex >= 0) {
-            args.push("--index=" + targetIndex)
-        }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
-        for (var i = 0; i < args.length; i++) {
-            var a = String(args[i])
-            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+        var cmdArgs = ["python3", scriptPath, "activate-instance"]
+        if (itemData.appId) cmdArgs.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) cmdArgs.push(itemData.desktopId)
+        if (itemData.exec) cmdArgs.push(itemData.exec)
+        if (typeof targetIndex === "number" && targetIndex >= 0) {
+            cmdArgs.push("--index=" + targetIndex)
         }
+        var escaped = []
+        for (var i = 0; i < cmdArgs.length; i++) {
+            escaped.push("\"$" + (i + 1) + "\"")
+        }
+        var shCmd = escaped.join(" ")
+        var fullArgs = ["sh", "-c", shCmd, "--"].concat(cmdArgs)
         var launchId = itemData.desktopId || itemData.appId || ""
         root.requestFocusOnLaunch(launchId)
-        Util.execDetached(cmd)
+        Util.execDetached(fullArgs.join(" "))
         root.updateDockItems()
     }
 
@@ -1915,19 +1914,32 @@ Item {
 
     Connections {
         target: ToplevelManager.toplevels
-        function onValuesChanged() { root.updateDockItems() }
+        function onValuesChanged() {
+            if (Date.now() - root.lastTerminalOpenTime < 150) {
+                terminalSettleTimer.restart()
+            } else {
+                root.updateDockItems()
+            }
+        }
     }
 
     Connections {
         target: ToplevelManager
-        function onActiveToplevelChanged() { root.updateDockItems() }
+        function onActiveToplevelChanged() {
+            if (Date.now() - root.lastTerminalOpenTime < 150) {
+                terminalSettleTimer.restart()
+            } else {
+                root.updateDockItems()
+            }
+        }
     }
 
     property double lastWindowOpenTime: 0
+    property double lastTerminalOpenTime: 0
 
     Timer {
         id: terminalSettleTimer
-        interval: 35
+        interval: 60
         repeat: false
         onTriggered: root.updateDockItems()
     }
@@ -1959,6 +1971,9 @@ Item {
                 var openClass = openParts.length >= 3 ? openParts[2].trim().toLowerCase() : ""
                 var isTerm = (openClass === "foot" || openClass === "ghostty" || openClass === "kitty" || openClass === "alacritty" || openClass === "wezterm")
 
+                if (isTerm) {
+                    root.lastTerminalOpenTime = Date.now()
+                }
                 terminalSettleTimer.restart()
                 if (!isTerm) {
                     root.updateDockItems()
@@ -2256,12 +2271,14 @@ Item {
             var win = root.dockWindow
             if (win && win.surface) win.surface.forceActiveFocus()
         }
+        root.evaluateHoverState()
     }
 
     onIsStackOpenChanged: {
         if (isStackOpen) {
             if (stackWindow && stackWindow.stackCard) stackWindow.stackCard.forceActiveFocus()
         }
+        root.evaluateHoverState()
     }
 
     onIsMenuOpenChanged: {
@@ -2277,6 +2294,11 @@ Item {
                 }
             }
         }
+        root.evaluateHoverState()
+    }
+
+    onIsEditingFolderTitleChanged: {
+        root.evaluateHoverState()
     }
 
     readonly property var dockWindow: {
@@ -2354,6 +2376,10 @@ Item {
 
             Keys.onEscapePressed: function(event) {
                 event.accepted = true
+                if (root.isEditingFolderTitle) {
+                    root.isEditingFolderTitle = false
+                    return
+                }
                 if (root.isStackOpen) {
                     root.activeStackItem = null
                 }
@@ -2708,7 +2734,7 @@ Item {
                         }
 
                         onDragHoverChanged: function(fromIdx, targetIdx, isMergeIntent) {
-                            root.dockDragActiveIndex = (targetIdx >= 0) ? fromIdx : -1
+                            root.dockDragActiveIndex = fromIdx
                             root.dockDragTargetIndex = isMergeIntent ? -1 : targetIdx
                             root.currentMergeTargetIndex = isMergeIntent ? targetIdx : -1
                         }

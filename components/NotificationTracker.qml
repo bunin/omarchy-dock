@@ -48,9 +48,9 @@ Item {
                     counts: tracker.canonicalCounts,
                     urgent: tracker.canonicalUrgent
                 })
-                var escaped = jsonStr.replace(/'/g, "'\\''")
-                saveProc.command = ["bash", "-c",
-                    "mkdir -p \"$(dirname '" + tracker.statePath + "')\" && printf '%s' '" + escaped + "' > '" + tracker.statePath + "'"]
+                saveProc.command = ["sh", "-c",
+                    'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1"',
+                    "--", tracker.statePath, jsonStr]
                 saveProc.running = true
             } catch (e) {}
         }
@@ -122,12 +122,19 @@ Item {
         if (raw.indexOf("chrome") !== -1 || raw.indexOf("chromium") !== -1) return "chrome"
         if (raw.indexOf("firefox") !== -1 || raw.indexOf("zen-browser") !== -1) return "firefox"
 
-        // 2. Extract domain core from Web App URLs (e.g. https://web.whatsapp.com -> whatsapp)
+        // 2. Extract domain core from Web App URLs (e.g. https://web.whatsapp.com -> whatsapp, https://photos.google.com -> photos)
         var urlMatch = raw.match(/https?:\/\/(?:www\.|web\.|app\.|mail\.)?([a-zA-Z0-9-]+)\./i)
         if (urlMatch && urlMatch[1]) {
             var dom = urlMatch[1].toLowerCase()
-            if (["com", "org", "net", "io", "app", "dev"].indexOf(dom) === -1) {
+            var ignoredProviders = ["com", "org", "net", "io", "app", "dev", "google", "yandex", "microsoft", "apple"]
+            if (ignoredProviders.indexOf(dom) === -1) {
                 return dom
+            } else {
+                // If subdomain is provider itself (e.g. google.com/photos), extract path token
+                var pathMatch = raw.match(/https?:\/\/[^\/]+\/([a-zA-Z0-9-]+)/i)
+                if (pathMatch && pathMatch[1] && pathMatch[1].length >= 3) {
+                    return pathMatch[1].toLowerCase()
+                }
             }
         }
 

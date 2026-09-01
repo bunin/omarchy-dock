@@ -608,7 +608,7 @@ BarWidget {
                   Quickshell.clipboardText = cmd
                 } catch(e) {}
                 if (root.bar && typeof root.bar.run === "function") {
-                  root.bar.run("wl-copy '" + cmd + "'")
+                  root.bar.run(["wl-copy", cmd])
                 }
                 cmdPill.copied = true
                 copyTimer.restart()

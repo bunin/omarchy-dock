@@ -609,7 +609,7 @@ Item {
                     if (root.itemData.isStack) {
                         clickEffectAnim.restart()
                         root.itemRightClicked(root.itemData, root)
-                    } else if (root.itemData.isRunning) {
+                    } else if (root.itemData.isRunning && !root.itemData.isMinimized) {
                         clickEffectAnim.restart()
                         root.minimizeRequested(root.itemData, root.effectiveTopIndex)
                     }
@@ -743,8 +743,8 @@ Item {
 
             // Middle Click (Wheel Button click) -> Immediately launch a duplicate
             if (mouse.button === Qt.MiddleButton) {
-                clickEffectAnim.restart()
-                if (root.itemData) {
+                if (root.itemData && !root.itemData.isStack) {
+                    clickEffectAnim.restart()
                     DockModel.launchApp(root.shell, root.itemData, Util)
                 }
                 return
