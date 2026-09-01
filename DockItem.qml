@@ -190,10 +190,10 @@ Item {
             width: root.iconBaseSize
             height: root.iconBaseSize
             fillMode: Image.PreserveAspectFit
-            cache: false
+            cache: true
             source: (root.iconRevision, root.resolveIcon(root.itemData))
             sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
-            asynchronous: false
+            asynchronous: true
             mipmap: true
             smooth: true
             antialiasing: true
@@ -245,7 +245,7 @@ Item {
                     width: stackGrid.cellWidth
                     height: stackGrid.cellWidth
                     fillMode: Image.PreserveAspectFit
-                    cache: false
+                    cache: true
                     source: (root.iconRevision, root.resolveIcon(modelData))
                     sourceSize: Qt.size(Math.max(64, width * 4 * Screen.devicePixelRatio), Math.max(64, height * 4 * Screen.devicePixelRatio))
                     mipmap: true

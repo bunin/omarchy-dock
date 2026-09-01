@@ -1928,6 +1928,13 @@ Item {
         onTriggered: root.updateDockItems()
     }
 
+    Timer {
+        id: titleChangeDebounceTimer
+        interval: 250
+        repeat: false
+        onTriggered: root.updateDockItems()
+    }
+
     Connections {
         target: (typeof Hyprland !== "undefined") ? Hyprland : null
         function onActiveToplevelChanged() { root.updateDockItems() }
@@ -1935,7 +1942,7 @@ Item {
             if (!event) return
             var name = String(event.name || "")
             if (name === "windowtitle" || name === "windowtitlev2") {
-                root.updateDockItems()
+                titleChangeDebounceTimer.restart()
             }
             if (name === "openwindow") {
                 root.updateDockItems()
