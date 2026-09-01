@@ -744,33 +744,9 @@ function matchToplevel(toplevel, appId, entry, desktopEntries, cachedCliApp) {
         if (cliApp && isTerminalApp(cleanId, entry)) {
             return false;
         }
-        // Case C: Dock item IS a terminal emulator — only match pure shell sessions.
-        // A "pure shell" is when the title contains a shell name (bash, zsh, fish, sh),
-        // a user@host pattern, or a path like ~ or /.
-        // All other cases (CLI apps, handshake/empty titles) are blocked.
-        if (isTerminalApp(cleanId, entry)) {
-            if (!title || title === appClass || title === cleanId || title === "terminal") {
-                return false;
-            }
-            var shellPatterns = ["bash", "zsh", "fish", "sh", "nu", "nushell", "elvish", "pwsh", "dash", "csh", "tcsh", "ksh"];
-            var isShellSession = false;
-            if (title.indexOf("@") !== -1 || title.indexOf("~") !== -1 || title.indexOf(":/") !== -1 || title.charAt(0) === "/") {
-                isShellSession = true;
-            } else {
-                var titleTokens = title.split(/[\s\-_.:;\/\\]+/);
-                for (var sp = 0; sp < shellPatterns.length; sp++) {
-                    for (var tt = 0; tt < titleTokens.length; tt++) {
-                        if (titleTokens[tt] === shellPatterns[sp]) {
-                            isShellSession = true;
-                            break;
-                        }
-                    }
-                    if (isShellSession) break;
-                }
-            }
-            if (!isShellSession) {
-                return false;
-            }
+        // Case C: Dock item IS a terminal emulator, and window is a generic terminal session (no dedicated CLI app):
+        if (!cliApp && isTerminalApp(cleanId, entry)) {
+            return true;
         }
     }
 
