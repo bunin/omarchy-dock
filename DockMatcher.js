@@ -449,6 +449,23 @@ function findEntry(desktopEntries, appId) {
             }
         }
 
+        // 2c. Reverse-domain suffix match (e.g. org.omarchy.cliamp -> cliamp, io.github.yazi -> yazi)
+        var strippedTarget = target.replace(/^(org|com|io|net|dev)\.[^.]+\./i, "").toLowerCase();
+        var lastPartTarget = target.split(".").pop().toLowerCase();
+        if (strippedTarget !== target || lastPartTarget !== target) {
+            for (var sp = 0; sp < list.length; sp++) {
+                var spe = unwrapEntry(list[sp]);
+                if (!spe) continue;
+                var speId = stripDesktop(spe.id || "").toLowerCase();
+                var speName = String(spe.name || "").toLowerCase();
+                var speExec = String(spe.exec || "").toLowerCase().split(/\s+/)[0].split("/").pop();
+                if (speId === strippedTarget || speName === strippedTarget || speExec === strippedTarget ||
+                    speId === lastPartTarget || speName === lastPartTarget || speExec === lastPartTarget) {
+                    return spe;
+                }
+            }
+        }
+
         // 3. Web App / Chrome domain token word matching (matching whole words, NOT substring like photos in photoshop)
         if (chromeDom.length > 0) {
             var domParts = chromeDom.split(".");
@@ -591,15 +608,16 @@ var IGNORED_COMMAND_PREFIXES = [
 ];
 
 var KNOWN_CLI_COMMANDS = [
-    "yazi", "nvim", "neovim", "vim", "nano", "micro", "helix", "hx", "emacs",
-    "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "nvtop",
-    "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc",
-    "lazygit", "lazydocker", "tig", "gitui", "k9s",
-    "ncmpcpp", "cmus", "mocp", "cava", "cliamp",
-    "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock"
+    "yazi", "nvim", "neovim", "vim", "nano", "micro", "helix", "hx", "emacs", "kakoune", "kak", "amp",
+    "btop", "htop", "top", "bottom", "btm", "glances", "bashtop", "bpytop", "nvtop", "gotop",
+    "ranger", "superfile", "broot", "vifm", "nnn", "lf", "fff", "mc", "midnight-commander", "clifm",
+    "lazygit", "lazydocker", "tig", "gitui", "k9s", "ox", "bandwhich", "gping",
+    "ncmpcpp", "cmus", "mocp", "cava", "cliamp", "rmpc", "spotify-tui", "spt", "mopidy", "musikcube",
+    "weechat", "irssi", "profanity", "neomutt", "mutt", "aerc", "gomuks", "senpai",
+    "tmux", "zellij", "cmatrix", "pipes.sh", "fastfetch", "neofetch", "cbonsai", "tty-clock", "peaclock", "termshark", "glow", "curseofwar"
 ];
 
-function extractCliApp(title) {
+function extractCliApp(title, desktopEntries) {
     if (!title) return "";
     var raw = String(title).toLowerCase().trim();
     var rawTokens = raw.split(/[\s:,\-_/\\()\[\]{}|]+/);
@@ -620,11 +638,31 @@ function extractCliApp(title) {
     // Check all tokens in title for known CLI app names
     for (var t = 0; t < tokens.length; t++) {
         var tok = tokens[t];
+        if (IGNORED_COMMAND_PREFIXES.indexOf(tok) !== -1) continue;
         if (KNOWN_CLI_COMMANDS.indexOf(tok) !== -1) {
             if (tok === "neovim" || tok === "vim") return "nvim";
             if (tok === "hx") return "helix";
             if (tok === "btm") return "bottom";
             return tok;
+        }
+    }
+
+    // Dynamic scanning: check if any token in title matches an installed desktop entry
+    if (desktopEntries) {
+        var list = toArray(desktopEntries);
+        for (var i = 0; i < tokens.length; i++) {
+            var token = tokens[i];
+            if (token.length < 3 || IGNORED_COMMAND_PREFIXES.indexOf(token) !== -1) continue;
+            for (var d = 0; d < list.length; d++) {
+                var de = unwrapEntry(list[d]);
+                if (!de) continue;
+                var deId = stripDesktop(de.id || "").toLowerCase();
+                var deExec = String(de.exec || "").toLowerCase().split(/\s+/)[0].split("/").pop();
+                var deName = String(de.name || "").toLowerCase();
+                if (token === deId || token === deExec || token === deName) {
+                    return deId || token;
+                }
+            }
         }
     }
 
@@ -682,7 +720,7 @@ function matchToplevel(toplevel, appId, entry, desktopEntries) {
     // Terminal CLI / TUI application matching:
     // If a window is running in a terminal emulator (e.g. foot, ghostty, kitty):
     if (isTerminalApp(appClass, null)) {
-        var cliApp = extractCliApp(title);
+        var cliApp = extractCliApp(title, desktopEntries);
         // Case A: Dock item is a specific CLI app (e.g. yazi, nvim, btop):
         if (cliApp && !isTerminalApp(cleanId, entry)) {
             var normCliApp = normalizeKey(cliApp);
@@ -1066,7 +1104,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
 
         // If window is running inside a terminal emulator and executes a recognized CLI app with a valid installed desktop entry:
         if (isTerminalApp(rAppId)) {
-            var rCliApp = extractCliApp(rTitle);
+            var rCliApp = extractCliApp(rTitle, entries);
             if (rCliApp && !isTerminalApp(rCliApp) && hasRealDesktopEntry(entries, rCliApp)) {
                 rAppId = rCliApp;
             }
