@@ -458,7 +458,7 @@ PanelWindow {
                                     cache: true
                                     source: (stackWindow.root.iconRevision, stackWindow.root.resolveIcon(modelData))
                                     sourceSize: Qt.size(Math.max(128, 28 * 4 * Screen.devicePixelRatio), Math.max(128, 28 * 4 * Screen.devicePixelRatio))
-                                    asynchronous: true
+                                    asynchronous: false
                                     mipmap: true
                                     smooth: true
                                     antialiasing: true

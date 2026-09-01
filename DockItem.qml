@@ -195,7 +195,7 @@ Item {
             cache: true
             source: (root.iconRevision, root.resolveIcon(root.itemData))
             sourceSize: Qt.size(Math.max(128, width * 4 * Screen.devicePixelRatio), Math.max(128, height * 4 * Screen.devicePixelRatio))
-            asynchronous: true
+            asynchronous: false
             mipmap: true
             smooth: true
             antialiasing: true
