@@ -190,12 +190,38 @@ def parse_desktop_exec_argv(exec_str):
     except Exception:
         return raw.split()
 
+def find_desktop_file(desktop_id):
+    if not desktop_id or not isinstance(desktop_id, str):
+        return ""
+    if "/" in desktop_id or " " in desktop_id:
+        return ""
+    clean = desktop_id if desktop_id.endswith(".desktop") else (desktop_id + ".desktop")
+    search_dirs = [
+        os.path.expanduser("~/.local/share/applications"),
+        "/usr/share/applications",
+        "/usr/local/share/applications",
+        "/var/lib/flatpak/exports/share/applications",
+        os.path.expanduser("~/.local/share/flatpak/exports/share/applications")
+    ]
+    xdg_dirs = os.environ.get("XDG_DATA_DIRS", "").split(":")
+    for d in xdg_dirs:
+        if d:
+            app_d = os.path.join(d, "applications")
+            if app_d not in search_dirs:
+                search_dirs.append(app_d)
+
+    for base in search_dirs:
+        candidate = os.path.join(base, clean)
+        if os.path.isfile(candidate):
+            return clean
+    return ""
+
 def launch_fallback(queries):
-    # 1. First priority: desktop entry files via gtk-launch
+    # 1. First priority: desktop entry files that actually exist on disk via gtk-launch
     for q in queries:
         if not q or q.startswith("0x") or q.startswith("--"):
             continue
-        desktop_id = q if q.endswith(".desktop") else (q + ".desktop" if "/" not in q and " " not in q else "")
+        desktop_id = find_desktop_file(q)
         if desktop_id:
             try:
                 subprocess.Popen(["uwsm-app", "--", "gtk-launch", desktop_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

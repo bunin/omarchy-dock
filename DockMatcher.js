@@ -472,7 +472,7 @@ function findEntry(desktopEntries, appId) {
             var meaningfulParts = [];
             for (var p = 0; p < domParts.length; p++) {
                 var part = domParts[p];
-                if (part.length >= 3 && part !== "com" && part !== "org" && part !== "net" && part !== "web" && part !== "app" && part !== "google" && part !== "yandex" && part !== "microsoft" && part !== "apple") {
+                if (part.length >= 1 && part !== "com" && part !== "org" && part !== "net" && part !== "web" && part !== "app" && part !== "google" && part !== "yandex" && part !== "microsoft" && part !== "apple") {
                     meaningfulParts.push(part);
                 }
             }
