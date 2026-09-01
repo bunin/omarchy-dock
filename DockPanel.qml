@@ -1923,9 +1923,11 @@ Item {
         function onActiveToplevelChanged() { root.updateDockItems() }
     }
 
+    property double lastWindowOpenTime: 0
+
     Timer {
         id: terminalSettleTimer
-        interval: 90
+        interval: 35
         repeat: false
         onTriggered: root.updateDockItems()
     }
@@ -1944,9 +1946,14 @@ Item {
             if (!event) return
             var name = String(event.name || "")
             if (name === "windowtitle" || name === "windowtitlev2") {
-                titleChangeDebounceTimer.restart()
+                if (Date.now() - root.lastWindowOpenTime < 2000) {
+                    root.updateDockItems()
+                } else {
+                    titleChangeDebounceTimer.restart()
+                }
             }
             if (name === "openwindow") {
+                root.lastWindowOpenTime = Date.now()
                 root.updateDockItems()
                 terminalSettleTimer.restart()
                 if (root.pendingFocusAppId) {
