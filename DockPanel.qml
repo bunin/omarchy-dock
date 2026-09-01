@@ -1611,43 +1611,41 @@ Item {
 
     function minimizeItem(itemData, targetIndex) {
         if (!itemData) return
-        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmdArgs = ["python3", scriptPath, "toggle-instance"]
-        if (itemData.appId) cmdArgs.push(itemData.appId)
-        if (itemData.desktopId && itemData.desktopId !== itemData.appId) cmdArgs.push(itemData.desktopId)
-        if (itemData.exec) cmdArgs.push(itemData.exec)
+        var args = ["toggle-instance"]
+        if (itemData.appId) args.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
+        if (itemData.exec) args.push(itemData.exec)
         if (typeof targetIndex === "number" && targetIndex >= 0) {
-            cmdArgs.push("--index=" + targetIndex)
+            args.push("--index=" + targetIndex)
         }
-        var escaped = []
-        for (var i = 0; i < cmdArgs.length; i++) {
-            escaped.push("\"$" + (i + 1) + "\"")
+        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
+        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+        for (var i = 0; i < args.length; i++) {
+            var a = String(args[i])
+            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
         }
-        var shCmd = escaped.join(" ")
-        var fullArgs = ["sh", "-c", shCmd, "--"].concat(cmdArgs)
-        Util.execDetached(fullArgs.join(" "))
+        Util.execDetached(cmd)
         root.updateDockItems()
     }
 
     function restoreOrLaunchItem(itemData, targetIndex) {
         if (!itemData) return
-        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmdArgs = ["python3", scriptPath, "activate-instance"]
-        if (itemData.appId) cmdArgs.push(itemData.appId)
-        if (itemData.desktopId && itemData.desktopId !== itemData.appId) cmdArgs.push(itemData.desktopId)
-        if (itemData.exec) cmdArgs.push(itemData.exec)
+        var args = ["activate-instance"]
+        if (itemData.appId) args.push(itemData.appId)
+        if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
+        if (itemData.exec) args.push(itemData.exec)
         if (typeof targetIndex === "number" && targetIndex >= 0) {
-            cmdArgs.push("--index=" + targetIndex)
+            args.push("--index=" + targetIndex)
         }
-        var escaped = []
-        for (var i = 0; i < cmdArgs.length; i++) {
-            escaped.push("\"$" + (i + 1) + "\"")
+        var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
+        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+        for (var i = 0; i < args.length; i++) {
+            var a = String(args[i])
+            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
         }
-        var shCmd = escaped.join(" ")
-        var fullArgs = ["sh", "-c", shCmd, "--"].concat(cmdArgs)
         var launchId = itemData.desktopId || itemData.appId || ""
         root.requestFocusOnLaunch(launchId)
-        Util.execDetached(fullArgs.join(" "))
+        Util.execDetached(cmd)
         root.updateDockItems()
     }
 

@@ -72,16 +72,26 @@ function launchApp(shell, itemData, util) {
     var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : "";
     var argv = parseDesktopExec(itemData.exec);
 
-    if (target && util && typeof util.execDetached === "function") {
-        util.execDetached("uwsm-app -- gtk-launch " + escapeShellArg(target));
-        return;
-    }
-
-    if (argv.length > 0 && util && typeof util.execDetached === "function") {
+    var fallbackCmd = "";
+    if (argv.length > 0) {
         var escapedArgs = [];
         for (var a = 0; a < argv.length; a++) {
             escapedArgs.push(escapeShellArg(argv[a]));
         }
-        util.execDetached("uwsm-app -- " + escapedArgs.join(" "));
+        fallbackCmd = "uwsm-app -- " + escapedArgs.join(" ");
+    }
+
+    var cmd = "";
+    if (target) {
+        cmd = "uwsm-app -- gtk-launch " + escapeShellArg(target);
+        if (fallbackCmd) {
+            cmd += " || (" + fallbackCmd + ")";
+        }
+    } else if (fallbackCmd) {
+        cmd = fallbackCmd;
+    }
+
+    if (cmd && util && typeof util.execDetached === "function") {
+        util.execDetached(cmd);
     }
 }

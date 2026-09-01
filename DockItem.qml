@@ -609,7 +609,7 @@ Item {
                     if (root.itemData.isStack) {
                         clickEffectAnim.restart()
                         root.itemRightClicked(root.itemData, root)
-                    } else if (root.itemData.isRunning && !root.itemData.isMinimized) {
+                    } else if (root.itemData.isRunning) {
                         clickEffectAnim.restart()
                         root.minimizeRequested(root.itemData, root.effectiveTopIndex)
                     }
