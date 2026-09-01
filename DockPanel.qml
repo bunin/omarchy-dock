@@ -1695,14 +1695,16 @@ Item {
 
         for (var i = 0; i < cands.length; i++) {
             var c = cands[i]
-            if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
-                var src = shell.appLibrary.iconSource(c)
-                if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) {
-                    return src
-                }
-            }
+            if (c.indexOf("://") >= 0) return c
+            if (c.indexOf("/") === 0) return "file://" + c
             var qs = Quickshell.iconPath(c, false)
             if (qs && qs.length > 0 && qs.indexOf("application-x-executable") === -1) {
+                if (shell && shell.appLibrary && typeof shell.appLibrary.iconSource === "function") {
+                    var src = shell.appLibrary.iconSource(c)
+                    if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) {
+                        return src
+                    }
+                }
                 return qs
             }
         }

@@ -111,7 +111,30 @@ var KNOWN_APP_DEFAULTS = {
     "xdg-desktop-portal": { id: "xdg-desktop-portal", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
     "org.freedesktop.portal": { id: "org.freedesktop.portal", icon: "document-open", rawIcon: "document-open", name: "File Chooser" },
     "zenity": { id: "zenity", icon: "dialog-information", rawIcon: "dialog-information", name: "Dialog" },
-    "kdialog": { id: "kdialog", icon: "dialog-information", rawIcon: "dialog-information", name: "Dialog" }
+    "kdialog": { id: "kdialog", icon: "dialog-information", rawIcon: "dialog-information", name: "Dialog" },
+    "hyprpolkitagent": { id: "hyprpolkitagent", icon: "dialog-password", rawIcon: "dialog-password", name: "Authentication" },
+    "polkit-gnome-authentication-agent-1": { id: "polkit-gnome-authentication-agent-1", icon: "dialog-password", rawIcon: "dialog-password", name: "Authentication" },
+    "org.kde.polkit-kde-authentication-agent-1": { id: "org.kde.polkit-kde-authentication-agent-1", icon: "dialog-password", rawIcon: "dialog-password", name: "Authentication" },
+    "pavucontrol": { id: "pavucontrol", icon: "multimedia-volume-control", rawIcon: "multimedia-volume-control", name: "Volume Control" },
+    "org.pulseaudio.pavucontrol": { id: "pavucontrol", icon: "multimedia-volume-control", rawIcon: "multimedia-volume-control", name: "Volume Control" },
+    "pwvucontrol": { id: "pwvucontrol", icon: "multimedia-volume-control", rawIcon: "multimedia-volume-control", name: "PipeWire Volume Control" },
+    "com.saivert.pwvucontrol": { id: "pwvucontrol", icon: "multimedia-volume-control", rawIcon: "multimedia-volume-control", name: "PipeWire Volume Control" },
+    "satty": { id: "satty", icon: "accessories-screenshot", rawIcon: "accessories-screenshot", name: "Satty" },
+    "com.gabm.satty": { id: "satty", icon: "accessories-screenshot", rawIcon: "accessories-screenshot", name: "Satty" },
+    "flameshot": { id: "flameshot", icon: "flameshot", rawIcon: "flameshot", name: "Flameshot" },
+    "org.flameshot.Flameshot": { id: "flameshot", icon: "flameshot", rawIcon: "flameshot", name: "Flameshot" },
+    "file-roller": { id: "file-roller", icon: "utilities-file-archiver", rawIcon: "utilities-file-archiver", name: "Archive Manager" },
+    "org.gnome.FileRoller": { id: "file-roller", icon: "utilities-file-archiver", rawIcon: "utilities-file-archiver", name: "Archive Manager" },
+    "ark": { id: "ark", icon: "utilities-file-archiver", rawIcon: "utilities-file-archiver", name: "Ark" },
+    "org.kde.ark": { id: "ark", icon: "utilities-file-archiver", rawIcon: "utilities-file-archiver", name: "Ark" },
+    "imv": { id: "imv", icon: "image-viewer", rawIcon: "image-viewer", name: "Image Viewer" },
+    "swayimg": { id: "swayimg", icon: "image-viewer", rawIcon: "image-viewer", name: "Image Viewer" },
+    "feh": { id: "feh", icon: "image-viewer", rawIcon: "image-viewer", name: "feh" },
+    "zathura": { id: "zathura", icon: "document-viewer", rawIcon: "document-viewer", name: "Zathura" },
+    "org.pwmt.zathura": { id: "zathura", icon: "document-viewer", rawIcon: "document-viewer", name: "Zathura" },
+    "galculator": { id: "galculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" },
+    "gnome-calculator": { id: "gnome-calculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" },
+    "org.gnome.Calculator": { id: "gnome-calculator", icon: "accessories-calculator", rawIcon: "accessories-calculator", name: "Calculator" }
 };
 
 var FALLBACK_ICON_CANDIDATES = {
@@ -220,7 +243,30 @@ var FALLBACK_ICON_CANDIDATES = {
     "xdg-desktop-portal": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
     "org.freedesktop.portal": ["document-open", "document-save-as", "document-save", "system-file-manager", "file-manager", "folder"],
     "zenity": ["dialog-information", "dialog-question", "dialog-warning", "utilities-terminal"],
-    "kdialog": ["dialog-information", "dialog-question", "dialog-warning", "utilities-terminal"]
+    "kdialog": ["dialog-information", "dialog-question", "dialog-warning", "utilities-terminal"],
+    "hyprpolkitagent": ["dialog-password", "security-high", "system-lock-screen", "preferences-system"],
+    "polkit-gnome-authentication-agent-1": ["dialog-password", "security-high", "system-lock-screen", "preferences-system"],
+    "org.kde.polkit-kde-authentication-agent-1": ["dialog-password", "security-high", "system-lock-screen", "preferences-system"],
+    "pavucontrol": ["multimedia-volume-control", "audio-card", "pavucontrol", "audio-volume-high"],
+    "org.pulseaudio.pavucontrol": ["multimedia-volume-control", "audio-card", "pavucontrol", "audio-volume-high"],
+    "pwvucontrol": ["multimedia-volume-control", "audio-card", "pwvucontrol", "audio-volume-high"],
+    "com.saivert.pwvucontrol": ["multimedia-volume-control", "audio-card", "pwvucontrol", "audio-volume-high"],
+    "satty": ["accessories-screenshot", "applets-screenshooter", "accessories-image-viewer"],
+    "com.gabm.satty": ["accessories-screenshot", "applets-screenshooter", "accessories-image-viewer"],
+    "flameshot": ["flameshot", "accessories-screenshot", "applets-screenshooter"],
+    "org.flameshot.Flameshot": ["flameshot", "accessories-screenshot", "applets-screenshooter"],
+    "file-roller": ["utilities-file-archiver", "archive-manager", "file-roller", "org.gnome.FileRoller"],
+    "org.gnome.FileRoller": ["utilities-file-archiver", "archive-manager", "file-roller", "org.gnome.FileRoller"],
+    "ark": ["utilities-file-archiver", "archive-manager", "ark", "org.kde.ark"],
+    "org.kde.ark": ["utilities-file-archiver", "archive-manager", "ark", "org.kde.ark"],
+    "imv": ["image-viewer", "accessories-image-viewer", "multimedia-photo-viewer"],
+    "swayimg": ["image-viewer", "accessories-image-viewer", "multimedia-photo-viewer"],
+    "feh": ["image-viewer", "accessories-image-viewer", "feh"],
+    "zathura": ["document-viewer", "application-pdf", "org.pwmt.zathura"],
+    "org.pwmt.zathura": ["document-viewer", "application-pdf", "org.pwmt.zathura"],
+    "galculator": ["accessories-calculator", "calc", "calculator"],
+    "gnome-calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"],
+    "org.gnome.Calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"]
 };
 
 function getCandidates(rawIcon, icon, appId) {
