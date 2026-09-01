@@ -1954,18 +1954,24 @@ Item {
             }
             if (name === "openwindow") {
                 root.lastWindowOpenTime = Date.now()
-                root.updateDockItems()
+                var openArgs = String(event.args || "")
+                var openParts = openArgs.split(",")
+                var openClass = openParts.length >= 3 ? openParts[2].trim().toLowerCase() : ""
+                var isTerm = (openClass === "foot" || openClass === "ghostty" || openClass === "kitty" || openClass === "alacritty" || openClass === "wezterm")
+
                 terminalSettleTimer.restart()
+                if (!isTerm) {
+                    root.updateDockItems()
+                }
+
                 if (root.pendingFocusAppId) {
                     if (Date.now() - root.pendingFocusTimestamp > 8000) {
                         root.pendingFocusAppId = ""
                         return
                     }
-                    var args = String(event.args || "")
-                    var parts = args.split(",")
-                    if (parts.length >= 3) {
-                        var addr = parts[0].trim()
-                        var winClass = parts[2].trim().toLowerCase()
+                    if (openParts.length >= 3) {
+                        var addr = openParts[0].trim()
+                        var winClass = openParts[2].trim().toLowerCase()
                         var pending = root.pendingFocusAppId.toLowerCase()
                         var normClass = winClass.replace(/[^a-z0-9]/g, "")
                         var normPending = pending.replace(/[^a-z0-9]/g, "")

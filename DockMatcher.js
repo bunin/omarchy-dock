@@ -1107,6 +1107,17 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             var rCliApp = extractCliApp(rTitle, entries);
             if (rCliApp && !isTerminalApp(rCliApp) && hasRealDesktopEntry(entries, rCliApp)) {
                 rAppId = rCliApp;
+            } else if (!rTitle || rTitle === rAppId || rTitle === "foot" || rTitle === "ghostty" || rTitle === "kitty" || rTitle === "alacritty" || rTitle === "terminal") {
+                var isPinnedTerm = false;
+                for (var pt = 0; pt < pinnedIds.length; pt++) {
+                    if (isTerminalApp(stripDesktop(pinnedIds[pt]))) {
+                        isPinnedTerm = true;
+                        break;
+                    }
+                }
+                if (isPinnedTerm) {
+                    continue;
+                }
             }
         }
 
