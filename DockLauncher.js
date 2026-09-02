@@ -68,9 +68,18 @@ function launchApp(shell, itemData, util) {
         return;
     }
 
-    // 2. Fallback: Launch via gtk-launch or individually-escaped argv
+    // 2. Fallback: Launch via gtk-launch or direct argv
     var target = launchId ? (launchId.indexOf(".desktop") !== -1 ? launchId : (launchId + ".desktop")) : "";
     var argv = parseDesktopExec(itemData.exec);
+
+    if (util && typeof util.execArgv === "function") {
+        if (target) {
+            util.execArgv(["uwsm-app", "--", "gtk-launch", target]);
+        } else if (argv.length > 0) {
+            util.execArgv(["uwsm-app", "--"].concat(argv));
+        }
+        return;
+    }
 
     var fallbackCmd = "";
     if (argv.length > 0) {

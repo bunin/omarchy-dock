@@ -48,9 +48,9 @@ Item {
                     counts: tracker.canonicalCounts,
                     urgent: tracker.canonicalUrgent
                 })
-                saveProc.command = ["sh", "-c",
-                    'mkdir -p "$(dirname "$1")" && printf \'%s\' "$2" > "$1"',
-                    "--", tracker.statePath, jsonStr]
+                saveProc.command = ["python3", "-c",
+                    "import sys, pathlib; p = pathlib.Path(sys.argv[1]); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(sys.argv[2], encoding='utf-8')",
+                    tracker.statePath, jsonStr]
                 saveProc.running = true
             } catch (e) {}
         }

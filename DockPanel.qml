@@ -1611,7 +1611,7 @@ Item {
 
     function minimizeItem(itemData, targetIndex) {
         if (!itemData) return
-        var args = ["toggle-instance"]
+        var args = ["minimize-instance"]
         if (itemData.appId) args.push(itemData.appId)
         if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
         if (itemData.exec) args.push(itemData.exec)
@@ -1619,12 +1619,16 @@ Item {
             args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
-        for (var i = 0; i < args.length; i++) {
-            var a = String(args[i])
-            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+        if (typeof Util !== "undefined" && typeof Util.execArgv === "function") {
+            Util.execArgv(["python3", scriptPath].concat(args))
+        } else {
+            var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+            for (var i = 0; i < args.length; i++) {
+                var a = String(args[i])
+                cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+            }
+            Util.execDetached(cmd)
         }
-        Util.execDetached(cmd)
         root.updateDockItems()
     }
 
@@ -1638,15 +1642,19 @@ Item {
             args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
-        var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
-        for (var i = 0; i < args.length; i++) {
-            var a = String(args[i])
-            cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
-        }
         var launchId = itemData.desktopId || itemData.appId || ""
         root.requestFocusOnLaunch(launchId)
         DockModel.setPendingCliHint(itemData.appId || itemData.desktopId || "", root.knownWindows)
-        Util.execDetached(cmd)
+        if (typeof Util !== "undefined" && typeof Util.execArgv === "function") {
+            Util.execArgv(["python3", scriptPath].concat(args))
+        } else {
+            var cmd = "python3 " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(scriptPath) : ("\"" + scriptPath + "\""))
+            for (var i = 0; i < args.length; i++) {
+                var a = String(args[i])
+                cmd += " " + (typeof Util !== "undefined" && Util.shellQuote ? Util.shellQuote(a) : ("\"" + a.replace(/"/g, "\\\"") + "\""))
+            }
+            Util.execDetached(cmd)
+        }
         root.updateDockItems()
     }
 
@@ -1741,6 +1749,7 @@ Item {
         root.currentMergeTargetIndex = -1
         if (widgetPicker) widgetPicker.opened = false
         root.closeAllWidgetPanels()
+        root.evaluateHoverState()
     }
 
     // Auto-dismiss open folders, folder icon editor, widget panels and edit mode when system notifications / OSD appear
@@ -2786,15 +2795,15 @@ Item {
                         }
 
                         onDragHoverChanged: function(fromIdx, targetIdx, isMergeIntent) {
-                            if (fromIdx < 0 || targetIdx < 0) {
+                            if (fromIdx < 0) {
                                 root.dockDragActiveIndex = -1
                                 root.dockDragTargetIndex = -1
                                 root.currentMergeTargetIndex = -1
                                 return
                             }
                             root.dockDragActiveIndex = fromIdx
-                            root.dockDragTargetIndex = isMergeIntent ? -1 : targetIdx
-                            root.currentMergeTargetIndex = isMergeIntent ? targetIdx : -1
+                            root.dockDragTargetIndex = (targetIdx >= 0 && !isMergeIntent) ? targetIdx : -1
+                            root.currentMergeTargetIndex = (targetIdx >= 0 && isMergeIntent) ? targetIdx : -1
                         }
 
                         onDragEnded: function() {

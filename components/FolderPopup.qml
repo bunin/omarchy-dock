@@ -746,7 +746,7 @@ PanelWindow {
                                             return
                                         }
                                         if (modelData) {
-                                            if (modelData.isRunning) {
+                                            if (modelData.isRunning && !modelData.isMinimized) {
                                                 subClickEffectAnim.restart()
                                                 stackWindow.root.minimizeItem(modelData, subItemRoot.subEffectiveTopIndex)
                                             }

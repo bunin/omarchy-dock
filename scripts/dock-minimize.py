@@ -440,7 +440,7 @@ def main():
         else:
             visible_windows.append(c)
 
-    if mode in ("toggle-instance", "toggle", "toggle-active", "minimize"):
+    if mode in ("toggle-instance", "toggle", "toggle-active", "minimize", "minimize-instance"):
         if not matching:
             return
 
@@ -470,6 +470,10 @@ def main():
         is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
 
         if is_min:
+            # Rule §4.1: Repeat right-click on minimized app is strictly ignored
+            if mode in ("minimize", "minimize-instance"):
+                return
+
             # RESTORE target_c
             target_ws = focused_ws
             if not target_ws or str(target_ws).startswith("special:"):
