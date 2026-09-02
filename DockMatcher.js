@@ -1007,13 +1007,26 @@ function getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId) 
     return { count: count, hasUrgent: isUrgent };
 }
 
-function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems) {
+function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntries, appLibrary, badgeCounts, urgentCounts, maxItems, minimizedToplevels) {
     var pinned = Array.isArray(pinnedList) ? pinnedList : [];
     var toplevels = toArray(toplevelsList);
     var entries = toArray(desktopEntries);
+    var minList = Array.isArray(minimizedToplevels) ? minimizedToplevels : [];
 
     var items = [];
     var assignedTops = {};
+
+    function isTopMinimized(top) {
+        if (!top) return false;
+        if (top.minimized === true) return true;
+        for (var m = 0; m < minList.length; m++) {
+            if (minList[m] === top) return true;
+            try {
+                if (minList[m] && minList[m].wayland === top) return true;
+            } catch (e) {}
+        }
+        return false;
+    }
 
     function getTopKey(top, idx) {
         if (!top) return "top_" + idx;
@@ -1098,21 +1111,29 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 var sTops = [];
                 var sActive = false;
                 var sActiveIdx = 0;
+                var sMinCount = 0;
                 for (var st = 0; st < toplevels.length; st++) {
                     var sTop = toplevels[st];
                     var stKey = getTopKey(sTop, st);
                     if (!assignedTops[stKey] && matchToplevel(sTop, sAppId, sEntry, entries, toplevelCliApps[stKey])) {
                         sTops.push(sTop);
                         assignedTops[stKey] = true;
-                        try {
-                            if ((activeToplevel && sTop === activeToplevel) || (sTop && (sTop.activated || sTop.active))) {
-                                sActive = true;
-                                sActiveIdx = sTops.length - 1;
-                            }
-                        } catch (e) {}
+                        var isSTopMin = isTopMinimized(sTop);
+                        if (isSTopMin) {
+                            sMinCount++;
+                        } else {
+                            try {
+                                if (activeToplevel && sTop === activeToplevel) {
+                                    sActive = true;
+                                    sActiveIdx = sTops.length - 1;
+                                }
+                            } catch (e) {}
+                        }
                     }
                 }
 
+                var isSubMin = (sTops.length > 0 && sMinCount === sTops.length);
+                if (isSubMin) sActive = false;
                 if (sTops.length > 0) isAnySubRunning = true;
                 if (sActive) isAnySubActive = true;
 
@@ -1129,7 +1150,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     isPinned: true,
                     isRunning: sTops.length > 0,
                     isActive: sActive,
-                    isMinimized: false,
+                    isMinimized: isSubMin,
                     activeTopIndex: sActiveIdx,
                     windowCount: sTops.length,
                     badgeCount: sInfo.count,
@@ -1179,20 +1200,29 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             var matching = [];
             var isAnyActive = false;
             var activeIdx = 0;
+            var minCount = 0;
             for (var t = 0; t < toplevels.length; t++) {
                 var top = toplevels[t];
                 var tKey = getTopKey(top, t);
                 if (!assignedTops[tKey] && matchToplevel(top, appId, entry, entries, toplevelCliApps[tKey])) {
                     matching.push(top);
                     assignedTops[tKey] = true;
-                    try {
-                        if ((activeToplevel && top === activeToplevel) || (top && (top.activated || top.active))) {
-                            isAnyActive = true;
-                            activeIdx = matching.length - 1;
-                        }
-                    } catch (e) {}
+                    var isTopMin = isTopMinimized(top);
+                    if (isTopMin) {
+                        minCount++;
+                    } else {
+                        try {
+                            if (activeToplevel && top === activeToplevel) {
+                                isAnyActive = true;
+                                activeIdx = matching.length - 1;
+                            }
+                        } catch (e) {}
+                    }
                 }
             }
+
+            var isItemMin = (matching.length > 0 && minCount === matching.length);
+            if (isItemMin) isAnyActive = false;
 
             var itemInfo = getBadgeInfo(badgeCounts, urgentCounts, appId, entry, name, desktopId);
 
@@ -1210,7 +1240,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 isDuplicate: false,
                 isRunning: matching.length > 0,
                 isActive: isAnyActive,
-                isMinimized: false,
+                isMinimized: isItemMin,
                 activeTopIndex: activeIdx,
                 windowCount: matching.length,
                 badgeCount: itemInfo.count,
@@ -1270,22 +1300,31 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var rMatching = [];
         var rIsActive = false;
         var rActiveIdx = 0;
+        var rMinCount = 0;
         for (var k = 0; k < toplevels.length; k++) {
             var candidate = toplevels[k];
             var cKey = getTopKey(candidate, k);
             if (!assignedTops[cKey] && matchToplevel(candidate, rAppId, rEntry, entries)) {
                 rMatching.push(candidate);
                 assignedTops[cKey] = true;
-                try {
-                    if ((activeToplevel && candidate === activeToplevel) || (candidate && (candidate.activated || candidate.active))) {
-                        rIsActive = true;
-                        rActiveIdx = rMatching.length - 1;
-                    }
-                } catch (e) {}
+                var isCandMin = isTopMinimized(candidate);
+                if (isCandMin) {
+                    rMinCount++;
+                } else {
+                    try {
+                        if (activeToplevel && candidate === activeToplevel) {
+                            rIsActive = true;
+                            rActiveIdx = rMatching.length - 1;
+                        }
+                    } catch (e) {}
+                }
             }
         }
 
         if (rMatching.length === 0) continue;
+
+        var isUnpinnedMin = (rMatching.length > 0 && rMinCount === rMatching.length);
+        if (isUnpinnedMin) rIsActive = false;
 
         var rInfo = getBadgeInfo(badgeCounts, urgentCounts, rAppId, rEntry, rName, rDesktopId);
 
@@ -1303,6 +1342,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             isDuplicate: false,
             isRunning: true,
             isActive: rIsActive,
+            isMinimized: isUnpinnedMin,
             activeTopIndex: rActiveIdx,
             windowCount: rMatching.length,
             badgeCount: rInfo.count,

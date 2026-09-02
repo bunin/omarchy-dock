@@ -1630,6 +1630,7 @@ Item {
             Util.execDetached(cmd)
         }
         root.updateDockItems()
+        minimizeRefreshTimer.restart()
     }
 
     function restoreOrLaunchItem(itemData, targetIndex) {
@@ -1656,6 +1657,7 @@ Item {
             Util.execDetached(cmd)
         }
         root.updateDockItems()
+        minimizeRefreshTimer.restart()
     }
 
     // Right-Click Menu State
@@ -1851,15 +1853,49 @@ Item {
         if (notifTracker) notifTracker.clearBadge(itemData)
     }
 
+    function getMinimizedToplevels() {
+        var minTops = []
+        if (typeof Hyprland !== "undefined" && Hyprland.workspaces && Hyprland.workspaces.values) {
+            var wsArr = Hyprland.workspaces.values
+            for (var w = 0; w < wsArr.length; w++) {
+                var ws = wsArr[w]
+                if (ws && String(ws.name || "").indexOf("special:") === 0) {
+                    if (ws.toplevels && ws.toplevels.values) {
+                        var tops = ws.toplevels.values
+                        for (var wt = 0; wt < tops.length; wt++) {
+                            var ht = tops[wt]
+                            if (ht) {
+                                if (ht.wayland) minTops.push(ht.wayland)
+                                minTops.push(ht)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return minTops
+    }
+
     function doUpdateDockItems() {
         root.syncKnownWindows()
         var toplevels = root.knownWindows
+        var minTops = root.getMinimizedToplevels()
         var active = ToplevelManager.activeToplevel
+        if (active) {
+            if (minTops.indexOf(active) !== -1) {
+                active = null
+            } else if (typeof Hyprland !== "undefined" && Hyprland.activeToplevel && Hyprland.activeToplevel.workspace) {
+                var aWs = String(Hyprland.activeToplevel.workspace.name || "")
+                if (aWs.indexOf("special:") === 0) {
+                    active = null
+                }
+            }
+        }
         var lib = root.shell ? root.shell.appLibrary : null
         var allEntries = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications && DesktopEntries.applications.values && DesktopEntries.applications.values.length > 0)
             ? DesktopEntries.applications.values
             : (lib && typeof lib.sortedEntries === "function" ? lib.sortedEntries("") : root.appRows)
-        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems)
+        root.dockItems = DockModel.buildDockItems(root.pinnedIds, toplevels, active, allEntries, lib, notifTracker.canonicalCounts, notifTracker.canonicalUrgent, root.maxDockItems, minTops)
 
         // Refresh active stack item contents if open
         if (root.activeStackItem) {
@@ -1997,6 +2033,13 @@ Item {
         onTriggered: root.updateDockItems()
     }
 
+    Timer {
+        id: minimizeRefreshTimer
+        interval: 65
+        repeat: false
+        onTriggered: root.updateDockItems()
+    }
+
     Connections {
         target: (typeof Hyprland !== "undefined") ? Hyprland : null
         function onActiveToplevelChanged() {
@@ -2015,6 +2058,11 @@ Item {
                 } else {
                     titleChangeDebounceTimer.restart()
                 }
+                return
+            }
+            if (name === "movewindow" || name === "movewindowv2" || name === "activewindow" || name === "activewindowv2" || name === "closewindow" || name === "workspace" || name === "workspacev2" || name === "focusedmon") {
+                root.updateDockItems()
+                return
             }
             if (name === "openwindow") {
                 root.lastWindowOpenTime = Date.now()
