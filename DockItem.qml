@@ -77,7 +77,7 @@ Item {
                     return src
                 }
             }
-            var qs = Quickshell.iconPath(c, false)
+            var qs = Quickshell.iconPath(c, true)
             if (qs && qs.length > 0 && qs.indexOf("application-x-executable") === -1) {
                 return qs
             }
@@ -88,7 +88,7 @@ Item {
             if (fbApp && fbApp.length > 0) return fbApp
         }
 
-        var fbQs = Quickshell.iconPath("omarchy", false) || Quickshell.iconPath("com.mitchellh.ghostty", false) || Quickshell.iconPath("utilities-terminal", false) || Quickshell.iconPath("application-x-executable", true)
+        var fbQs = Quickshell.iconPath("omarchy", true) || Quickshell.iconPath("com.mitchellh.ghostty", true) || Quickshell.iconPath("utilities-terminal", true) || Quickshell.iconPath("application-x-executable", true)
         if (fbQs && fbQs.length > 0) return fbQs
 
         return "file:///usr/share/pixmaps/omarchy.png"

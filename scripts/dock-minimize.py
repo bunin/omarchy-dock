@@ -409,15 +409,6 @@ def main():
         if is_match:
             matching.append(c)
 
-    cache_file = "/tmp/omarchy_dock_minimized.json"
-    saved = {}
-    if os.path.exists(cache_file):
-        try:
-            with open(cache_file, "r") as f:
-                saved = json.load(f)
-        except Exception:
-            saved = {}
-
     focused_ws = "1"
     try:
         monitors_raw = hypr_cmd(sock_path, "j/monitors")
@@ -474,10 +465,8 @@ def main():
             if mode in ("minimize", "minimize-instance"):
                 return
 
-            # RESTORE target_c
-            target_ws = focused_ws
-            if not target_ws or str(target_ws).startswith("special:"):
-                target_ws = saved.get(addr, "1")
+            # RESTORE target_c to current focused workspace
+            target_ws = focused_ws or "1"
             if str(target_ws).startswith("special:"):
                 target_ws = "1"
 
@@ -491,16 +480,9 @@ def main():
             if "error" in res_focus.lower():
                 hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
 
-            saved.pop(addr, None)
             close_any_special(sock_path)
         else:
             # MINIMIZE target_c
-            ws_obj = target_c.get("workspace", {})
-            orig_ws = str(ws_obj.get("name") or ws_obj.get("id") or focused_ws)
-            if orig_ws.startswith("special:"):
-                orig_ws = focused_ws
-            saved[addr] = orig_ws
-
             cmd = f'dispatch hl.dsp.window.move({{ window = "address:{addr}", workspace = "special:minimized" }})'
             res = hypr_cmd(sock_path, cmd)
             if "error" in res.lower():
@@ -525,12 +507,6 @@ def main():
                 if remaining:
                     target_addr = remaining[0]["address"]
                     hypr_cmd(sock_path, f'dispatch hl.dsp.focus({{ window = "address:{target_addr}" }})')
-
-        try:
-            with open(cache_file, "w") as f:
-                json.dump(saved, f)
-        except Exception:
-            pass
         return
 
     elif mode in ("activate-instance", "activate", "restore", "restore-or-launch"):
@@ -553,9 +529,7 @@ def main():
         is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
 
         if is_min:
-            target_ws = focused_ws
-            if not target_ws or str(target_ws).startswith("special:"):
-                target_ws = saved.get(addr, "1")
+            target_ws = focused_ws or "1"
             if str(target_ws).startswith("special:"):
                 target_ws = "1"
 
@@ -569,13 +543,7 @@ def main():
             if "error" in res_focus.lower():
                 hypr_cmd(sock_path, f"dispatch focuswindow address:{addr}")
 
-            saved.pop(addr, None)
             close_any_special(sock_path)
-            try:
-                with open(cache_file, "w") as f:
-                    json.dump(saved, f)
-            except Exception:
-                pass
         else:
             cmd_focus = f'dispatch hl.dsp.focus({{ window = "address:{addr}" }})'
             res_focus = hypr_cmd(sock_path, cmd_focus)

@@ -1709,7 +1709,7 @@ Item {
                     return src
                 }
             }
-            var qs = Quickshell.iconPath(c, false)
+            var qs = Quickshell.iconPath(c, true)
             if (qs && qs.length > 0 && qs.indexOf("application-x-executable") === -1) {
                 return qs
             }

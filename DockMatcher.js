@@ -270,7 +270,16 @@ var FALLBACK_ICON_CANDIDATES = {
     "gnome-calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"],
     "org.gnome.Calculator": ["accessories-calculator", "calc", "calculator", "org.gnome.Calculator"],
     "cliamp": ["cliamp", "audio-player", "multimedia-audio-player", "music"],
-    "org.omarchy.cliamp": ["cliamp", "audio-player", "multimedia-audio-player", "music"]
+    "org.omarchy.cliamp": ["cliamp", "audio-player", "multimedia-audio-player", "music"],
+    "soffice": ["libreoffice-startcenter", "libreoffice-main", "document-viewer", "accessories-text-editor"],
+    "spotify": ["spotify-client", "spotify", "audio-player", "multimedia-audio-player"],
+    "com.spotify.client": ["spotify-client", "spotify", "audio-player"],
+    "obsidian": ["md.obsidian.Obsidian", "obsidian", "accessories-text-editor"],
+    "md.obsidian.obsidian": ["obsidian", "md.obsidian.Obsidian", "accessories-text-editor"],
+    "lite_xl": ["lite-xl", "lite_xl", "text-editor", "accessories-text-editor"],
+    "lite-xl": ["lite-xl", "lite_xl", "text-editor", "accessories-text-editor"],
+    "com.lite_xl.litexl": ["lite-xl", "lite_xl", "text-editor", "accessories-text-editor"],
+    "xdg-desktop-portal-gtk": ["document-open", "file-manager", "preferences-desktop"]
 };
 
 function getCandidates(rawIcon, icon, appId) {
@@ -279,6 +288,14 @@ function getCandidates(rawIcon, icon, appId) {
         if (!c) return;
         var s = String(c).trim();
         if (s.length > 0 && list.indexOf(s) === -1) list.push(s);
+        if (s.indexOf("_") !== -1) {
+            var hyp = s.replace(/_/g, "-");
+            if (list.indexOf(hyp) === -1) list.push(hyp);
+        }
+        if (s.indexOf("-") !== -1) {
+            var und = s.replace(/-/g, "_");
+            if (list.indexOf(und) === -1) list.push(und);
+        }
     }
     add(rawIcon);
     add(icon);
