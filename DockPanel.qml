@@ -1645,6 +1645,7 @@ Item {
         }
         var launchId = itemData.desktopId || itemData.appId || ""
         root.requestFocusOnLaunch(launchId)
+        DockModel.setPendingCliHint(itemData.appId || itemData.desktopId || "", root.knownWindows)
         Util.execDetached(cmd)
         root.updateDockItems()
     }
@@ -1913,7 +1914,22 @@ Item {
     Connections {
         target: ToplevelManager.toplevels
         function onValuesChanged() {
-            if (Date.now() - root.lastTerminalOpenTime < 150) {
+            var live = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+            var hasNewTerm = false
+            for (var i = 0; i < live.length; i++) {
+                var t = live[i]
+                if (t && (t.appId === "foot" || t.appId === "ghostty" || t.appId === "kitty" || t.appId === "alacritty" || t.appId === "wezterm")) {
+                    if (root.knownWindows.indexOf(t) === -1) {
+                        hasNewTerm = true
+                        break
+                    }
+                }
+            }
+            if (hasNewTerm) {
+                root.lastTerminalOpenTime = Date.now()
+                cliScannerProc.running = true
+                terminalSettleTimer.restart()
+            } else if (Date.now() - root.lastTerminalOpenTime < 150) {
                 terminalSettleTimer.restart()
             } else {
                 root.updateDockItems()
@@ -1935,11 +1951,34 @@ Item {
     property double lastWindowOpenTime: 0
     property double lastTerminalOpenTime: 0
 
+    Process {
+        id: cliScannerProc
+        running: false
+        command: ["python3", Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, ""), "scan-cli"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                try {
+                    var apps = JSON.parse(text)
+                    if (Array.isArray(apps)) {
+                        DockModel.setDetectedCliApps(apps)
+                        root.updateDockItems()
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
     Timer {
         id: terminalSettleTimer
-        interval: 60
+        interval: 100
         repeat: false
-        onTriggered: root.updateDockItems()
+        onTriggered: {
+            if (Date.now() - root.lastTerminalOpenTime < 2000) {
+                cliScannerProc.running = true
+            }
+            root.updateDockItems()
+        }
     }
 
     Timer {
@@ -1951,7 +1990,13 @@ Item {
 
     Connections {
         target: (typeof Hyprland !== "undefined") ? Hyprland : null
-        function onActiveToplevelChanged() { root.updateDockItems() }
+        function onActiveToplevelChanged() {
+            if (Date.now() - root.lastTerminalOpenTime < 150) {
+                terminalSettleTimer.restart()
+            } else {
+                root.updateDockItems()
+            }
+        }
         function onRawEvent(event) {
             if (!event) return
             var name = String(event.name || "")
@@ -1971,9 +2016,9 @@ Item {
 
                 if (isTerm) {
                     root.lastTerminalOpenTime = Date.now()
-                }
-                terminalSettleTimer.restart()
-                if (!isTerm) {
+                    cliScannerProc.running = true
+                    terminalSettleTimer.restart()
+                } else {
                     root.updateDockItems()
                 }
 
@@ -2203,6 +2248,15 @@ Item {
         root.refreshHyprlandOptions()
         if (shell && shell.appLibrary && typeof shell.appLibrary.refreshIcons === "function") {
             shell.appLibrary.refreshIcons()
+        }
+        if (shell && shell.appLibrary && typeof shell.appLibrary.launch === "function" && !shell.appLibrary._dockLaunchHooked) {
+            shell.appLibrary._dockLaunchHooked = true
+            var origAppLibLaunch = shell.appLibrary.launch
+            shell.appLibrary.launch = function(appId, appName) {
+                root.requestFocusOnLaunch(appId)
+                DockModel.setPendingCliHint(appId, root.knownWindows)
+                return origAppLibLaunch.apply(this, arguments)
+            }
         }
         root.doUpdateDockItems()
     }

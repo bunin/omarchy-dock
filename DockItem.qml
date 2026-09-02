@@ -579,6 +579,7 @@ Item {
         Keys.onTabPressed: function(event) {
             if (root.itemData) {
                 clickEffectAnim.restart()
+                DockModel.setPendingCliHint(root.itemData.appId || root.itemData.desktopId || "", (root.parentDock && root.parentDock.knownWindows) ? root.parentDock.knownWindows : [])
                 DockModel.launchApp(root.shell, root.itemData, Util)
                 event.accepted = true
             }
@@ -747,6 +748,7 @@ Item {
             if (mouse.button === Qt.MiddleButton) {
                 if (root.itemData && !root.itemData.isStack) {
                     clickEffectAnim.restart()
+                    DockModel.setPendingCliHint(root.itemData.appId || root.itemData.desktopId || "", (root.parentDock && root.parentDock.knownWindows) ? root.parentDock.knownWindows : [])
                     DockModel.launchApp(root.shell, root.itemData, Util)
                 }
                 return

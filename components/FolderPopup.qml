@@ -715,6 +715,7 @@ PanelWindow {
                                 Keys.onTabPressed: function(event) {
                                     if (modelData) {
                                         subClickEffectAnim.restart()
+                                        DockModel.setPendingCliHint(modelData.appId || modelData.desktopId || "", (stackWindow.root && stackWindow.root.knownWindows) ? stackWindow.root.knownWindows : [])
                                         DockModel.launchApp(stackWindow.root.shell, modelData, Util)
                                         event.accepted = true
                                     }
@@ -832,6 +833,7 @@ PanelWindow {
                                     // Middle Click (Wheel Button click) -> Immediately launch duplicate
                                     if (mouse.button === Qt.MiddleButton) {
                                         subClickEffectAnim.restart()
+                                        DockModel.setPendingCliHint(modelData.appId || modelData.desktopId || "", (stackWindow.root && stackWindow.root.knownWindows) ? stackWindow.root.knownWindows : [])
                                         DockModel.launchApp(stackWindow.root.shell, modelData, Util)
                                         return
                                     }

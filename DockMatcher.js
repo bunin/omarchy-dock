@@ -684,6 +684,73 @@ function extractCliApp(title, desktopEntries) {
     return "";
 }
 
+// =========================================================================
+// Predictive Launch Hint — instant CLI app icon appearance
+// When a CLI app is launched, we record the set of currently open windows
+// (knownBefore). When a NEW terminal window opens that was NOT in knownBefore,
+// it is immediately identified as the launched CLI app without waiting
+// for the window title to update.
+// =========================================================================
+var _pendingCliHint = null; // { appId: string, timestamp: number, knownBefore: Array, appliedToTop: Object|null }
+
+function setPendingCliHint(appId, knownWindowsList) {
+    if (!appId) return;
+    var clean = stripDesktop(appId).toLowerCase();
+    var cleanNorm = normalizeKey(clean);
+    var isCli = (KNOWN_CLI_COMMANDS.indexOf(clean) !== -1 || KNOWN_CLI_COMMANDS.indexOf(cleanNorm) !== -1 || clean === "cliamp" || cleanNorm === "cliamp");
+    if (isCli) {
+        var known = [];
+        if (Array.isArray(knownWindowsList)) {
+            for (var i = 0; i < knownWindowsList.length; i++) {
+                if (knownWindowsList[i]) known.push(knownWindowsList[i]);
+            }
+        }
+        var targetCmd = clean;
+        for (var k = 0; k < KNOWN_CLI_COMMANDS.length; k++) {
+            if (KNOWN_CLI_COMMANDS[k] === clean || KNOWN_CLI_COMMANDS[k] === cleanNorm) {
+                targetCmd = KNOWN_CLI_COMMANDS[k];
+                break;
+            }
+        }
+        _pendingCliHint = {
+            appId: targetCmd,
+            timestamp: Date.now(),
+            knownBefore: known,
+            appliedToTop: null
+        };
+    }
+}
+
+function getPendingCliHint() {
+    if (!_pendingCliHint) return null;
+    if (Date.now() - _pendingCliHint.timestamp > 6000) {
+        _pendingCliHint = null;
+        return null;
+    }
+    return _pendingCliHint;
+}
+
+function clearPendingCliHint() {
+    _pendingCliHint = null;
+}
+
+var _detectedCliApps = []; // array of detected CLI command strings from /proc, e.g. ["cliamp", "btop"]
+var _detectedCliTimestamp = 0;
+
+function setDetectedCliApps(apps) {
+    if (Array.isArray(apps)) {
+        _detectedCliApps = apps.slice();
+        _detectedCliTimestamp = Date.now();
+    }
+}
+
+function getDetectedCliApps() {
+    if (Date.now() - _detectedCliTimestamp > 15000) {
+        _detectedCliApps = [];
+    }
+    return _detectedCliApps;
+}
+
 function hasRealDesktopEntry(entries, appId) {
     if (!entries || !appId) return false;
     var target = stripDesktop(appId).toLowerCase().trim();
@@ -947,12 +1014,50 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
     }
 
     // Precalculate CLI app recognition once per toplevel to avoid O(P * T * E) repeated loops
+    // Predictive Launch Hint & Real-Time /proc Scanning:
+    //   1. Detect CLI apps from window titles (extractCliApp)
+    //   2. If not in title, apply predictive launch hint from dock click
+    //   3. If not in title, apply background /proc scanner results (detects CLI apps launched from menu/CLI)
+    //   4. When extractCliApp confirms the real title, clear the hint.
     var toplevelCliApps = {};
+    var hint = getPendingCliHint();
+    var detectedCliList = getDetectedCliApps();
     for (var tc = 0; tc < toplevels.length; tc++) {
         var topObj = toplevels[tc];
         if (topObj && isTerminalApp(topObj.appId || "")) {
             var tk = getTopKey(topObj, tc);
-            toplevelCliApps[tk] = extractCliApp(topObj.title || "", entries);
+            var detected = extractCliApp(topObj.title || "", entries);
+            if (!detected && hint) {
+                var wasAlreadyOpen = false;
+                if (hint.knownBefore && Array.isArray(hint.knownBefore)) {
+                    for (var kb = 0; kb < hint.knownBefore.length; kb++) {
+                        if (hint.knownBefore[kb] === topObj) {
+                            wasAlreadyOpen = true;
+                            break;
+                        }
+                    }
+                }
+                if (!wasAlreadyOpen && (!hint.appliedToTop || hint.appliedToTop === topObj)) {
+                    detected = hint.appId;
+                    hint.appliedToTop = topObj;
+                }
+            }
+            if (!detected && detectedCliList.length > 0) {
+                for (var d = 0; d < detectedCliList.length; d++) {
+                    var candCli = detectedCliList[d];
+                    if (candCli) {
+                        detected = candCli;
+                        break;
+                    }
+                }
+            }
+            if (detected && hint && (hint.appliedToTop === topObj || detected === hint.appId)) {
+                if (extractCliApp(topObj.title || "", entries)) {
+                    clearPendingCliHint();
+                    hint = null;
+                }
+            }
+            toplevelCliApps[tk] = detected;
         }
     }
 

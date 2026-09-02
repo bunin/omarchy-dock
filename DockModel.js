@@ -55,6 +55,8 @@ var matchToplevel = Matcher.matchToplevel;
 var toCanonical = Matcher.toCanonical;
 var getBadgeInfo = Matcher.getBadgeInfo;
 var buildDockItems = Matcher.buildDockItems;
+var setPendingCliHint = Matcher.setPendingCliHint;
+var setDetectedCliApps = Matcher.setDetectedCliApps;
 
 // =========================================================================
 // 4. Dock Widget Management (DockWidgets.js)

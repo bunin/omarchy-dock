@@ -88,6 +88,21 @@ def get_terminal_child_app(pid):
                             if ct == "hx": return "helix"
                             if ct == "btm": return "bottom"
                             return ct
+                # Check grandchild processes in case child was a wrapper shell
+                g_children_path = f"/proc/{cpid}/task/{cpid}/children"
+                if os.path.exists(g_children_path):
+                    with open(g_children_path, "r") as gf:
+                        gchild_pids = gf.read().split()
+                    for gcpid in gchild_pids:
+                        gcomm_path = f"/proc/{gcpid}/comm"
+                        if os.path.exists(gcomm_path):
+                            with open(gcomm_path, "r") as gf2:
+                                gcomm = gf2.read().strip().lower()
+                            if gcomm in KNOWN_CLI_COMMANDS or gcomm == "cliamp":
+                                if gcomm in ("neovim", "vim"): return "nvim"
+                                if gcomm == "hx": return "helix"
+                                if gcomm == "btm": return "bottom"
+                                return gcomm
     except Exception:
         pass
     return ""
@@ -255,12 +270,12 @@ def main():
 
     mode = "minimize"
     arg_start = 1
-    if sys.argv[1] in ("minimize", "restore", "restore-or-launch", "toggle-active", "toggle-or-cycle", "toggle-instance", "activate-instance", "toggle", "activate"):
+    if sys.argv[1] in ("minimize", "restore", "restore-or-launch", "toggle-active", "toggle-or-cycle", "toggle-instance", "activate-instance", "toggle", "activate", "scan-cli"):
         mode = sys.argv[1]
         arg_start = 2
 
     queries = [q.strip() for q in sys.argv[arg_start:] if q.strip()]
-    if not queries:
+    if not queries and mode != "scan-cli":
         return
 
     sock_path = get_hypr_socket()
@@ -280,6 +295,19 @@ def main():
     except Exception:
         if mode == "restore-or-launch":
             launch_fallback(queries)
+        return
+
+    if mode == "scan-cli":
+        detected_apps = []
+        for c in clients:
+            c_cls = str(c.get("class", "")).lower()
+            if is_terminal_identifier(c_cls):
+                pid = c.get("pid")
+                title = c.get("title", "")
+                app = extract_cli_app(title, pid)
+                if app and app not in detected_apps:
+                    detected_apps.append(app)
+        print(json.dumps(detected_apps))
         return
 
     target_index = -1
