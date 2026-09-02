@@ -800,6 +800,17 @@ PanelWindow {
                                     subPreviewResetTimer.restart()
                                 }
 
+                                onCanceled: {
+                                    subLongPressTimer.stop()
+                                    if (isDraggingActive) {
+                                        isDraggingActive = false
+                                        stackWindow.root.folderDragActiveIndex = -1
+                                        stackWindow.root.folderDragTargetIndex = -1
+                                        subDragOffset.x = 0
+                                        subDragOffset.y = 0
+                                    }
+                                }
+
                                 onWheel: function(wheel) {
                                     if (modelData && modelData.isRunning && modelData.toplevels && modelData.toplevels.length >= 2) {
                                         if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {

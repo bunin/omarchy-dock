@@ -2732,9 +2732,21 @@ Item {
                         }
 
                         onDragHoverChanged: function(fromIdx, targetIdx, isMergeIntent) {
+                            if (fromIdx < 0 || targetIdx < 0) {
+                                root.dockDragActiveIndex = -1
+                                root.dockDragTargetIndex = -1
+                                root.currentMergeTargetIndex = -1
+                                return
+                            }
                             root.dockDragActiveIndex = fromIdx
                             root.dockDragTargetIndex = isMergeIntent ? -1 : targetIdx
                             root.currentMergeTargetIndex = isMergeIntent ? targetIdx : -1
+                        }
+
+                        onDragEnded: function() {
+                            root.dockDragActiveIndex = -1
+                            root.dockDragTargetIndex = -1
+                            root.currentMergeTargetIndex = -1
                         }
 
                         onMoveRequested: function(fromIdx, toIdx) {

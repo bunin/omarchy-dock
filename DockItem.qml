@@ -40,6 +40,7 @@ Item {
     signal restoreOrLaunchRequested(var itemData, int targetIndex)
     signal minimizeRequested(var itemData, int targetIndex)
     signal dragStarted(int fromIndex)
+    signal dragEnded()
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
@@ -689,18 +690,19 @@ Item {
                     isMerge = false
                 }
 
+                root.isMergeActive = false
+                dragOffset.x = 0
+                dragOffset.y = 0
+
                 if (targetIdx !== root.itemIndex) {
                     if (isMerge) {
                         root.mergeRequested(root.itemIndex, targetIdx)
                     } else {
                         root.moveRequested(root.itemIndex, targetIdx)
                     }
+                } else {
+                    root.dragEnded()
                 }
-
-                root.isMergeActive = false
-                dragOffset.x = 0
-                dragOffset.y = 0
-                root.dragHoverChanged(root.itemIndex, -1, false)
             }
         }
 
@@ -718,7 +720,7 @@ Item {
                 root.isMergeActive = false
                 dragOffset.x = 0
                 dragOffset.y = 0
-                root.dragHoverChanged(root.itemIndex, -1, false)
+                root.dragEnded()
             }
         }
 
