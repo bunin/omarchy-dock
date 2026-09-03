@@ -33,23 +33,23 @@ PanelWindow {
     mask: Region { item: menuCard }
 
     anchors {
-        top: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "bottom") ? true : (menuWindow.root.isVertical ? true : false)
-        bottom: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "top") ? true : (menuWindow.root.isVertical ? true : false)
-        left: (menuWindow.root.isVertical && menuWindow.root.barPosition === "right") ? true : (!menuWindow.root.isVertical ? true : false)
-        right: (menuWindow.root.isVertical && menuWindow.root.barPosition === "left") ? true : (!menuWindow.root.isVertical ? true : false)
+        top: (!menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "bottom") ? true : (menuWindow.root.isVertical ? true : false)
+        bottom: (!menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "top") ? true : (menuWindow.root.isVertical ? true : false)
+        left: (menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "right") ? true : (!menuWindow.root.isVertical ? true : false)
+        right: (menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "left") ? true : (!menuWindow.root.isVertical ? true : false)
     }
 
     margins {
-        bottom: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "top")
+        bottom: (!menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "top")
             ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? stackOffset : ((Style.gapsOut || 5) + 54 + 6 + stackOffset))))
             : 0
-        top: (!menuWindow.root.isVertical && menuWindow.root.barPosition === "bottom")
+        top: (!menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "bottom")
             ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? stackOffset : ((Style.gapsOut || 5) + 54 + 6 + stackOffset))))
             : 0
-        right: (menuWindow.root.isVertical && menuWindow.root.barPosition === "left")
+        right: (menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "left")
             ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186) : ((Style.gapsOut || 5) + 54 + 6 + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width : 180) + 6))))
             : 0
-        left: (menuWindow.root.isVertical && menuWindow.root.barPosition === "right")
+        left: (menuWindow.root.isVertical && menuWindow.root.oppositeEdge === "right")
             ? (isDirectDockPopup ? dockOffset : (dockOffset + (isOverlay ? ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width + 6 : 186) : ((Style.gapsOut || 5) + 54 + 6 + ((stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.width : 180) + 6))))
             : 0
     }
