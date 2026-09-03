@@ -2480,7 +2480,12 @@ Item {
                 }
 
                 WlrLayershell.namespace: "omarchy-dock"
-                WlrLayershell.layer: WlrLayer.Top
+                // Fullscreen windows stack above the Top layer, which would
+                // leave an autohidden dock unreachable exactly when it is
+                // summoned. Overlay keeps it callable there. In "always" mode
+                // the dock is permanently on screen, so it stays on Top and
+                // lets fullscreen content win.
+                WlrLayershell.layer: root.autohide ? WlrLayer.Overlay : WlrLayer.Top
                 WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
                 exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
                 color: "transparent"
@@ -3156,7 +3161,9 @@ Item {
                          && root.screenShowsDock(modelData)
 
                 WlrLayershell.namespace: "omarchy-dock-edge"
-                WlrLayershell.layer: WlrLayer.Top
+                // The reveal trigger only exists while autohide is on, and it
+                // has to catch the pointer over a fullscreen window.
+                WlrLayershell.layer: WlrLayer.Overlay
                 WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
                 exclusionMode: ExclusionMode.Ignore
                 color: "transparent"
