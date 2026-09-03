@@ -1849,8 +1849,17 @@ Item {
         onBadgeChanged: root.doUpdateDockItems()
     }
 
+    // Clearing a badge rebuilds dockItems, and the Repeater below then destroys
+    // the very delegate whose click is still running. Every statement after the
+    // call — the rest of onItemLeftClicked, and DockItem's own handler, which
+    // has not yet asked for the window — would execute in a dead context and
+    // throw "root is not defined", swallowing the click. Defer the clear so the
+    // click finishes before the delegates are replaced.
     function clearBadge(itemData) {
-        if (notifTracker) notifTracker.clearBadge(itemData)
+        if (!notifTracker) return
+        Qt.callLater(function() {
+            if (notifTracker) notifTracker.clearBadge(itemData)
+        })
     }
 
     function getMinimizedToplevels() {
