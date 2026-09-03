@@ -47,7 +47,7 @@ Item {
     // Reported in this item's window coordinates so the tooltip window can
     // line itself up with the icon without re-deriving the dock layout.
     signal tooltipRequested(var itemData, point windowCenter)
-    signal tooltipDismissed()
+    signal tooltipDismissed(var itemData)
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
@@ -825,7 +825,7 @@ Item {
             if (!root.windowListHovered && !root.windowListOpen) {
                 previewResetTimer.restart()
             }
-            root.tooltipDismissed()
+            root.tooltipDismissed(root.itemData)
         }
 
         onCanceled: {
