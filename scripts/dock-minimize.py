@@ -232,6 +232,18 @@ def find_desktop_file(desktop_id):
     return ""
 
 def launch_fallback(queries):
+    # 0. Dedicated native Wayland App-ID launch for cliamp / CLI audio player
+    for q in queries:
+        if not q or q.startswith("0x") or q.startswith("--"):
+            continue
+        clean_q = q.replace(".desktop", "").lower().strip()
+        if clean_q in ("cliamp", "org.omarchy.cliamp"):
+            try:
+                subprocess.Popen(["foot", "-a", "cliamp", "-T", "cliamp", "-e", "cliamp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+            except Exception:
+                pass
+
     # 1. First priority: desktop entry files that actually exist on disk via gtk-launch
     for q in queries:
         if not q or q.startswith("0x") or q.startswith("--"):

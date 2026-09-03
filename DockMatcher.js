@@ -674,14 +674,14 @@ function extractCliApp(title, desktopEntries) {
         var scanLimit = Math.min(tokens.length, 3);
         for (var i = 0; i < scanLimit; i++) {
             var token = tokens[i];
-            if (token.length < 3 || IGNORED_COMMAND_PREFIXES.indexOf(token) !== -1) continue;
+            if (token.length < 3 || IGNORED_COMMAND_PREFIXES.indexOf(token) !== -1 || isTerminalApp(token)) continue;
             for (var d = 0; d < list.length; d++) {
                 var de = unwrapEntry(list[d]);
                 if (!de) continue;
                 var deId = stripDesktop(de.id || "").toLowerCase();
                 var deExec = String(de.exec || "").toLowerCase().split(/\s+/)[0].split("/").pop();
                 var deName = String(de.name || "").toLowerCase();
-                if (token === deId || token === deExec || token === deName) {
+                if ((token === deId || token === deExec || token === deName) && !isTerminalApp(deId, de)) {
                     return deId || token;
                 }
             }
@@ -1178,14 +1178,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             }
 
             if (!detected && stickyIdx !== -1) {
-                var cachedApp = _stickyCliByWindow[stickyIdx].cliApp;
-                var titleLower = title.toLowerCase().trim();
-                var isShellReset = (titleLower === "foot" || titleLower === "ghostty" || titleLower === "kitty" ||
-                                    titleLower === "bash" || titleLower === "zsh" || titleLower === "fish" ||
-                                    titleLower === "~" || titleLower === "");
-                if (!isShellReset) {
-                    detected = cachedApp;
-                }
+                detected = _stickyCliByWindow[stickyIdx].cliApp;
             }
 
             if (!detected && hint) {
@@ -1220,8 +1213,6 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 } else {
                     _stickyCliByWindow.push({ top: topObj, cliApp: detected, lastTitle: title });
                 }
-            } else if (stickyIdx !== -1) {
-                _stickyCliByWindow.splice(stickyIdx, 1);
             }
 
             if (detected && hint && (hint.appliedToTop === topObj || detected === hint.appId)) {
