@@ -44,6 +44,10 @@ Item {
     signal dragStarted(int fromIndex)
     signal dragEnded()
     signal windowListHoverChanged(bool hovered)
+    // Reported in this item's window coordinates so the tooltip window can
+    // line itself up with the icon without re-deriving the dock layout.
+    signal tooltipRequested(var itemData, point windowCenter)
+    signal tooltipDismissed()
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
@@ -647,6 +651,7 @@ Item {
             mouseArea.forceActiveFocus()
             windowListCloseTimer.stop()
             if (root.canShowWindowList && !root.windowListOpen) windowListOpenTimer.restart()
+            root.tooltipRequested(root.itemData, root.mapToItem(null, root.width / 2, root.height / 2))
         }
 
         Keys.onRightPressed: function(event) {
@@ -820,6 +825,7 @@ Item {
             if (!root.windowListHovered && !root.windowListOpen) {
                 previewResetTimer.restart()
             }
+            root.tooltipDismissed()
         }
 
         onCanceled: {
