@@ -1075,6 +1075,18 @@ function findEntryFast(index, appId) {
     return findEntry(index.list, appId);
 }
 
+// Do two dock item objects describe the same icon? The model is rebuilt
+// whenever windows change, so object identity alone is not enough. Items
+// with no identity at all never match: treating them as equal would let one
+// icon's hover exit cancel another icon's tooltip.
+function isSameDockItem(a, b) {
+    if (a && b && a === b) return true;
+    if (!a || !b) return false;
+    var aId = String(a.id || a.appId || "");
+    var bId = String(b.id || b.appId || "");
+    return aId.length > 0 && aId === bId;
+}
+
 // Longest tooltip we will render, ellipsis included. Window titles are
 // unbounded, and an untrimmed one runs off the side of the screen.
 var TOOLTIP_MAX_LENGTH = 60;

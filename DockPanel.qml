@@ -689,7 +689,14 @@ Item {
         tooltipDelayTimer.restart()
     }
 
-    function dismissTooltip() {
+    // Leaving an icon cancels only that icon's tooltip. The pointer crossing
+    // from one icon to the next can deliver the old icon's exit *after* the
+    // new icon's enter, and an unconditional cancel would kill the tooltip
+    // that was just asked for. Calling this with no item (dock hiding, drag,
+    // popup) always clears.
+    function dismissTooltip(itemData) {
+        if (itemData !== undefined && itemData !== null && root.tooltipItem !== null
+                && !DockModel.isSameDockItem(itemData, root.tooltipItem)) return
         tooltipDelayTimer.stop()
         root.tooltipShown = false
         root.tooltipItem = null
@@ -2862,7 +2869,7 @@ Item {
                         isMergeTarget: (root.currentMergeTargetIndex === index)
 
                         onTooltipRequested: function(data, windowCenter) { root.requestTooltip(data, windowCenter) }
-                        onTooltipDismissed: root.dismissTooltip()
+                        onTooltipDismissed: function(data) { root.dismissTooltip(data) }
 
                         // 1D Live Rail Displacement (with Left Widget offset)
                         readonly property real appBaseOffset: (root.hasLeftWidgets ? (root.leftWidgetsWidth + root.leftSeparatorSize) : 0)
