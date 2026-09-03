@@ -67,6 +67,7 @@ You can customize options directly via the `···` status bar widget or in `~/.
   "dockEnabled": true,
   "visibilityMode": "always",
   "overlayMode": false,
+  "dockPosition": "auto",
   "visibleWorkspace": "all",
   "showFolderTitles": true,
   "showBadges": true,
@@ -81,6 +82,12 @@ You can customize options directly via the `···` status bar widget or in `~/.
 `visibilityMode` accepts `always`, `hover`, `keybind`, or `hybrid`. `overlayMode` uses the
 native v1.5.0 implementation: `false` reserves screen space and `true` floats
 the dock above tiled windows.
+`dockPosition` accepts `auto`, `top`, `bottom`, `left`, or `right`. With `auto`
+(the default) the dock keeps sitting opposite the Omarchy status bar, so a top
+bar puts the dock at the bottom. Any explicit edge pins the dock there and the
+bar is ignored, which lets a top bar and a left-hand dock coexist. Parking the
+dock on the bar's own edge is allowed: the dock offsets itself by the bar's
+thickness instead of covering it.
 `visibleWorkspace` accepts `all`, a numeric workspace ID, or a Hyprland
 workspace name. With `all`, a keyboard opening targets the workspace and
 monitor containing the focused window and keeps that target until the dock is

@@ -19,6 +19,7 @@ BarWidget {
   readonly property bool autohide: root.visibilityMode !== "always"
   property bool overlayMode: false
   property string visibleWorkspace: "all"
+  property string dockPosition: DockSettings.DOCK_POSITION_AUTO
   property bool showFolderTitles: true
   property bool showBadges: true
   property bool widgetsEnabled: true
@@ -72,6 +73,7 @@ BarWidget {
         }
         root.overlayMode = normalized.overlayMode
         root.visibleWorkspace = normalized.visibleWorkspace
+        root.dockPosition = normalized.dockPosition
         if (s && s.dockEnabled !== undefined) {
           root.dockEnabled = (s.dockEnabled === true || s.dockEnabled === "true" || s.dockEnabled === 1 || s.dockEnabled === "1")
         } else {
@@ -119,6 +121,7 @@ BarWidget {
     s.autohide = DockSettings.legacyAutohide(root.visibilityMode)
     s.overlayMode = root.overlayMode
     s.visibleWorkspace = root.visibleWorkspace
+    s.dockPosition = root.dockPosition
     s.showFolderTitles = root.showFolderTitles
     s.showBadges = root.showBadges
     s.widgetsEnabled = root.widgetsEnabled
@@ -205,6 +208,22 @@ BarWidget {
       root.bar.run("omarchy-shell rosakodu.dock setVisibleWorkspace " + root.visibleWorkspace)
     }
   }
+
+  function setDockPosition(position) {
+    root.dockPosition = DockSettings.normalizeDockPosition(position)
+    saveSettings()
+    if (root.bar && typeof root.bar.run === "function") {
+      root.bar.run("omarchy-shell rosakodu.dock setDockPosition " + root.dockPosition)
+    }
+  }
+
+  readonly property var dockPositionOptions: [
+    { value: "auto", label: "Auto (opposite the bar)" },
+    { value: "top", label: "Top edge" },
+    { value: "bottom", label: "Bottom edge" },
+    { value: "left", label: "Left edge" },
+    { value: "right", label: "Right edge" }
+  ]
 
   function buildWorkspaceOptions() {
     var opts = [
@@ -429,7 +448,16 @@ BarWidget {
           onChanged: function(value) { root.setVisibleWorkspace(value) }
         }
 
-        // 3. Autohide dock (edge hover)
+        // 3. Dock Position Dropdown
+        DockDropdown {
+          Layout.fillWidth: true
+          showLabel: false
+          value: root.dockPosition
+          options: root.dockPositionOptions
+          onChanged: function(value) { root.setDockPosition(value) }
+        }
+
+        // 4. Autohide dock (edge hover)
         Rectangle {
           id: autohideRow
           Layout.fillWidth: true
@@ -510,7 +538,7 @@ BarWidget {
           }
         }
 
-        // 4. Keyboard shortcut toggle
+        // 5. Keyboard shortcut toggle
         Rectangle {
           id: keybindRow
           Layout.fillWidth: true
@@ -591,7 +619,7 @@ BarWidget {
           }
         }
 
-        // 5. Shortcut Hint (smoothly appears ONLY when Keyboard shortcut is active)
+        // 6. Shortcut Hint (smoothly appears ONLY when Keyboard shortcut is active)
         ColumnLayout {
           id: shortcutHintCard
           Layout.fillWidth: true

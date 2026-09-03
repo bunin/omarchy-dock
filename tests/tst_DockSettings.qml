@@ -240,4 +240,92 @@ TestCase {
         compare(decision.action, "workspace-unavailable")
         compare(decision.targetWorkspace, "")
     }
+
+    function test_dockPositionDefaultsToAuto() {
+        compare(DockSettings.normalize({}).dockPosition, "auto")
+    }
+
+    function test_dockPositionNormalization_data() {
+        return [
+            { tag: "auto", value: "auto", expected: "auto" },
+            { tag: "top", value: "top", expected: "top" },
+            { tag: "bottom", value: "bottom", expected: "bottom" },
+            { tag: "left", value: "left", expected: "left" },
+            { tag: "right", value: "right", expected: "right" },
+            { tag: "uppercase", value: "LEFT", expected: "left" },
+            { tag: "padded", value: "  right  ", expected: "right" },
+            { tag: "garbage", value: "diagonal", expected: "auto" },
+            { tag: "empty", value: "", expected: "auto" },
+            { tag: "null", value: null, expected: "auto" },
+            { tag: "numeric", value: 3, expected: "auto" }
+        ]
+    }
+
+    function test_dockPositionNormalization(data) {
+        compare(DockSettings.normalizeDockPosition(data.value), data.expected)
+        compare(DockSettings.normalize({ dockPosition: data.value }).dockPosition, data.expected)
+    }
+
+    function test_oppositeEdge_data() {
+        return [
+            { tag: "top", edge: "top", expected: "bottom" },
+            { tag: "bottom", edge: "bottom", expected: "top" },
+            { tag: "left", edge: "left", expected: "right" },
+            { tag: "right", edge: "right", expected: "left" },
+            { tag: "garbage", edge: "nonsense", expected: "top" }
+        ]
+    }
+
+    function test_oppositeEdge(data) {
+        compare(DockSettings.oppositeEdge(data.edge), data.expected)
+    }
+
+    function test_autoPositionSitsOppositeTheBar_data() {
+        return [
+            { tag: "bar-top", bar: "top", expected: "bottom" },
+            { tag: "bar-bottom", bar: "bottom", expected: "top" },
+            { tag: "bar-left", bar: "left", expected: "right" },
+            { tag: "bar-right", bar: "right", expected: "left" }
+        ]
+    }
+
+    function test_autoPositionSitsOppositeTheBar(data) {
+        compare(DockSettings.resolveDockEdge("auto", data.bar), data.expected)
+    }
+
+    function test_explicitPositionIgnoresTheBar_data() {
+        return [
+            { tag: "left-under-top-bar", configured: "left", bar: "top", expected: "left" },
+            { tag: "top-under-top-bar", configured: "top", bar: "top", expected: "top" },
+            { tag: "bottom-under-left-bar", configured: "bottom", bar: "left", expected: "bottom" },
+            { tag: "right-under-right-bar", configured: "right", bar: "right", expected: "right" }
+        ]
+    }
+
+    function test_explicitPositionIgnoresTheBar(data) {
+        compare(DockSettings.resolveDockEdge(data.configured, data.bar), data.expected)
+    }
+
+    function test_invalidConfiguredPositionFallsBackToAutoBehavior() {
+        compare(DockSettings.resolveDockEdge("diagonal", "top"), "bottom")
+    }
+
+    function test_dockIsVerticalOnSideEdges_data() {
+        return [
+            { tag: "left", edge: "left", expected: true },
+            { tag: "right", edge: "right", expected: true },
+            { tag: "top", edge: "top", expected: false },
+            { tag: "bottom", edge: "bottom", expected: false }
+        ]
+    }
+
+    function test_dockIsVerticalOnSideEdges(data) {
+        compare(DockSettings.edgeIsVertical(data.edge), data.expected)
+    }
+
+    function test_dockSharesEdgeWithBarOnlyWhenTheyCollide() {
+        compare(DockSettings.sharesEdgeWithBar("top", "top"), true)
+        compare(DockSettings.sharesEdgeWithBar("bottom", "top"), false)
+        compare(DockSettings.sharesEdgeWithBar("auto", "top"), false)
+    }
 }

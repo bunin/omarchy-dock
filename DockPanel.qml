@@ -28,21 +28,33 @@ Item {
     property string detectedBarPosition: "top"
     property bool detectedBarTransparent: false
 
-    // Live bar position (only used to position the dock on the opposite side of the screen)
-    property string barPosition: {
+    // Live status bar position. Only consulted when dockPosition is "auto".
+    property string systemBarPosition: {
         if (shell && shell.bar && shell.bar.position) return shell.bar.position
         if (shell && shell.barConfig && shell.barConfig.position) return shell.barConfig.position
         return detectedBarPosition
     }
-    readonly property bool isVertical: barPosition === "left" || barPosition === "right"
 
-    // Live dock edge on screen (opposite to system status bar)
-    readonly property string dockScreenPosition: {
-        if (root.barPosition === "top") return "bottom"
-        if (root.barPosition === "bottom") return "top"
-        if (root.barPosition === "left") return "right"
-        if (root.barPosition === "right") return "left"
-        return "bottom"
+    // Configured dock edge: "auto" (opposite the status bar, the historical
+    // behaviour) or an explicit "top" / "bottom" / "left" / "right".
+    property string dockPosition: DockSettings.DOCK_POSITION_AUTO
+
+    // Live dock edge on screen. This is the anchor everything else derives from.
+    readonly property string dockScreenPosition: DockSettings.resolveDockEdge(root.dockPosition, root.systemBarPosition)
+    readonly property bool isVertical: DockSettings.edgeIsVertical(root.dockScreenPosition)
+
+    // The edge facing away from the dock. Layout maths is written against it:
+    // `oppositeEdge === "top"` means the dock itself sits at the bottom.
+    readonly property string oppositeEdge: DockSettings.oppositeEdge(root.dockScreenPosition)
+
+    // True only when the user parked the dock on the status bar's own edge, so
+    // the dock has to leave room for the bar instead of covering it.
+    readonly property bool sharesEdgeWithBar: DockSettings.sharesEdgeWithBar(root.dockPosition, root.systemBarPosition)
+    readonly property real barClearance: {
+        if (!root.sharesEdgeWithBar) return 0
+        if (!Style.bar) return 26
+        // A bar on a side edge is a different thickness than one on top/bottom.
+        return DockSettings.edgeIsVertical(root.systemBarPosition) ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
     }
 
     // Live Bar & Tray Transparency Tracking (Auto-syncs dock with bar & tray glassmorphism)
@@ -114,6 +126,7 @@ Item {
         function setShowFolderTitles(val: string): string { root.showFolderTitles = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setShowBadges(val: string): string { root.showBadges = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
         function setOverlayMode(val: string): string { root.overlayMode = (val === "true" || val === "1"); root.saveSettings(); return "ok" }
+        function setDockPosition(pos: string): string { root.setDockPosition(pos); return "ok" }
         function ping(): string { return "ok" }
     }
 
@@ -898,6 +911,7 @@ Item {
                     root.preferredVisibilityMode = normalized.visibilityMode
                 }
                 root.overlayMode = normalized.overlayMode
+                root.dockPosition = normalized.dockPosition
                 root.visibleWorkspace = normalized.visibleWorkspace
                 if (s.dockEnabled !== undefined) {
                     root.dockEnabled = (s.dockEnabled === true || s.dockEnabled === "true" || s.dockEnabled === 1 || s.dockEnabled === "1")
@@ -953,6 +967,7 @@ Item {
             preferredVisibilityMode: root.preferredVisibilityMode,
             autohide: DockSettings.legacyAutohide(root.visibilityMode),
             overlayMode: root.overlayMode,
+            dockPosition: root.dockPosition,
             visibleWorkspace: root.visibleWorkspace,
             autohideEdgeDepth: root.autohideEdgeDepth,
             showFolderTitles: root.showFolderTitles,
@@ -994,6 +1009,11 @@ Item {
             root.preferredVisibilityMode = norm
         }
         root.visibilityMode = norm
+        saveSettings()
+    }
+
+    function setDockPosition(position) {
+        root.dockPosition = DockSettings.normalizeDockPosition(position)
         saveSettings()
     }
 
@@ -1341,10 +1361,13 @@ Item {
         onTriggered: root.evaluateHoverState()
     }
 
-    property string lastRemapBarPosition: ""
-    onBarPositionChanged: {
-        if (root.lastRemapBarPosition !== root.barPosition) {
-            root.lastRemapBarPosition = root.barPosition
+    // Keyed on the dock's own edge rather than the bar's: with the edge
+    // configurable the dock can move while the bar stays put, and in "auto"
+    // a bar move changes this too.
+    property string lastRemapDockEdge: ""
+    onDockScreenPositionChanged: {
+        if (root.lastRemapDockEdge !== root.dockScreenPosition) {
+            root.lastRemapDockEdge = root.dockScreenPosition
             // Drop the sticky hover flag before the surfaces are rebuilt: the
             // pointer cannot be over a dock that does not exist yet, and the
             // edge trigger re-reveals the dock the moment it really is.
@@ -2512,17 +2535,21 @@ Item {
                 }
 
                 anchors {
-                    top: root.barPosition === "bottom"
-                    bottom: root.barPosition === "top"
-                    left: root.barPosition === "right"
-                    right: root.barPosition === "left"
+                    top: root.oppositeEdge === "bottom"
+                    bottom: root.oppositeEdge === "top"
+                    left: root.oppositeEdge === "right"
+                    right: root.oppositeEdge === "left"
                 }
 
+                // The dock keeps its usual gap from its own screen edge, plus the
+                // status bar's thickness when the user parked it on the bar's edge
+                // (only reachable with an explicit dockPosition — "auto" always
+                // picks the opposite edge, so barClearance stays 0 there).
                 margins {
-                    bottom: (!root.isVertical && root.barPosition === "top") ? (Style.gapsOut || 5) : 0
-                    top: (!root.isVertical && root.barPosition === "bottom") ? (Style.gapsOut || 5) : 0
-                    right: (root.isVertical && root.barPosition === "left") ? (Style.gapsOut || 5) : 0
-                    left: (root.isVertical && root.barPosition === "right") ? (Style.gapsOut || 5) : 0
+                    bottom: (!root.isVertical && root.oppositeEdge === "top") ? ((Style.gapsOut || 5) + root.barClearance) : 0
+                    top: (!root.isVertical && root.oppositeEdge === "bottom") ? ((Style.gapsOut || 5) + root.barClearance) : 0
+                    right: (root.isVertical && root.oppositeEdge === "left") ? ((Style.gapsOut || 5) + root.barClearance) : 0
+                    left: (root.isVertical && root.oppositeEdge === "right") ? ((Style.gapsOut || 5) + root.barClearance) : 0
                 }
 
                 implicitWidth: root.isVertical ? (root.slotSize + 8) : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
@@ -2600,14 +2627,14 @@ Item {
                 id: autohideTranslate
                 x: {
                     if (!root.shouldSlideOut) return 0
-                    if (root.barPosition === "right") return -56
-                    if (root.barPosition === "left") return 56
+                    if (root.oppositeEdge === "right") return -56
+                    if (root.oppositeEdge === "left") return 56
                     return 0
                 }
                 y: {
                     if (!root.shouldSlideOut) return 0
-                    if (root.barPosition === "top") return 56
-                    if (root.barPosition === "bottom") return -56
+                    if (root.oppositeEdge === "top") return 56
+                    if (root.oppositeEdge === "bottom") return -56
                     return 0
                 }
                 Behavior on x { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
@@ -2821,7 +2848,7 @@ Item {
                         itemData: modelData
                         itemIndex: index
                         totalCount: root.dockItems.length
-                        barPosition: root.barPosition
+                        oppositeEdge: root.oppositeEdge
                         shell: root.shell
                         slotSize: root.slotSize
                         iconBaseSize: root.iconBaseSize

@@ -33,17 +33,17 @@ PanelWindow {
     mask: Region { item: stackCard }
 
     anchors {
-        top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? true : (stackWindow.root.isVertical ? true : false)
-        bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? true : (stackWindow.root.isVertical ? true : false)
-        left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? true : (!stackWindow.root.isVertical ? true : false)
-        right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? true : (!stackWindow.root.isVertical ? true : false)
+        top: (!stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "bottom") ? true : (stackWindow.root.isVertical ? true : false)
+        bottom: (!stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "top") ? true : (stackWindow.root.isVertical ? true : false)
+        left: (stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "right") ? true : (!stackWindow.root.isVertical ? true : false)
+        right: (stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "left") ? true : (!stackWindow.root.isVertical ? true : false)
     }
 
     margins {
-        bottom: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "top") ? dockOffset : 0
-        top: (!stackWindow.root.isVertical && stackWindow.root.barPosition === "bottom") ? dockOffset : 0
-        right: (stackWindow.root.isVertical && stackWindow.root.barPosition === "left") ? dockOffset : 0
-        left: (stackWindow.root.isVertical && stackWindow.root.barPosition === "right") ? dockOffset : 0
+        bottom: (!stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "top") ? dockOffset : 0
+        top: (!stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "bottom") ? dockOffset : 0
+        right: (stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "left") ? dockOffset : 0
+        left: (stackWindow.root.isVertical && stackWindow.root.oppositeEdge === "right") ? dockOffset : 0
     }
 
         implicitWidth: stackWindow.root.isVertical ? stackCard.width : (dockWindow.screen ? dockWindow.screen.width : 1920)

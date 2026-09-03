@@ -34,6 +34,58 @@ function normalizeOverlayMode(value, legacySpaceMode) {
     return mode === "overlay"
 }
 
+var DOCK_POSITION_AUTO = "auto"
+var DOCK_EDGES = ["top", "bottom", "left", "right"]
+
+// The edge the dock sits on when nothing valid is configured and the bar
+// position is unknown. Matches the dock's historical default.
+var DOCK_EDGE_FALLBACK = "bottom"
+
+var OPPOSITE_EDGES = {
+    top: "bottom",
+    bottom: "top",
+    left: "right",
+    right: "left"
+}
+
+function normalizeEdge(value) {
+    var edge = String(value === undefined || value === null ? "" : value).trim().toLowerCase()
+    return DOCK_EDGES.indexOf(edge) !== -1 ? edge : DOCK_EDGE_FALLBACK
+}
+
+// Configured dock edge: one of the four screen edges, or "auto" to keep
+// sitting opposite the status bar the way the dock always has.
+function normalizeDockPosition(value) {
+    var position = String(value === undefined || value === null ? "" : value).trim().toLowerCase()
+    if (position === DOCK_POSITION_AUTO) return DOCK_POSITION_AUTO
+    return DOCK_EDGES.indexOf(position) !== -1 ? position : DOCK_POSITION_AUTO
+}
+
+function oppositeEdge(value) {
+    return OPPOSITE_EDGES[normalizeEdge(value)]
+}
+
+// Where the dock actually lives. An explicit setting wins outright; "auto"
+// (and anything unrecognized) falls back to the historical behaviour of
+// sitting opposite the status bar.
+function resolveDockEdge(configuredPosition, barPosition) {
+    var configured = normalizeDockPosition(configuredPosition)
+    return configured === DOCK_POSITION_AUTO ? oppositeEdge(barPosition) : configured
+}
+
+function edgeIsVertical(value) {
+    var edge = normalizeEdge(value)
+    return edge === "left" || edge === "right"
+}
+
+// True only when the user has explicitly parked the dock on the same edge the
+// status bar occupies, so the dock has to step aside for it.
+function sharesEdgeWithBar(configuredPosition, barPosition) {
+    var configured = normalizeDockPosition(configuredPosition)
+    if (configured === DOCK_POSITION_AUTO) return false
+    return configured === normalizeEdge(barPosition)
+}
+
 function normalizeVisibleWorkspace(value) {
     if (value === undefined || value === null) return "all"
     var workspace = String(value).trim()
@@ -45,7 +97,8 @@ function normalize(raw) {
     return {
         visibilityMode: normalizeVisibilityMode(settings.visibilityMode, settings.autohide),
         overlayMode: normalizeOverlayMode(settings.overlayMode, settings.spaceMode),
-        visibleWorkspace: normalizeVisibleWorkspace(settings.visibleWorkspace)
+        visibleWorkspace: normalizeVisibleWorkspace(settings.visibleWorkspace),
+        dockPosition: normalizeDockPosition(settings.dockPosition)
     }
 }
 

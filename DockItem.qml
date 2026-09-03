@@ -14,7 +14,7 @@ Item {
     property var itemData: null
     property int itemIndex: 0
     property int totalCount: 1
-    property string barPosition: "bottom"
+    property string oppositeEdge: "bottom"
     property var shell: null
     property real slotSize: 42
     property real iconBaseSize: 24
@@ -44,7 +44,7 @@ Item {
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
-    readonly property bool isVertical: barPosition === "left" || barPosition === "right"
+    readonly property bool isVertical: oppositeEdge === "left" || oppositeEdge === "right"
 
     width: slotSize
     height: slotSize
@@ -131,7 +131,7 @@ Item {
             NumberAnimation {
                 target: root
                 property: "clickLiftY"
-                to: (root.isVertical ? 0 : (root.barPosition === "bottom" ? -4 : 4))
+                to: (root.isVertical ? 0 : (root.oppositeEdge === "bottom" ? -4 : 4))
                 duration: 90
                 easing.type: Easing.OutQuad
             }
