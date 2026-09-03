@@ -1075,6 +1075,39 @@ function findEntryFast(index, appId) {
     return findEntry(index.list, appId);
 }
 
+// Longest tooltip we will render, ellipsis included. Window titles are
+// unbounded, and an untrimmed one runs off the side of the screen.
+var TOOLTIP_MAX_LENGTH = 60;
+
+function truncateTooltip(text) {
+    var value = String(text == null ? "" : text).trim();
+    if (value.length <= TOOLTIP_MAX_LENGTH) return value;
+    return value.slice(0, TOOLTIP_MAX_LENGTH - 1) + "\u2026";
+}
+
+// Label for a hovered dock item. A single window is best identified by its
+// own title; several windows have no one title that is honest, so name the
+// app and say how many. Folders and idle apps just carry their name.
+function tooltipTextFor(item) {
+    if (!item || typeof item !== "object") return "";
+
+    var name = String(item.name || "").trim();
+    if (item.isStack) return truncateTooltip(name);
+
+    var count = (typeof item.windowCount === "number" && item.windowCount > 0)
+        ? item.windowCount : 0;
+    if (count === 0) return truncateTooltip(name);
+
+    if (count === 1) {
+        var tops = Array.isArray(item.toplevels) ? item.toplevels : [];
+        var top = tops.length > 0 ? tops[0] : null;
+        var title = top ? String(top.title || "").trim() : "";
+        return truncateTooltip(title || name);
+    }
+
+    return truncateTooltip(name + " \u00b7 " + count + " windows");
+}
+
 function collectMatchingToplevels(appId, entry, entries, toplevels, assignedTops, toplevelCliApps, activeToplevel, isTopMinimizedFn, getTopKeyFn) {
     var matching = [];
     var isAnyActive = false;
