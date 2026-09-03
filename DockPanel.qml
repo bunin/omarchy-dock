@@ -555,8 +555,16 @@ Item {
             }
         }
         if (root.shell && root.shell.openPanelIds) {
+            // openPanelIds is a set the shell adds to on summon and removes
+            // from on hide, so a panel that closes itself can leave its id
+            // behind. The shell's own isPluginOpen() knows this and prefers
+            // the panel's live `opened` property, falling back to the set only
+            // when there is nothing live to ask. Trusting the raw set instead
+            // pins the dock open for the rest of the session.
+            var askShell = typeof root.shell.isPluginOpen === "function"
             for (var k in root.shell.openPanelIds) {
-                if (root.shell.openPanelIds[k] === true) return true
+                if (root.shell.openPanelIds[k] !== true) continue
+                if (!askShell || root.shell.isPluginOpen(k)) return true
             }
         }
         return false
