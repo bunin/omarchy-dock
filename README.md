@@ -115,6 +115,12 @@ target. In `keybind` and `hybrid` modes, summoned docks automatically hide after
 the same 1.5-second inactivity delay used by hover mode. Keeping the pointer or
 a dock popup active pauses the dismissal timer.
 
+Hovering an icon for about half a second labels it: the window's own title
+when the app has exactly one window open, the app name and a window count
+when it has several, and just the name for a folder or an app that is not
+running. The label never takes pointer input, so it cannot steal the hover
+that summoned it.
+
 Pinned items and folder layouts are automatically saved to `~/.config/omarchy/dock-pinned.json`.
 
 ---

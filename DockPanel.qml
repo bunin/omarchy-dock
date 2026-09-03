@@ -663,6 +663,46 @@ Item {
         onTriggered: root.refreshActiveWorkspaceWindowCount()
     }
 
+
+    // --- Icon tooltip ---------------------------------------------------
+    property var tooltipItem: null
+    // Centre of the hovered icon, in dock-window coordinates.
+    property point tooltipWindowCenter: Qt.point(0, 0)
+    property bool tooltipShown: false
+    readonly property string tooltipText: DockModel.tooltipTextFor(root.tooltipItem)
+
+    // Same centre, along the axis the dock runs on, in screen coordinates.
+    // The dock window is centred on that axis, so its origin is half the
+    // leftover screen length.
+    readonly property real tooltipAxisCenter: {
+        var win = root.dockWindow
+        if (!win || !win.screen) return 0
+        var screenLength = root.isVertical ? win.screen.height : win.screen.width
+        var windowLength = root.isVertical ? win.height : win.width
+        var origin = (screenLength - windowLength) / 2
+        return origin + (root.isVertical ? root.tooltipWindowCenter.y : root.tooltipWindowCenter.x)
+    }
+
+    Timer {
+        id: tooltipDelayTimer
+        interval: 450
+        repeat: false
+        onTriggered: root.tooltipShown = (root.tooltipItem !== null && root.tooltipText.length > 0)
+    }
+
+    function requestTooltip(itemData, windowCenter) {
+        if (!itemData || root.isEditMode || root.dockDragActiveIndex >= 0) return
+        root.tooltipItem = itemData
+        root.tooltipWindowCenter = windowCenter
+        tooltipDelayTimer.restart()
+    }
+
+    function dismissTooltip() {
+        tooltipDelayTimer.stop()
+        root.tooltipShown = false
+        root.tooltipItem = null
+    }
+
     readonly property bool isWorkspaceEmpty: root.activeWorkspaceWindowCount === 0
     readonly property bool isDockActive: root.isDockHovered
         || root.isStackHovered
@@ -1360,6 +1400,9 @@ Item {
         // would stay revealed with nothing left to ever clear the flag.
         onTriggered: root.evaluateHoverState()
     }
+
+    onShouldSlideOutChanged: if (root.shouldSlideOut) root.dismissTooltip()
+    onDockDragActiveIndexChanged: if (root.dockDragActiveIndex >= 0) root.dismissTooltip()
 
     // Keyed on the dock's own edge rather than the bar's: with the edge
     // configurable the dock can move while the bar stays put, and in "auto"
@@ -2446,6 +2489,7 @@ Item {
     }
 
     onIsEditModeChanged: {
+        if (root.isEditMode) root.dismissTooltip()
         if (isEditMode) {
             var win = root.dockWindow
             if (win && win.surface) win.surface.forceActiveFocus()
@@ -2454,6 +2498,7 @@ Item {
     }
 
     onIsStackOpenChanged: {
+        if (root.isStackOpen) root.dismissTooltip()
         if (isStackOpen) {
             if (stackWindow && stackWindow.stackCard) stackWindow.stackCard.forceActiveFocus()
         }
@@ -2461,6 +2506,7 @@ Item {
     }
 
     onIsMenuOpenChanged: {
+        if (root.isMenuOpen) root.dismissTooltip()
         if (isMenuOpen) {
             if (menuWindow && menuWindow.menuCard) {
                 menuWindow.menuCard.forceActiveFocus()
@@ -2859,6 +2905,9 @@ Item {
                         isSelected: (!root.isMenuFromFolder && root.activeMenuItem && (root.activeMenuItem.appId === modelData.appId || root.activeMenuItem.id === modelData.id)) || (root.activeStackItem && (root.activeStackItem.id === modelData.id || root.activeStackItem.appId === modelData.appId))
                         isMergeTarget: (root.currentMergeTargetIndex === index)
 
+                        onTooltipRequested: function(data, windowCenter) { root.requestTooltip(data, windowCenter) }
+                        onTooltipDismissed: root.dismissTooltip()
+
                         // 1D Live Rail Displacement (with Left Widget offset)
                         readonly property real appBaseOffset: (root.hasLeftWidgets ? (root.leftWidgetsWidth + root.leftSeparatorSize) : 0)
                         readonly property int visualSlot: (root.dockDragActiveIndex === index) ? index : root.getDockVisualSlot(index, root.dockDragActiveIndex, root.dockDragTargetIndex)
@@ -3166,6 +3215,12 @@ Item {
     }
 
     // 2. The Isolated Action Card Popup Overlay Window (Folder Icon Picker)
+    DockTooltip {
+        id: tooltipWindow
+        root: root
+        dockWindow: root.dockWindow
+    }
+
     FolderMenu {
         id: menuWindow
         root: root

@@ -126,4 +126,76 @@ TestCase {
         compare(DockMatcher.hyprAddressFor({ title: "first" }, null), "")
         compare(DockMatcher.hyprAddressFor(null, null), "")
     }
+
+    function test_tooltipTextIsEmptyWithoutAnItem() {
+        compare(DockMatcher.tooltipTextFor(null), "")
+        compare(DockMatcher.tooltipTextFor(undefined), "")
+    }
+
+    function test_tooltipShowsTheAppNameWhenNotRunning() {
+        compare(DockMatcher.tooltipTextFor({
+            name: "Firefox", isRunning: false, windowCount: 0, toplevels: []
+        }), "Firefox")
+    }
+
+    function test_tooltipShowsTheFolderNameForAStack() {
+        compare(DockMatcher.tooltipTextFor({
+            name: "Media", isStack: true, isRunning: true, windowCount: 3,
+            toplevels: [{ title: "Some window" }]
+        }), "Media")
+    }
+
+    function test_tooltipShowsTheWindowTitleForASingleWindow() {
+        compare(DockMatcher.tooltipTextFor({
+            name: "Firefox", isRunning: true, windowCount: 1,
+            toplevels: [{ title: "Hyprland Wiki - Variables" }]
+        }), "Hyprland Wiki - Variables")
+    }
+
+    function test_tooltipFallsBackToTheAppNameWhenTheTitleIsBlank_data() {
+        return [
+            { tag: "empty", title: "" },
+            { tag: "whitespace", title: "   " },
+            { tag: "missing", title: undefined }
+        ]
+    }
+
+    function test_tooltipFallsBackToTheAppNameWhenTheTitleIsBlank(data) {
+        compare(DockMatcher.tooltipTextFor({
+            name: "Alacritty", isRunning: true, windowCount: 1,
+            toplevels: [{ title: data.title }]
+        }), "Alacritty")
+    }
+
+    function test_tooltipCountsWindowsInsteadOfPickingOneTitle() {
+        compare(DockMatcher.tooltipTextFor({
+            name: "Nautilus", isRunning: true, windowCount: 3,
+            toplevels: [{ title: "Home" }, { title: "Downloads" }, { title: "Music" }]
+        }), "Nautilus \u00b7 3 windows")
+    }
+
+    function test_tooltipUsesTheSingularCountLabelDefensively() {
+        // windowCount disagreeing with toplevels.length must not read as "1 windows"
+        compare(DockMatcher.tooltipTextFor({
+            name: "Slack", isRunning: true, windowCount: 2, toplevels: []
+        }), "Slack \u00b7 2 windows")
+    }
+
+    function test_tooltipTruncatesOverlongTitles() {
+        var long = "A window title that runs on well past what any sensible tooltip should ever display"
+        var out = DockMatcher.tooltipTextFor({
+            name: "Editor", isRunning: true, windowCount: 1, toplevels: [{ title: long }]
+        })
+        compare(out.length, 60)
+        compare(out.charAt(59), "\u2026")
+        compare(out.slice(0, 59), long.slice(0, 59))
+    }
+
+    function test_tooltipLeavesTitlesAtTheLimitAlone() {
+        var exact = new Array(61).join("x") // 60 chars
+        compare(exact.length, 60)
+        compare(DockMatcher.tooltipTextFor({
+            name: "Editor", isRunning: true, windowCount: 1, toplevels: [{ title: exact }]
+        }), exact)
+    }
 }

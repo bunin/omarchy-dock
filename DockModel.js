@@ -14,6 +14,7 @@
 var DEFAULT_PINNED = Pinned.DEFAULT_PINNED;
 var stripDesktop = Pinned.stripDesktop;
 var hyprAddressFor = Matcher.hyprAddressFor;
+var tooltipTextFor = Matcher.tooltipTextFor;
 var toArray = Pinned.toArray;
 var parsePinned = Pinned.parsePinned;
 var serializePinned = Pinned.serializePinned;

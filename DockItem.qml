@@ -41,6 +41,10 @@ Item {
     signal minimizeRequested(var itemData, int targetIndex)
     signal dragStarted(int fromIndex)
     signal dragEnded()
+    // Reported in this item's window coordinates so the tooltip window can
+    // line itself up with the icon without re-deriving the dock layout.
+    signal tooltipRequested(var itemData, point windowCenter)
+    signal tooltipDismissed()
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
@@ -510,6 +514,7 @@ Item {
 
         onEntered: {
             mouseArea.forceActiveFocus()
+            root.tooltipRequested(root.itemData, root.mapToItem(null, root.width / 2, root.height / 2))
         }
 
         Keys.onRightPressed: function(event) {
@@ -661,6 +666,7 @@ Item {
             longPressTimer.stop()
             root.isWheelScrolling = false
             previewResetTimer.restart()
+            root.tooltipDismissed()
         }
 
         onCanceled: {
