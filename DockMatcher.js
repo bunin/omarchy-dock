@@ -693,8 +693,8 @@ function extractCliApp(title, desktopEntries) {
         return "nvim";
     }
 
-    // Special patterns for cliamp Winamp scrolling marquee ("really whips", "whips the terminal's ass", "cliamp", "it really", "really whip")
-    if (raw.indexOf("whips") !== -1 || raw.indexOf("terminal's ass") !== -1 || raw.indexOf("cliamp") !== -1 || raw.indexOf("really whip") !== -1 || raw.indexOf("it really") !== -1) {
+    // Special patterns for cliamp Winamp scrolling marquee ("really whips", "whips the terminal's ass", "cliamp", "it really", "really whip", "ass.")
+    if (raw.indexOf("whips") !== -1 || raw.indexOf("terminal's ass") !== -1 || raw.indexOf("cliamp") !== -1 || raw.indexOf("really whip") !== -1 || raw.indexOf("it really") !== -1 || raw.indexOf("ass.") !== -1) {
         return "cliamp";
     }
 
@@ -768,7 +768,8 @@ function getDetectedCliApps() {
     return _detectedCliApps;
 }
 
-var _stickyCliByWindow = []; // [{ top: Object, cliApp: string, lastTitle: string }]
+var _stickyCliByTopId = {}; // topId -> cliApp
+var _nextTopId = 1;
 
 function hasRealDesktopEntry(entries, appId) {
     if (!entries || !appId) return false;
@@ -1137,15 +1138,28 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         return false;
     }
 
+    for (var init_t = 0; init_t < toplevels.length; init_t++) {
+        var tObj = toplevels[init_t];
+        if (tObj && typeof tObj === "object") {
+            try {
+                if (!tObj._dockTopId) {
+                    tObj._dockTopId = (tObj.address ? String(tObj.address) : ("win_" + (_nextTopId++)));
+                }
+            } catch (e) {}
+        }
+    }
+
     function getTopKey(top, idx) {
         if (!top) return "top_" + idx;
+        try {
+            if (top._dockTopId) return top._dockTopId;
+            if (top.address) return String(top.address);
+        } catch (e) {}
         var app = "";
-        var title = "";
         try {
             app = String(top.appId || "");
-            title = String(top.title || "");
         } catch (e) {}
-        return app + "___" + title + "___" + idx;
+        return app + "___" + idx;
     }
 
     function entryFor(id) {
@@ -1169,16 +1183,8 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             var detected = extractCliApp(title, entries);
 
             // Check sticky window cache for persistent player/app matching (vital for Winamp marquee!)
-            var stickyIdx = -1;
-            for (var si = 0; si < _stickyCliByWindow.length; si++) {
-                if (_stickyCliByWindow[si].top === topObj) {
-                    stickyIdx = si;
-                    break;
-                }
-            }
-
-            if (!detected && stickyIdx !== -1) {
-                detected = _stickyCliByWindow[stickyIdx].cliApp;
+            if (!detected && _stickyCliByTopId[tk]) {
+                detected = _stickyCliByTopId[tk];
             }
 
             if (!detected && hint) {
@@ -1207,12 +1213,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
             }
 
             if (detected) {
-                if (stickyIdx !== -1) {
-                    _stickyCliByWindow[stickyIdx].cliApp = detected;
-                    _stickyCliByWindow[stickyIdx].lastTitle = title;
-                } else {
-                    _stickyCliByWindow.push({ top: topObj, cliApp: detected, lastTitle: title });
-                }
+                _stickyCliByTopId[tk] = detected;
             }
 
             if (detected && hint && (hint.appliedToTop === topObj || detected === hint.appId)) {
@@ -1226,9 +1227,13 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
     }
 
     // Purge closed windows from sticky cache
-    for (var sc = _stickyCliByWindow.length - 1; sc >= 0; sc--) {
-        if (toplevels.indexOf(_stickyCliByWindow[sc].top) === -1) {
-            _stickyCliByWindow.splice(sc, 1);
+    var liveTopKeys = {};
+    for (var ltk = 0; ltk < toplevels.length; ltk++) {
+        if (toplevels[ltk]) liveTopKeys[getTopKey(toplevels[ltk], ltk)] = true;
+    }
+    for (var cachedKey in _stickyCliByTopId) {
+        if (!liveTopKeys[cachedKey]) {
+            delete _stickyCliByTopId[cachedKey];
         }
     }
 
@@ -1382,7 +1387,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var rExec = (rEntry && rEntry.exec) ? rEntry.exec : "";
 
         // Find all unassigned toplevels for this unpinned app
-        var rRes = collectMatchingToplevels(rAppId, rEntry, entries, toplevels, assignedTops, null, activeToplevel, isTopMinimized, getTopKey);
+        var rRes = collectMatchingToplevels(rAppId, rEntry, entries, toplevels, assignedTops, toplevelCliApps, activeToplevel, isTopMinimized, getTopKey);
         if (rRes.windowCount === 0) continue;
 
         var rInfo = getBadgeInfo(badgeCounts, urgentCounts, rAppId, rEntry, rName, rDesktopId);

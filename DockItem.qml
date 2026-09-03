@@ -167,12 +167,6 @@ Item {
         return false
     }
 
-    // Smooth Entry Transition for newly opened apps
-    property bool isSpawned: false
-    Component.onCompleted: {
-        isSpawned = true
-    }
-
     // Main animated icon wrapper (smooth, buttery rail motion)
     Item {
         id: iconWrapper
@@ -182,15 +176,14 @@ Item {
         height: root.iconBaseSize
         z: 1
 
-        readonly property real spawnScale: (!root.isSpawned && root.itemData && !root.itemData.isPinned) ? 0.0 : 1.0
-        scale: spawnScale * (root.isDragging ? 1.15 : (root.isEditMode ? 0.82 : (root.isMergeTarget ? 0.94 : (root.isPressVisualActive ? 0.92 : (mouseArea.containsMouse ? 1.10 : 1.0))))) * root.clickScaleFactor
-        opacity: root.iconsReady ? (root.isDragging ? 0.92 : ((!root.isSpawned && root.itemData && !root.itemData.isPinned) ? 0.0 : 1.0)) : 0.0
+        scale: (root.isDragging ? 1.15 : (root.isEditMode ? 0.82 : (root.isMergeTarget ? 0.94 : (root.isPressVisualActive ? 0.92 : (mouseArea.containsMouse ? 1.10 : 1.0))))) * root.clickScaleFactor
+        opacity: root.iconsReady ? (root.isDragging ? 0.92 : 1.0) : 0.0
 
         Behavior on scale {
             enabled: !clickEffectAnim.running
-            NumberAnimation { duration: 220; easing.type: Easing.OutBack; easing.overshoot: 1.25 }
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
         }
-        Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
         // Normal Single App Icon (Instantly react to rawIcon theme swaps, crisp HiDPI rasterization)
         Image {
@@ -207,9 +200,6 @@ Item {
             mipmap: true
             smooth: true
             antialiasing: true
-
-            opacity: status === Image.Ready ? 1.0 : 0.0
-            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
         }
 
         Image {
