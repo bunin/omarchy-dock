@@ -1346,12 +1346,21 @@ Item {
         id: remapTimer
         interval: 100
         repeat: false
+        // The remap builds fresh surfaces whose HoverHandlers start out
+        // unhovered and therefore emit no onHoveredChanged. Re-derive the
+        // hover state by hand, or a dock that was hovered before the remap
+        // would stay revealed with nothing left to ever clear the flag.
+        onTriggered: root.evaluateHoverState()
     }
 
     property string lastRemapDockEdge: ""
     onDockScreenPositionChanged: {
         if (root.lastRemapDockEdge !== root.dockScreenPosition) {
             root.lastRemapDockEdge = root.dockScreenPosition
+            // Drop the sticky hover flag before the surfaces are rebuilt: the
+            // pointer cannot be over a dock that does not exist yet, and the
+            // edge trigger re-reveals the dock the moment it really is.
+            root.isDockHovered = false
             remapTimer.restart()
         }
     }
