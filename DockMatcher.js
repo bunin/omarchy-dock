@@ -768,6 +768,8 @@ function getDetectedCliApps() {
     return _detectedCliApps;
 }
 
+var _stickyCliByWindow = []; // [{ top: Object, cliApp: string, lastTitle: string }]
+
 function hasRealDesktopEntry(entries, appId) {
     if (!entries || !appId) return false;
     var target = stripDesktop(appId).toLowerCase().trim();
@@ -1163,7 +1165,29 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         var topObj = toplevels[tc];
         if (topObj && isTerminalApp(topObj.appId || "")) {
             var tk = getTopKey(topObj, tc);
-            var detected = extractCliApp(topObj.title || "", entries);
+            var title = String(topObj.title || "");
+            var detected = extractCliApp(title, entries);
+
+            // Check sticky window cache for persistent player/app matching (vital for Winamp marquee!)
+            var stickyIdx = -1;
+            for (var si = 0; si < _stickyCliByWindow.length; si++) {
+                if (_stickyCliByWindow[si].top === topObj) {
+                    stickyIdx = si;
+                    break;
+                }
+            }
+
+            if (!detected && stickyIdx !== -1) {
+                var cachedApp = _stickyCliByWindow[stickyIdx].cliApp;
+                var titleLower = title.toLowerCase().trim();
+                var isShellReset = (titleLower === "foot" || titleLower === "ghostty" || titleLower === "kitty" ||
+                                    titleLower === "bash" || titleLower === "zsh" || titleLower === "fish" ||
+                                    titleLower === "~" || titleLower === "");
+                if (!isShellReset) {
+                    detected = cachedApp;
+                }
+            }
+
             if (!detected && hint) {
                 var wasAlreadyOpen = false;
                 if (hint.knownBefore && Array.isArray(hint.knownBefore)) {
@@ -1188,6 +1212,18 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                     }
                 }
             }
+
+            if (detected) {
+                if (stickyIdx !== -1) {
+                    _stickyCliByWindow[stickyIdx].cliApp = detected;
+                    _stickyCliByWindow[stickyIdx].lastTitle = title;
+                } else {
+                    _stickyCliByWindow.push({ top: topObj, cliApp: detected, lastTitle: title });
+                }
+            } else if (stickyIdx !== -1) {
+                _stickyCliByWindow.splice(stickyIdx, 1);
+            }
+
             if (detected && hint && (hint.appliedToTop === topObj || detected === hint.appId)) {
                 if (extractCliApp(topObj.title || "", entries)) {
                     clearPendingCliHint();
@@ -1195,6 +1231,13 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
                 }
             }
             toplevelCliApps[tk] = detected;
+        }
+    }
+
+    // Purge closed windows from sticky cache
+    for (var sc = _stickyCliByWindow.length - 1; sc >= 0; sc--) {
+        if (toplevels.indexOf(_stickyCliByWindow[sc].top) === -1) {
+            _stickyCliByWindow.splice(sc, 1);
         }
     }
 

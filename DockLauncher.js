@@ -57,10 +57,26 @@ function parseDesktopExec(execStr) {
     return args;
 }
 
+function stripDesktop(id) {
+    var value = String(id == null ? "" : id).trim();
+    if (value.slice(-8).toLowerCase() === ".desktop") value = value.slice(0, -8);
+    if (value.slice(-4).toLowerCase() === ".exe") value = value.slice(0, -4);
+    return value;
+}
+
 function launchApp(shell, itemData, util) {
     if (!itemData) return;
     var launchId = itemData.desktopId || itemData.appId || "";
     var appName = itemData.name || "";
+    var cleanId = stripDesktop(launchId).toLowerCase();
+
+    // Fast-path for cliamp & popular CLI utilities: sets dedicated Wayland app-id on foot
+    var cliFastApps = ["cliamp", "org.omarchy.cliamp", "yazi", "btop", "nvim", "helix", "micro", "lazygit", "fastfetch"];
+    if (cliFastApps.indexOf(cleanId) !== -1 && util && typeof util.execArgv === "function") {
+        var baseCmd = (cleanId === "org.omarchy.cliamp" || cleanId === "cliamp") ? "cliamp" : cleanId;
+        util.execArgv(["foot", "-a", baseCmd, "-T", baseCmd, "-e", baseCmd]);
+        return;
+    }
 
     // 1. Primary: Use Omarchy's official shell.appLibrary launcher
     if (shell && shell.appLibrary && typeof shell.appLibrary.launch === "function") {
