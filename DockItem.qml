@@ -15,7 +15,7 @@ Item {
     property var itemData: null
     property int itemIndex: 0
     property int totalCount: 1
-    property string barPosition: "bottom"
+    property string oppositeEdge: "bottom"
     property var shell: null
     property real fontScale: (typeof Style !== "undefined" && typeof Style.fontScale === "number" && Style.fontScale > 0) ? Style.fontScale : 1.0
     property real slotSize: Math.round(42 * fontScale)
@@ -47,10 +47,10 @@ Item {
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
-    readonly property bool isVertical: barPosition === "left" || barPosition === "right"
+    readonly property bool isVertical: oppositeEdge === "left" || oppositeEdge === "right"
 
     // The dock sits on the screen edge opposite the status bar.
-    readonly property string dockEdge: barPosition === "top" ? "bottom" : (barPosition === "bottom" ? "top" : (barPosition === "left" ? "right" : "left"))
+    readonly property string dockEdge: oppositeEdge === "top" ? "bottom" : (oppositeEdge === "bottom" ? "top" : (oppositeEdge === "left" ? "right" : "left"))
 
     // Hovering an app with several windows lists them by title, so the one to
     // focus can be picked directly instead of by its dot in the capsule.
@@ -246,7 +246,7 @@ Item {
             NumberAnimation {
                 target: root
                 property: "clickLiftY"
-                to: (root.isVertical ? 0 : (root.barPosition === "bottom" ? -4 : 4))
+                to: (root.isVertical ? 0 : (root.oppositeEdge === "bottom" ? -4 : 4))
                 duration: 90
                 easing.type: Easing.OutQuad
             }
