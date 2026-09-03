@@ -198,4 +198,34 @@ TestCase {
             name: "Editor", isRunning: true, windowCount: 1, toplevels: [{ title: exact }]
         }), exact)
     }
+
+    function test_sameDockItemMatchesTheIdenticalObject() {
+        var item = { id: "firefox", appId: "firefox" }
+        verify(DockMatcher.isSameDockItem(item, item))
+    }
+
+    function test_sameDockItemMatchesARebuiltCopyById() {
+        verify(DockMatcher.isSameDockItem({ id: "firefox" }, { id: "firefox" }))
+    }
+
+    function test_sameDockItemFallsBackToAppId() {
+        verify(DockMatcher.isSameDockItem({ appId: "slack" }, { appId: "slack" }))
+    }
+
+    function test_differentDockItemsDoNotMatch() {
+        verify(!DockMatcher.isSameDockItem({ id: "firefox" }, { id: "slack" }))
+    }
+
+    function test_dockItemsWithoutIdentityNeverMatch() {
+        // Two anonymous objects must not be treated as the same icon, or one
+        // icon's exit would cancel another icon's tooltip.
+        verify(!DockMatcher.isSameDockItem({}, {}))
+        verify(!DockMatcher.isSameDockItem({ id: "" }, { id: "" }))
+    }
+
+    function test_sameDockItemHandlesMissingOperands() {
+        verify(!DockMatcher.isSameDockItem(null, { id: "firefox" }))
+        verify(!DockMatcher.isSameDockItem({ id: "firefox" }, null))
+        verify(!DockMatcher.isSameDockItem(null, null))
+    }
 }
