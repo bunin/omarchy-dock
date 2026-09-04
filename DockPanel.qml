@@ -3300,7 +3300,12 @@ Item {
                 color: "transparent"
                 mask: Region { item: edgeTriggerLoader }
 
-                // Anchor to the same edge as the dock, no margins — hug the screen edge
+                // Anchor to the same edge as the dock and hug it, except when
+                // the dock is parked on the status bar's own edge: this window
+                // ignores exclusive zones and outranks the bar's Top layer, so
+                // hugging the edge there would take the bar's outer pixels out
+                // of the pointer's reach and reveal the dock on every brush
+                // past it. Start inside the bar instead.
                 anchors {
                     top:    root.dockScreenPosition === "top"
                     bottom: root.dockScreenPosition === "bottom"
@@ -3309,10 +3314,10 @@ Item {
                 }
 
                 margins {
-                    top: 0
-                    bottom: 0
-                    left: 0
-                    right: 0
+                    top:    root.dockScreenPosition === "top" ? root.barDisplacement : 0
+                    bottom: root.dockScreenPosition === "bottom" ? root.barDisplacement : 0
+                    left:   root.dockScreenPosition === "left" ? root.barDisplacement : 0
+                    right:  root.dockScreenPosition === "right" ? root.barDisplacement : 0
                 }
 
                 implicitWidth:  root.isVertical ? root.effectiveAutohideEdgeDepth : Math.max(root.slotSize + 8, root.totalDockDimension + 14)
