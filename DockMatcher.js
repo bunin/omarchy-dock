@@ -1087,6 +1087,18 @@ function isSameDockItem(a, b) {
     return aId.length > 0 && aId === bId;
 }
 
+// True while the given dock item is still one of the icons on the dock. A
+// delegate destroyed under the pointer -- an app's last window closed while its
+// unpinned icon was hovered -- delivers no exit signal, so whoever tracks the
+// hovered icon has to notice the rebuild instead.
+function dockItemStillPresent(item, items) {
+    if (!item || !items || typeof items.length !== "number") return false;
+    for (var i = 0; i < items.length; i++) {
+        if (isSameDockItem(item, items[i])) return true;
+    }
+    return false;
+}
+
 // The Hyprland address of one of a dock item's windows, empty when the window
 // is not in Hyprland's list any more. A dock icon numbers its windows in its
 // own sticky creation order, while the helper script resolves them against

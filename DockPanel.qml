@@ -735,6 +735,16 @@ Item {
         root.tooltipItem = null
     }
 
+    // A delegate destroyed while the pointer is on it never emits its exit, so
+    // the rebuilt dock is the only notice that the labelled icon is gone --
+    // close an unpinned app's last window and the icon disappears from under
+    // the pointer, leaving the label naming an app that is no longer there.
+    onDockItemsChanged: {
+        if (root.tooltipItem !== null && !DockModel.dockItemStillPresent(root.tooltipItem, root.dockItems)) {
+            root.dismissTooltip()
+        }
+    }
+
     readonly property bool isWorkspaceEmpty: root.activeWorkspaceWindowCount === 0
     readonly property bool isDockActive: root.isDockHovered
         || root.isStackHovered

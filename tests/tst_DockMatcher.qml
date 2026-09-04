@@ -186,6 +186,39 @@ TestCase {
         verify(!DockMatcher.isSameDockItem(null, null))
     }
 
+    function test_dockItemStillPresentTracksTheRebuiltDock() {
+        var firefox = { id: "firefox" }
+        var slack = { id: "slack" }
+        verify(DockMatcher.dockItemStillPresent(firefox, [slack, firefox]))
+        verify(!DockMatcher.dockItemStillPresent(firefox, [slack]))
+    }
+
+    // The Repeater hands out fresh objects on every rebuild, so identity has to
+    // go through isSameDockItem rather than ===.
+    function test_dockItemStillPresentMatchesARebuiltCopy() {
+        verify(DockMatcher.dockItemStillPresent({ id: "firefox" }, [{ id: "firefox" }]))
+        verify(DockMatcher.dockItemStillPresent({ appId: "slack" }, [{ appId: "slack" }]))
+    }
+
+    function test_dockItemStillPresentOnAnEmptyOrMissingDock_data() {
+        return [
+            { tag: "empty", items: [] },
+            { tag: "null", items: null },
+            { tag: "undefined", items: undefined },
+            { tag: "not-a-list", items: 3 }
+        ]
+    }
+
+    function test_dockItemStillPresentOnAnEmptyOrMissingDock(data) {
+        verify(!DockMatcher.dockItemStillPresent({ id: "firefox" }, data.items))
+    }
+
+    function test_dockItemStillPresentWithoutAnItem() {
+        verify(!DockMatcher.dockItemStillPresent(null, [{ id: "firefox" }]))
+        verify(!DockMatcher.dockItemStillPresent(undefined, [{ id: "firefox" }]))
+    }
+
+
     // A dock icon numbers its windows in its own sticky creation order, but the
     // helper script resolves a window against Hyprland's client list, whose
     // order changes on its own — a lock screen, a workspace move or a restore
