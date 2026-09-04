@@ -310,6 +310,34 @@ TestCase {
         compare(DockSettings.resolveDockEdge("diagonal", "top"), "bottom")
     }
 
+    function test_autoPositionFallsBackToTheDockDefaultForAnUnknownBar_data() {
+        return [
+            { tag: "missing", bar: undefined, expected: "bottom" },
+            { tag: "null", bar: null, expected: "bottom" },
+            { tag: "empty", bar: "   ", expected: "bottom" },
+            { tag: "typo", bar: "botom", expected: "bottom" },
+            { tag: "numeric", bar: 3, expected: "bottom" }
+        ]
+    }
+
+    function test_autoPositionFallsBackToTheDockDefaultForAnUnknownBar(data) {
+        compare(DockSettings.resolveDockEdge("auto", data.bar), data.expected)
+    }
+
+    function test_dockNeverSharesEdgeWithAnUnknownBar_data() {
+        return [
+            { tag: "missing", bar: undefined },
+            { tag: "null", bar: null },
+            { tag: "empty", bar: "   " },
+            { tag: "typo", bar: "botom" }
+        ]
+    }
+
+    function test_dockNeverSharesEdgeWithAnUnknownBar(data) {
+        compare(DockSettings.sharesEdgeWithBar("bottom", data.bar), false)
+        compare(DockSettings.sharesEdgeWithBar("top", data.bar), false)
+    }
+
     function test_dockIsVerticalOnSideEdges_data() {
         return [
             { tag: "left", edge: "left", expected: true },
