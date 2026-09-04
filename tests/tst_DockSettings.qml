@@ -373,6 +373,40 @@ TestCase {
         compare(DockSettings.barClearanceFor("top", "top", data.size, false, false), 0)
     }
 
+    // A space-reserving dock still sits a bar-thickness off its edge; the
+    // compositor just applies it instead of us. Surfaces that ignore exclusive
+    // zones need the total, not the part the dock window applies itself.
+    function test_barDisplacementSurvivesADockThatReservesSpace() {
+        compare(DockSettings.barClearanceFor("top", "top", 26, false, true), 0)
+        compare(DockSettings.barClearanceFor("top", "top", 26, false, false), 26)
+    }
+
+    // dockClearingOffset(gap, barDisplacement, dockThickness)
+    function test_dockClearingOffsetClearsTheBarAndTheDockCard_data() {
+        return [
+            { tag: "no-bar", gap: 5, bar: 0, thickness: 50, expected: 60 },
+            { tag: "bar-on-the-dock-edge", gap: 5, bar: 26, thickness: 50, expected: 86 },
+            { tag: "vertical-bar", gap: 5, bar: 28, thickness: 50, expected: 88 }
+        ]
+    }
+
+    function test_dockClearingOffsetClearsTheBarAndTheDockCard(data) {
+        compare(DockSettings.dockClearingOffset(data.gap, data.bar, data.thickness), data.expected)
+    }
+
+    function test_dockClearingOffsetIgnoresUnusableInputs_data() {
+        return [
+            { tag: "all-missing", gap: undefined, bar: undefined, thickness: undefined, expected: 0 },
+            { tag: "negative-gap", gap: -5, bar: 0, thickness: 50, expected: 50 },
+            { tag: "negative-bar", gap: 5, bar: -26, thickness: 50, expected: 60 },
+            { tag: "garbage-thickness", gap: 5, bar: 26, thickness: "thick", expected: 36 }
+        ]
+    }
+
+    function test_dockClearingOffsetIgnoresUnusableInputs(data) {
+        compare(DockSettings.dockClearingOffset(data.gap, data.bar, data.thickness), data.expected)
+    }
+
     function test_dockIsVerticalOnSideEdges_data() {
         return [
             { tag: "left", edge: "left", expected: true },

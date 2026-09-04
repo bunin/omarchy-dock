@@ -66,6 +66,22 @@ Item {
                                                                      root.isBarHidden,
                                                                      root.dockDeclaresExclusiveZone)
 
+    // How far the bar pushes the dock off its edge in total, whoever applies
+    // it: the margin above while the dock declares no exclusive zone, the
+    // compositor once it does. Surfaces that always ignore exclusive zones get
+    // no compositor help in either case, so they need this and not barClearance.
+    readonly property real barDisplacement: DockSettings.barClearanceFor(root.dockPosition,
+                                                                        root.systemBarPosition,
+                                                                        root.liveBarSize,
+                                                                        root.isBarHidden,
+                                                                        false)
+
+    // Where a surface that has to clear the dock by hand starts. Shared by the
+    // tooltip and, in overlay mode, the folder popup and the context menu.
+    readonly property real dockClearingOffset: DockSettings.dockClearingOffset(Style.gapsOut || 5,
+                                                                              root.barDisplacement,
+                                                                              root.slotSize + 8)
+
     // Live Bar & Tray Transparency Tracking (Auto-syncs dock with bar & tray glassmorphism)
     readonly property bool isBarTransparent: {
         if (shell && shell.bar && shell.bar.transparent !== undefined) return (shell.bar.transparent === true)

@@ -17,9 +17,10 @@ PanelWindow {
     readonly property string text: tipWindow.root.tooltipText
     readonly property bool vertical: tipWindow.root.isVertical
 
-    // Clear the dock card and the gap on either side of it.
-    readonly property int dockGap: (Style.gapsOut || 5)
-    readonly property int dockOffset: dockGap + (tipWindow.root.slotSize + 8) + dockGap
+    // Clear the dock card, the gap on either side of it, and the status bar
+    // when the dock is parked on the bar's own edge. This window always ignores
+    // exclusive zones, so nothing of that is applied for us.
+    readonly property real dockOffset: tipWindow.root.dockClearingOffset
 
     visible: tipWindow.root.tooltipShown
              && tipWindow.root.dockRevealed
