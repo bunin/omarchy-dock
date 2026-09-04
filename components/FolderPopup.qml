@@ -19,9 +19,11 @@ PanelWindow {
     visible: stackWindow.root.isStackOpen && stackWindow.root.dockRevealed
 
     readonly property bool isOverlay: stackWindow.root.overlayMode === true
-    readonly property int dockThickness: stackWindow.root.slotSize + 8
     readonly property int dockGap: (Style.gapsOut || 5)
-    readonly property int dockOffset: isOverlay ? (dockGap + dockThickness + dockGap) : dockGap
+    // In overlay mode this window ignores exclusive zones, so it has to clear
+    // the dock -- and the status bar the dock may be parked on -- by hand.
+    // Otherwise the compositor keeps it clear of both and a gap is enough.
+    readonly property real dockOffset: isOverlay ? stackWindow.root.dockClearingOffset : dockGap
 
     WlrLayershell.namespace: "omarchy-dock-stack"
     WlrLayershell.layer: isOverlay ? WlrLayer.Overlay : WlrLayer.Top

@@ -113,6 +113,18 @@ function barClearanceFor(configuredPosition, barPosition, barSize, barHidden, do
     return isFinite(size) && size > 0 ? size : 0
 }
 
+// Distance from the dock's screen edge to the outer side of the gap past the
+// dock card -- where a surface that has to clear the dock starts. Only for
+// surfaces that declare no exclusive zone (the tooltip always, popups in
+// overlay mode); for the others the compositor keeps them clear of the dock's
+// own zone and a plain gap is enough.
+function dockClearingOffset(gap, barDisplacement, dockThickness) {
+    var edgeGap = Math.max(0, Number(gap) || 0)
+    var bar = Math.max(0, Number(barDisplacement) || 0)
+    var thickness = Math.max(0, Number(dockThickness) || 0)
+    return edgeGap + bar + thickness + edgeGap
+}
+
 function normalizeVisibleWorkspace(value) {
     if (value === undefined || value === null) return "all"
     var workspace = String(value).trim()
