@@ -16,6 +16,7 @@ var stripDesktop = Pinned.stripDesktop;
 var hyprAddressFor = Matcher.hyprAddressFor;
 var tooltipTextFor = Matcher.tooltipTextFor;
 var isSameDockItem = Matcher.isSameDockItem;
+var dockItemStillPresent = Matcher.dockItemStillPresent;
 var toArray = Pinned.toArray;
 var parsePinned = Pinned.parsePinned;
 var serializePinned = Pinned.serializePinned;
