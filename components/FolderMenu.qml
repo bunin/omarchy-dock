@@ -20,9 +20,11 @@ PanelWindow {
 
     readonly property bool isOverlay: menuWindow.root.overlayMode === true
     readonly property bool isDirectDockPopup: !menuWindow.root.isMenuFromFolder
-    readonly property int dockThickness: menuWindow.root.slotSize + 8
     readonly property int dockGap: (Style.gapsOut || 5)
-    readonly property int dockOffset: isOverlay ? (dockGap + dockThickness + dockGap) : dockGap
+    // In overlay mode this window ignores exclusive zones, so it has to clear
+    // the dock -- and the status bar the dock may be parked on -- by hand.
+    // Otherwise the compositor keeps it clear of both and a gap is enough.
+    readonly property real dockOffset: isOverlay ? menuWindow.root.dockClearingOffset : dockGap
     readonly property int stackOffset: (stackWindow && stackWindow.stackCard) ? stackWindow.stackCard.height + 6 : 186
 
     WlrLayershell.namespace: "omarchy-dock-menu"
