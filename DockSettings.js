@@ -65,12 +65,22 @@ function oppositeEdge(value) {
     return OPPOSITE_EDGES[normalizeEdge(value)]
 }
 
+// A status bar edge we recognize, or "" when the shell reported something we
+// cannot place. Unlike normalizeEdge() this never invents an edge: the dock's
+// own fallback is not a sensible guess for where the *bar* is.
+function normalizeBarEdge(value) {
+    var edge = String(value === undefined || value === null ? "" : value).trim().toLowerCase()
+    return DOCK_EDGES.indexOf(edge) !== -1 ? edge : ""
+}
+
 // Where the dock actually lives. An explicit setting wins outright; "auto"
 // (and anything unrecognized) falls back to the historical behaviour of
 // sitting opposite the status bar.
 function resolveDockEdge(configuredPosition, barPosition) {
     var configured = normalizeDockPosition(configuredPosition)
-    return configured === DOCK_POSITION_AUTO ? oppositeEdge(barPosition) : configured
+    if (configured !== DOCK_POSITION_AUTO) return configured
+    var bar = normalizeBarEdge(barPosition)
+    return bar === "" ? DOCK_EDGE_FALLBACK : OPPOSITE_EDGES[bar]
 }
 
 function edgeIsVertical(value) {
@@ -83,7 +93,8 @@ function edgeIsVertical(value) {
 function sharesEdgeWithBar(configuredPosition, barPosition) {
     var configured = normalizeDockPosition(configuredPosition)
     if (configured === DOCK_POSITION_AUTO) return false
-    return configured === normalizeEdge(barPosition)
+    var bar = normalizeBarEdge(barPosition)
+    return bar !== "" && configured === bar
 }
 
 function normalizeVisibleWorkspace(value) {
