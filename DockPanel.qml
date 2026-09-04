@@ -50,12 +50,21 @@ Item {
     // True only when the user parked the dock on the status bar's own edge, so
     // the dock has to leave room for the bar instead of covering it.
     readonly property bool sharesEdgeWithBar: DockSettings.sharesEdgeWithBar(root.dockPosition, root.systemBarPosition)
-    readonly property real barClearance: {
-        if (!root.sharesEdgeWithBar) return 0
-        if (!Style.bar) return 26
-        // A bar on a side edge is a different thickness than one on top/bottom.
-        return DockSettings.edgeIsVertical(root.systemBarPosition) ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
-    }
+
+    // Whether the dock window reserves screen space right now. The dock layer's
+    // exclusionMode is bound to this, and barClearance is the manual stand-in
+    // for the cases where it is false and the compositor keeps nothing clear.
+    readonly property bool dockDeclaresExclusiveZone: root.dockRevealed && !root.overlayMode
+
+    // A bar on a side edge is a different thickness than one on top/bottom.
+    readonly property int defaultBarSize: DockSettings.edgeIsVertical(root.systemBarPosition) ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
+    readonly property bool isBarHidden: (shell && shell.bar && shell.bar.barHidden === true) ? true : false
+    readonly property int liveBarSize: (shell && shell.bar && shell.bar.barSize > 0) ? shell.bar.barSize : root.defaultBarSize
+    readonly property real barClearance: DockSettings.barClearanceFor(root.dockPosition,
+                                                                     root.systemBarPosition,
+                                                                     root.liveBarSize,
+                                                                     root.isBarHidden,
+                                                                     root.dockDeclaresExclusiveZone)
 
     // Live Bar & Tray Transparency Tracking (Auto-syncs dock with bar & tray glassmorphism)
     readonly property bool isBarTransparent: {
@@ -2569,7 +2578,7 @@ Item {
                 // lets fullscreen content win.
                 WlrLayershell.layer: root.autohide ? WlrLayer.Overlay : WlrLayer.Top
                 WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-                exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
+                exclusionMode: root.dockDeclaresExclusiveZone ? ExclusionMode.Auto : ExclusionMode.Ignore
                 color: "transparent"
 
                 anchors {
