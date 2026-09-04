@@ -68,18 +68,24 @@ function shouldSlideOut(visibilityMode, visibilityOverride, dockActive, workspac
     return dockActive !== true && workspaceEmpty !== true
 }
 
-function keyboardToggleAllowed(visibilityMode, autohide) {
-    if (autohide !== undefined && autohide !== true) return false
-    return normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_KEYBIND
+// Whether the keyboard shortcut may toggle the dock. Everything but "hover"
+// accepts it; "hover" is the screen-edge trigger's alone, because a dock that
+// reveals on approach has nothing for a keypress to add and the two would fight
+// over visibilityOverride.
+function keyboardToggleAllowed(visibilityMode) {
+    return normalizeVisibilityMode(visibilityMode, false) !== VISIBILITY_HOVER
 }
 
-function revealRequestAllowed(visibilityMode, source, autohide) {
-    if (source === "internal") return true
-    return keyboardToggleAllowed(visibilityMode, autohide)
+function revealRequestAllowed(visibilityMode, source) {
+    return source === "internal" || keyboardToggleAllowed(visibilityMode)
 }
 
+// In "keybind" mode a dock summoned by the shortcut hides itself again once the
+// inactivity timer runs out, the same way hover mode does. A dock the user
+// asked to keep on screen in any other mode stays put.
 function shouldAutoDismissKeyboardReveal(visibilityMode, visibilityOverride) {
-    return false
+    return normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_KEYBIND
+        && normalizeVisibilityOverride(visibilityOverride) === VISIBILITY_OVERRIDE_SHOWN
 }
 
 function releaseInteractionVisibilityOverride(owned, previousOverride, currentOverride) {

@@ -670,7 +670,7 @@ Item {
     function toggleReveal(revealSource) {
         if (!root.opened || !root.dockEnabled || !root.pluginEnabled || !root.isPinnedLoaded) return "unavailable"
         var source = revealSource === "internal" ? "internal" : "keyboard"
-        if (!DockSettings.revealRequestAllowed(root.visibilityMode, source, root.autohide)) return "inactive"
+        if (!DockSettings.revealRequestAllowed(root.visibilityMode, source)) return "inactive"
 
         var now = Date.now()
         if (now - root.lastToggleRevealTime < 300) {
