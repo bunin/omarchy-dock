@@ -97,6 +97,22 @@ function sharesEdgeWithBar(configuredPosition, barPosition) {
     return bar !== "" && configured === bar
 }
 
+// Room the dock leaves for the status bar. Only ever non-zero when the user
+// parked the dock on the bar's own edge -- "auto" always picks the opposite
+// edge. wlr-layer-shell already keeps a surface that declares an exclusive
+// zone clear of the bar's own, so this is the manual equivalent for the cases
+// where the dock declares none (overlay mode, or while it is slid out). It
+// mirrors the compositor deliberately, hidden bar included: the bar drops its
+// exclusive zone while hidden, so the dock reclaims the space either way and
+// does not shift when overlay mode is toggled.
+function barClearanceFor(configuredPosition, barPosition, barSize, barHidden, dockDeclaresExclusiveZone) {
+    if (dockDeclaresExclusiveZone === true) return 0
+    if (barHidden === true) return 0
+    if (!sharesEdgeWithBar(configuredPosition, barPosition)) return 0
+    var size = Number(barSize)
+    return isFinite(size) && size > 0 ? size : 0
+}
+
 function normalizeVisibleWorkspace(value) {
     if (value === undefined || value === null) return "all"
     var workspace = String(value).trim()

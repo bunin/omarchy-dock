@@ -338,6 +338,50 @@ TestCase {
         compare(DockSettings.sharesEdgeWithBar("top", data.bar), false)
     }
 
+    // barClearanceFor(configuredPosition, barPosition, barSize, barHidden,
+    //                 dockDeclaresExclusiveZone)
+    function test_barClearanceOnlyAppliesWhenTheDockIgnoresExclusiveZones_data() {
+        return [
+            { tag: "ignore-zone", exclusive: false, expected: 26 },
+            { tag: "declares-zone", exclusive: true, expected: 0 }
+        ]
+    }
+
+    function test_barClearanceOnlyAppliesWhenTheDockIgnoresExclusiveZones(data) {
+        compare(DockSettings.barClearanceFor("top", "top", 26, false, data.exclusive), data.expected)
+    }
+
+    function test_barClearanceIsReclaimedWhileTheBarIsHidden() {
+        compare(DockSettings.barClearanceFor("top", "top", 26, true, false), 0)
+        compare(DockSettings.barClearanceFor("top", "top", 26, false, false), 26)
+    }
+
+    function test_barClearanceIsZeroWhenTheDockDoesNotShareTheBarEdge_data() {
+        return [
+            { tag: "auto", configured: "auto", bar: "top" },
+            { tag: "opposite", configured: "bottom", bar: "top" },
+            { tag: "perpendicular", configured: "left", bar: "top" },
+            { tag: "unknown-bar", configured: "top", bar: "botom" }
+        ]
+    }
+
+    function test_barClearanceIsZeroWhenTheDockDoesNotShareTheBarEdge(data) {
+        compare(DockSettings.barClearanceFor(data.configured, data.bar, 26, false, false), 0)
+    }
+
+    function test_barClearanceRejectsUnusableBarSizes_data() {
+        return [
+            { tag: "negative", size: -10 },
+            { tag: "zero", size: 0 },
+            { tag: "undefined", size: undefined },
+            { tag: "garbage", size: "wide" }
+        ]
+    }
+
+    function test_barClearanceRejectsUnusableBarSizes(data) {
+        compare(DockSettings.barClearanceFor("top", "top", data.size, false, false), 0)
+    }
+
     function test_dockIsVerticalOnSideEdges_data() {
         return [
             { tag: "left", edge: "left", expected: true },
