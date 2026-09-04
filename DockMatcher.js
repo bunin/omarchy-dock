@@ -1075,6 +1075,27 @@ function findEntryFast(index, appId) {
     return findEntry(index.list, appId);
 }
 
+// The Hyprland address of one of a dock item's windows, empty when the window
+// is not in Hyprland's list any more. A dock icon numbers its windows in its
+// own sticky creation order, while the helper script resolves them against
+// Hyprland's client list, and that list reorders on its own — a lock screen, a
+// workspace move or a restore from the scratchpad is enough to swap two entries
+// around. A position sent across that gap names whichever window happens to sit
+// there; an address names the window itself.
+function hyprAddressFor(toplevel, hyprToplevels) {
+    if (!toplevel || !hyprToplevels || typeof hyprToplevels.length !== "number") return "";
+    for (var i = 0; i < hyprToplevels.length; i++) {
+        var ht = hyprToplevels[i];
+        if (!ht) continue;
+        if (ht === toplevel || ht.wayland === toplevel) {
+            var addr = String(ht.address || "");
+            if (!addr) return "";
+            return addr.indexOf("0x") === 0 ? addr : ("0x" + addr);
+        }
+    }
+    return "";
+}
+
 function collectMatchingToplevels(appId, entry, entries, toplevels, assignedTops, toplevelCliApps, activeToplevel, isTopMinimizedFn, getTopKeyFn) {
     var matching = [];
     var isAnyActive = false;

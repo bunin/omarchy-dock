@@ -1609,13 +1609,31 @@ Item {
         }
     }
 
+    // Which window the helper script should act on, as a Hyprland address.
+    // The script resolves a bare --index against Hyprland's client list, which
+    // is ordered independently of the dock's own window order, so the two agree
+    // only until Hyprland reshuffles. Name the window instead, and fall back to
+    // the position only when the address cannot be resolved.
+    function targetWindowArg(itemData, targetIndex) {
+        if (!itemData || typeof targetIndex !== "number" || targetIndex < 0) return ""
+        var tops = itemData.toplevels || []
+        if (targetIndex >= tops.length) return ""
+        var hyprTops = (typeof Hyprland !== "undefined" && Hyprland.toplevels && Hyprland.toplevels.values)
+            ? Hyprland.toplevels.values
+            : []
+        return DockModel.hyprAddressFor(tops[targetIndex], hyprTops)
+    }
+
     function minimizeItem(itemData, targetIndex) {
         if (!itemData) return
         var args = ["minimize-instance"]
         if (itemData.appId) args.push(itemData.appId)
         if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
         if (itemData.exec) args.push(itemData.exec)
-        if (typeof targetIndex === "number" && targetIndex >= 0) {
+        var targetArg = root.targetWindowArg(itemData, targetIndex)
+        if (targetArg) {
+            args.push(targetArg)
+        } else if (typeof targetIndex === "number" && targetIndex >= 0) {
             args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
@@ -1639,7 +1657,10 @@ Item {
         if (itemData.appId) args.push(itemData.appId)
         if (itemData.desktopId && itemData.desktopId !== itemData.appId) args.push(itemData.desktopId)
         if (itemData.exec) args.push(itemData.exec)
-        if (typeof targetIndex === "number" && targetIndex >= 0) {
+        var targetArg = root.targetWindowArg(itemData, targetIndex)
+        if (targetArg) {
+            args.push(targetArg)
+        } else if (typeof targetIndex === "number" && targetIndex >= 0) {
             args.push("--index=" + targetIndex)
         }
         var scriptPath = Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, "")
