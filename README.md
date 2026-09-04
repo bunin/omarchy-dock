@@ -87,7 +87,9 @@ the dock above tiled windows.
 bar puts the dock at the bottom. Any explicit edge pins the dock there and the
 bar is ignored, which lets a top bar and a left-hand dock coexist. Parking the
 dock on the bar's own edge is allowed: the dock offsets itself by the bar's
-thickness instead of covering it.
+thickness instead of covering it, and takes that space back whenever the bar
+hides itself. An edge the plugin does not recognize is treated as no answer at
+all, so an `auto` dock falls back to the bottom.
 `visibleWorkspace` accepts `all`, a numeric workspace ID, or a Hyprland
 workspace name. With `all`, a keyboard opening targets the workspace and
 monitor containing the focused window and keeps that target until the dock is
