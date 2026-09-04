@@ -2461,6 +2461,18 @@ Item {
                 exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
                 color: "transparent"
 
+                // Input region. While the dock is slid out its card is
+                // translated off the window and the HoverHandler below is
+                // disabled, so claiming the whole window there only swallows
+                // the outer edge of whatever is underneath -- a fullscreen
+                // client, since autohide puts this window on the Overlay layer
+                // -- for a dock that cannot be hovered anyway. Revealing it is
+                // the separate edge trigger's job. Hand the strip back.
+                mask: Region {
+                    width: root.shouldSlideOut ? 0 : dockLayer.width
+                    height: root.shouldSlideOut ? 0 : dockLayer.height
+                }
+
                 anchors {
                     top: root.barPosition === "bottom"
                     bottom: root.barPosition === "top"
