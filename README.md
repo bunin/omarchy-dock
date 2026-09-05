@@ -78,7 +78,7 @@ You can customize options directly via the `···` status bar widget or in `~/.
 }
 ```
 
-`visibilityMode` accepts `always`, `hover`, or `keybind`. `overlayMode` uses the
+`visibilityMode` accepts `always`, `hover`, `keybind`, or `hybrid`. `overlayMode` uses the
 native v1.5.0 implementation: `false` reserves screen space and `true` floats
 the dock above tiled windows.
 `visibleWorkspace` accepts `all`, a numeric workspace ID, or a Hyprland
@@ -100,10 +100,11 @@ o.bind("SUPER + SHIFT + D", "Dock", "omarchy-shell -q rosakodu.dock toggleReveal
 ```
 
 Choose any other key combination by changing the first argument to `o.bind`.
-The shortcut works when `visibilityMode` is `always` or `keybind`; `hover`
-accepts only the screen-edge trigger. If the dock is already visible, the first
+The shortcut works when `visibilityMode` is `always`, `keybind`, or `hybrid`; `hover`
+accepts only the screen-edge trigger. In `hybrid` mode, both the screen-edge hover
+trigger and keyboard shortcuts operate concurrently. If the dock is already visible, the first
 press closes it without moving it and the next press opens it on the current
-target. In `keybind` mode the dock starts hidden and automatically hides after
+target. In `keybind` and `hybrid` modes, summoned docks automatically hide after
 the same 1.5-second inactivity delay used by hover mode. Keeping the pointer or
 a dock popup active pauses the dismissal timer.
 

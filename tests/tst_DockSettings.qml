@@ -65,7 +65,8 @@ TestCase {
         return [
             { tag: "always", mode: "always", expected: false },
             { tag: "hover", mode: "hover", expected: true },
-            { tag: "keybind", mode: "keybind", expected: true }
+            { tag: "keybind", mode: "keybind", expected: true },
+            { tag: "hybrid", mode: "hybrid", expected: true }
         ]
     }
 
@@ -114,6 +115,11 @@ TestCase {
             { tag: "hover-empty", mode: "hover", override: 0, active: false, empty: true, hidden: false },
             { tag: "hover-keybind-hidden", mode: "hover", override: -1, active: true, empty: true, hidden: true },
             { tag: "hover-keybind-shown", mode: "hover", override: 1, active: false, empty: false, hidden: false },
+            { tag: "hybrid-active", mode: "hybrid", override: 0, active: true, empty: false, hidden: false },
+            { tag: "hybrid-inactive", mode: "hybrid", override: 0, active: false, empty: false, hidden: true },
+            { tag: "hybrid-empty", mode: "hybrid", override: 0, active: false, empty: true, hidden: false },
+            { tag: "hybrid-keybind-hidden", mode: "hybrid", override: -1, active: true, empty: true, hidden: true },
+            { tag: "hybrid-keybind-shown", mode: "hybrid", override: 1, active: false, empty: false, hidden: false },
             { tag: "keybind-follow", mode: "keybind", override: 0, active: true, empty: true, hidden: true },
             { tag: "keybind-shown", mode: "keybind", override: 1, active: false, empty: false, hidden: false }
         ]
@@ -127,7 +133,8 @@ TestCase {
         return [
             { tag: "autohide-disabled", mode: "always", expected: true },
             { tag: "screen-edge-hover", mode: "hover", expected: false },
-            { tag: "keyboard-shortcut", mode: "keybind", expected: true }
+            { tag: "keyboard-shortcut", mode: "keybind", expected: true },
+            { tag: "hybrid-mode", mode: "hybrid", expected: true }
         ]
     }
 
@@ -139,6 +146,7 @@ TestCase {
         verify(!DockSettings.revealRequestAllowed("hover", "keyboard"))
         verify(DockSettings.revealRequestAllowed("hover", "internal"))
         verify(DockSettings.revealRequestAllowed("keybind", "keyboard"))
+        verify(DockSettings.revealRequestAllowed("hybrid", "keyboard"))
         verify(DockSettings.revealRequestAllowed("always", "keyboard"))
     }
 
@@ -147,7 +155,8 @@ TestCase {
             { tag: "always-shown", mode: "always", override: 1, expected: false },
             { tag: "hover-shown", mode: "hover", override: 1, expected: false },
             { tag: "keybind-follow", mode: "keybind", override: 0, expected: false },
-            { tag: "keybind-shown", mode: "keybind", override: 1, expected: true }
+            { tag: "keybind-shown", mode: "keybind", override: 1, expected: true },
+            { tag: "hybrid-shown", mode: "hybrid", override: 1, expected: true }
         ]
     }
 

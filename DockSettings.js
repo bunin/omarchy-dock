@@ -3,6 +3,7 @@
 var VISIBILITY_ALWAYS = "always"
 var VISIBILITY_HOVER = "hover"
 var VISIBILITY_KEYBIND = "keybind"
+var VISIBILITY_HYBRID = "hybrid"
 
 var VISIBILITY_OVERRIDE_HIDDEN = -1
 var VISIBILITY_OVERRIDE_FOLLOW = 0
@@ -10,10 +11,20 @@ var VISIBILITY_OVERRIDE_SHOWN = 1
 
 function normalizeVisibilityMode(value, legacyAutohide) {
     var mode = String(value === undefined || value === null ? "" : value).trim().toLowerCase()
-    if (mode === VISIBILITY_ALWAYS || mode === VISIBILITY_HOVER || mode === VISIBILITY_KEYBIND) {
+    if (mode === VISIBILITY_ALWAYS || mode === VISIBILITY_HOVER || mode === VISIBILITY_KEYBIND || mode === VISIBILITY_HYBRID) {
         return mode
     }
     return legacyAutohide === true ? VISIBILITY_HOVER : VISIBILITY_ALWAYS
+}
+
+function hasHover(visibilityMode) {
+    var mode = normalizeVisibilityMode(visibilityMode, false)
+    return mode === VISIBILITY_HOVER || mode === VISIBILITY_HYBRID
+}
+
+function hasKeybind(visibilityMode) {
+    var mode = normalizeVisibilityMode(visibilityMode, false)
+    return mode === VISIBILITY_KEYBIND || mode === VISIBILITY_HYBRID
 }
 
 function normalizeOverlayMode(value, legacySpaceMode) {
@@ -84,7 +95,9 @@ function revealRequestAllowed(visibilityMode, source) {
 // inactivity timer runs out, the same way hover mode does. A dock the user
 // asked to keep on screen in any other mode stays put.
 function shouldAutoDismissKeyboardReveal(visibilityMode, visibilityOverride) {
-    return normalizeVisibilityMode(visibilityMode, false) === VISIBILITY_KEYBIND
+    var mode = normalizeVisibilityMode(visibilityMode, false)
+    var isDismissable = mode === VISIBILITY_KEYBIND || mode === VISIBILITY_HYBRID
+    return isDismissable
         && normalizeVisibilityOverride(visibilityOverride) === VISIBILITY_OVERRIDE_SHOWN
 }
 

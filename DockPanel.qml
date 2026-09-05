@@ -637,7 +637,7 @@ Item {
     Timer {
         id: workspaceCheckTimer
         interval: 200
-        running: root.visibilityMode === "hover" && root.workspaceAllowed
+        running: (root.visibilityMode === "hover" || root.visibilityMode === "hybrid") && root.workspaceAllowed
         repeat: true
         onTriggered: root.refreshActiveWorkspaceWindowCount()
     }
@@ -3118,7 +3118,7 @@ Item {
                 required property var modelData
                 screen: modelData
                 visible: root.dockAvailable
-                         && root.visibilityMode === "hover"
+                         && (root.visibilityMode === "hover" || root.visibilityMode === "hybrid")
                          && root.shouldSlideOut
                          && root.screenShowsDock(modelData)
 
@@ -3158,7 +3158,10 @@ Item {
                             hoverEnabled: true
                             acceptedButtons: Qt.NoButton
                             onEntered: {
-                                // Cursor reached the screen edge — show the dock
+                                // Cursor reached the screen edge — reset keyboard override and show dock
+                                if (root.visibilityOverride === DockSettings.VISIBILITY_OVERRIDE_HIDDEN) {
+                                    root.visibilityOverride = DockSettings.VISIBILITY_OVERRIDE_FOLLOW
+                                }
                                 root.isDockHovered = true
                                 autohideLeaveTimer.restart()
                             }
