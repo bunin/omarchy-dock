@@ -1075,6 +1075,63 @@ function findEntryFast(index, appId) {
     return findEntry(index.list, appId);
 }
 
+// Do two dock item objects describe the same icon? The model is rebuilt
+// whenever windows change, so object identity alone is not enough. Items
+// with no identity at all never match: treating them as equal would let one
+// icon's hover exit cancel another icon's tooltip.
+function isSameDockItem(a, b) {
+    if (a && b && a === b) return true;
+    if (!a || !b) return false;
+    var aId = String(a.id || a.appId || "");
+    var bId = String(b.id || b.appId || "");
+    return aId.length > 0 && aId === bId;
+}
+
+// True while the given dock item is still one of the icons on the dock. A
+// delegate destroyed under the pointer -- an app's last window closed while its
+// unpinned icon was hovered -- delivers no exit signal, so whoever tracks the
+// hovered icon has to notice the rebuild instead.
+function dockItemStillPresent(item, items) {
+    if (!item || !items || typeof items.length !== "number") return false;
+    for (var i = 0; i < items.length; i++) {
+        if (isSameDockItem(item, items[i])) return true;
+    }
+    return false;
+}
+
+// Longest tooltip we will render, ellipsis included. Window titles are
+// unbounded, and an untrimmed one runs off the side of the screen.
+var TOOLTIP_MAX_LENGTH = 60;
+
+function truncateTooltip(text) {
+    var value = String(text == null ? "" : text).trim();
+    if (value.length <= TOOLTIP_MAX_LENGTH) return value;
+    return value.slice(0, TOOLTIP_MAX_LENGTH - 1) + "\u2026";
+}
+
+// Label for a hovered dock item. A single window is best identified by its
+// own title; several windows have no one title that is honest, so name the
+// app and say how many. Folders and idle apps just carry their name.
+function tooltipTextFor(item) {
+    if (!item || typeof item !== "object") return "";
+
+    var name = String(item.name || "").trim();
+    if (item.isStack) return truncateTooltip(name);
+
+    var count = (typeof item.windowCount === "number" && item.windowCount > 0)
+        ? item.windowCount : 0;
+    if (count === 0) return truncateTooltip(name);
+
+    if (count === 1) {
+        var tops = Array.isArray(item.toplevels) ? item.toplevels : [];
+        var top = tops.length > 0 ? tops[0] : null;
+        var title = top ? String(top.title || "").trim() : "";
+        return truncateTooltip(title || name);
+    }
+
+    return truncateTooltip(name + " \u00b7 " + count + " windows");
+}
+
 function collectMatchingToplevels(appId, entry, entries, toplevels, assignedTops, toplevelCliApps, activeToplevel, isTopMinimizedFn, getTopKeyFn) {
     var matching = [];
     var isAnyActive = false;
