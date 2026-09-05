@@ -2472,10 +2472,27 @@ Item {
                 }
 
                 WlrLayershell.namespace: "omarchy-dock"
-                WlrLayershell.layer: WlrLayer.Top
+                // Fullscreen windows stack above the Top layer, which would
+                // leave an autohidden dock unreachable exactly when it is
+                // summoned. Overlay keeps it callable there. In "always" mode
+                // the dock is permanently on screen, so it stays on Top and
+                // lets fullscreen content win.
+                WlrLayershell.layer: root.autohide ? WlrLayer.Overlay : WlrLayer.Top
                 WlrLayershell.keyboardFocus: root.isEditMode ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
                 exclusionMode: root.dockRevealed && !root.overlayMode ? ExclusionMode.Auto : ExclusionMode.Ignore
                 color: "transparent"
+
+                // Input region. While the dock is slid out its card is
+                // translated off the window and the HoverHandler below is
+                // disabled, so claiming the whole window there only swallows
+                // the outer edge of whatever is underneath -- a fullscreen
+                // client, since autohide puts this window on the Overlay layer
+                // -- for a dock that cannot be hovered anyway. Revealing it is
+                // the separate edge trigger's job. Hand the strip back.
+                mask: Region {
+                    width: root.shouldSlideOut ? 0 : dockLayer.width
+                    height: root.shouldSlideOut ? 0 : dockLayer.height
+                }
 
                 anchors {
                     top: root.barPosition === "bottom"
@@ -3144,7 +3161,9 @@ Item {
                          && root.screenShowsDock(modelData)
 
                 WlrLayershell.namespace: "omarchy-dock-edge"
-                WlrLayershell.layer: WlrLayer.Top
+                // The reveal trigger only exists while autohide is on, and it
+                // has to catch the pointer over a fullscreen window.
+                WlrLayershell.layer: WlrLayer.Overlay
                 WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
                 exclusionMode: ExclusionMode.Ignore
                 color: "transparent"
