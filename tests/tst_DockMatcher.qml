@@ -83,4 +83,47 @@ TestCase {
         compare(resAllMin.isActive, false) // Minimized cannot be active
         compare(resAllMin.isMinimized, true)
     }
+
+    // A dock icon numbers its windows in its own sticky creation order, but the
+    // helper script resolves a window against Hyprland's client list, whose
+    // order changes on its own — a lock screen, a workspace move or a restore
+    // from the scratchpad is enough. Passing a position therefore aims at
+    // whichever window happens to sit there now; an address names one window.
+    function test_hyprAddressForFindsTheWindowByIdentity() {
+        var firstWayland = { title: "first" }
+        var secondWayland = { title: "second" }
+        var hyprToplevels = [
+            { address: "0xaaa111", wayland: firstWayland },
+            { address: "0xbbb222", wayland: secondWayland }
+        ]
+        compare(DockMatcher.hyprAddressFor(secondWayland, hyprToplevels), "0xbbb222")
+        compare(DockMatcher.hyprAddressFor(firstWayland, hyprToplevels), "0xaaa111")
+    }
+
+    function test_hyprAddressForPrefixesABareHexAddress() {
+        // The script recognises an address only by its 0x prefix, so a bare
+        // address from Hyprland has to grow one before it is passed along.
+        var wayland = { title: "first" }
+        compare(DockMatcher.hyprAddressFor(wayland, [{ address: "ccc333", wayland: wayland }]), "0xccc333")
+    }
+
+    function test_hyprAddressForIgnoresPositionAndOrder() {
+        // The same window keeps its address after Hyprland reshuffles its list.
+        var wayland = { title: "first" }
+        var before = [{ address: "0xaaa111", wayland: wayland }, { address: "0xbbb222", wayland: {} }]
+        var after = [{ address: "0xbbb222", wayland: {} }, { address: "0xaaa111", wayland: wayland }]
+        compare(DockMatcher.hyprAddressFor(wayland, before), DockMatcher.hyprAddressFor(wayland, after))
+    }
+
+    function test_hyprAddressForReturnsNothingForAnUnknownWindow() {
+        // A window that closed between the click and the lookup has no address,
+        // and the caller falls back rather than aiming at a stranger.
+        compare(DockMatcher.hyprAddressFor({ title: "gone" }, [{ address: "0xaaa111", wayland: {} }]), "")
+    }
+
+    function test_hyprAddressForHandlesMissingOperands() {
+        compare(DockMatcher.hyprAddressFor(null, [{ address: "0xaaa111", wayland: {} }]), "")
+        compare(DockMatcher.hyprAddressFor({ title: "first" }, null), "")
+        compare(DockMatcher.hyprAddressFor(null, null), "")
+    }
 }
