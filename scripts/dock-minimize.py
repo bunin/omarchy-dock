@@ -231,6 +231,67 @@ def find_desktop_file(desktop_id):
             return clean
     return ""
 
+def split_queries(queries):
+    """Separate the app identifiers from the window selector.
+
+    A dock click sends the app's identifiers (app id, desktop id, exec) and,
+    optionally, which of that app's windows to act on: a Hyprland address
+    ("0x..."), or the legacy "--index=N" / bare-N position. A selector picks a
+    window out of the app's windows -- it must not narrow the match itself, or
+    the app's other windows stop existing as far as the caller can tell, and
+    logic like "focus a sibling after minimizing" has nothing left to find.
+
+    Only a "0x" prefix counts as an address. Hyprland always writes them that
+    way, and app identifiers that happen to be spelled out of hex digits
+    ("deface") are identifiers.
+    """
+    target_index = -1
+    target_addr = ""
+    identifiers = []
+    for q in queries:
+        if q.startswith("--index="):
+            try:
+                target_index = int(q.split("=")[1])
+            except Exception:
+                pass
+        elif q.isdigit() and target_index == -1:
+            try:
+                target_index = int(q)
+            except Exception:
+                pass
+        elif q.lower().startswith("0x") and not target_addr:
+            target_addr = q.lower()
+        else:
+            identifiers.append(q)
+    return identifiers, target_index, target_addr
+
+
+def pick_target(matching, visible_windows, minimized_windows, target_addr, target_index, active_addr):
+    """The one window a dock click is aimed at, out of the app's windows.
+
+    An address names a specific window and wins outright; an index is the
+    legacy form of the same thing and is resolved against Hyprland's client
+    order, which reorders on its own. With neither -- or with a selector whose
+    window is gone -- fall back to the active window (when the caller cares),
+    then the first visible one, then a minimized one.
+    """
+    if target_addr:
+        for c in matching:
+            if str(c.get("address", "")).lower() == target_addr:
+                return c
+    if 0 <= target_index < len(matching):
+        return matching[target_index]
+    if active_addr:
+        for c in matching:
+            if str(c.get("address", "")).lower() == active_addr:
+                return c
+    if visible_windows:
+        return visible_windows[0]
+    if minimized_windows:
+        return minimized_windows[0]
+    return matching[0] if matching else None
+
+
 def launch_fallback(queries):
     # 0. Dedicated native Wayland App-ID launch for cliamp / CLI audio player
     for q in queries:
@@ -322,26 +383,10 @@ def main():
         print(json.dumps(detected_apps))
         return
 
-    target_index = -1
-    filtered_queries = []
-    for q in queries:
-        if q.startswith("--index="):
-            try:
-                target_index = int(q.split("=")[1])
-            except Exception:
-                pass
-        elif q.isdigit() and target_index == -1:
-            try:
-                target_index = int(q)
-            except Exception:
-                pass
-        else:
-            filtered_queries.append(q)
-    queries = filtered_queries
+    queries, target_index, target_addr = split_queries(queries)
 
     norm_queries = [normalize(q) for q in queries]
     raw_queries = [q.lower() for q in queries]
-    addr_queries = [q.lower() for q in queries if q.startswith("0x") or (len(q) > 4 and all(c in "0123456789abcdef" for c in q.lower().replace("0x", "")))]
 
     is_terminal_query = bool(queries and is_terminal_identifier(queries[0]))
     target_cli = ""
@@ -376,7 +421,6 @@ def main():
 
     matching = []
     for c in clients:
-        c_addr = str(c.get("address", "")).lower()
         c_class = str(c.get("class", "")).lower()
         c_init_class = str(c.get("initialClass", "")).lower()
         c_title = str(c.get("title", "")).lower()
@@ -386,11 +430,6 @@ def main():
         c_pid = c.get("pid")
         is_client_terminal = is_terminal_identifier(c_class) or is_terminal_identifier(c_init_class)
         cli_app = extract_cli_app(c_title, c_pid) if is_client_terminal else ""
-
-        if addr_queries:
-            if c_addr in addr_queries:
-                matching.append(c)
-            continue
 
         if target_cli:
             # When clicking a dedicated CLI app icon (e.g. yazi, nvim), match if the terminal window is running that CLI app
@@ -408,7 +447,7 @@ def main():
         is_match = False
         for i, q in enumerate(raw_queries):
             nq = norm_queries[i]
-            if q == c_addr or q == c_class or q == c_init_class:
+            if q == c_class or q == c_init_class:
                 is_match = True
                 break
             if nq and (nq == c_norm_class or nq == c_norm_init):
@@ -447,27 +486,19 @@ def main():
         if not matching:
             return
 
-        target_c = None
-        if target_index >= 0 and target_index < len(matching):
-            target_c = matching[target_index]
-        else:
-            active_addr = ""
-            try:
-                active_raw = hypr_cmd(sock_path, "j/activewindow")
-                if active_raw:
-                    active_obj = json.loads(active_raw)
-                    active_addr = str(active_obj.get("address", "")).lower()
-            except Exception:
-                pass
-            active_matches = [c for c in matching if str(c.get("address", "")).lower() == active_addr]
-            if active_matches:
-                target_c = active_matches[0]
-            elif visible_windows:
-                target_c = visible_windows[0]
-            elif minimized_windows:
-                target_c = minimized_windows[0]
-            else:
-                target_c = matching[0]
+        active_addr = ""
+        try:
+            active_raw = hypr_cmd(sock_path, "j/activewindow")
+            if active_raw:
+                active_obj = json.loads(active_raw)
+                active_addr = str(active_obj.get("address", "")).lower()
+        except Exception:
+            pass
+
+        target_c = pick_target(matching, visible_windows, minimized_windows,
+                               target_addr, target_index, active_addr)
+        if target_c is None:
+            return
 
         addr = target_c["address"]
         is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
@@ -526,16 +557,10 @@ def main():
             launch_fallback(queries)
             return
 
-        target_c = None
-        if target_index >= 0 and target_index < len(matching):
-            target_c = matching[target_index]
-        else:
-            if visible_windows:
-                target_c = visible_windows[0]
-            elif minimized_windows:
-                target_c = minimized_windows[0]
-            else:
-                target_c = matching[0]
+        target_c = pick_target(matching, visible_windows, minimized_windows,
+                               target_addr, target_index, "")
+        if target_c is None:
+            return
 
         addr = target_c["address"]
         is_min = str(target_c.get("workspace", {}).get("name", "")).startswith("special:")
