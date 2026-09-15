@@ -624,6 +624,13 @@ function findEntry(desktopEntries, appId) {
             if (emName === target || (cleanTarget && emName === cleanTarget) || (hypTarget && emName === hypTarget) || (firstToken.length >= 3 && emName === firstToken)) return em;
         }
 
+        // 1b2. StartupWMClass match: the entry's own claim on this window class
+        for (var sc = 0; sc < list.length; sc++) {
+            var esc = unwrapEntry(list[sc]);
+            if (!esc) continue;
+            if (String(esc.startupClass || "").toLowerCase() === target) return esc;
+        }
+
         // 1c. Exact URL / Domain match in exec or entry.id for Chrome Web Apps
         if (chromeDom.length > 0) {
             for (var c = 0; c < list.length; c++) {
@@ -1218,6 +1225,11 @@ function matchToplevel(toplevel, appId, entry, desktopEntries, cachedCliApp) {
 
     // 3. Entry ID, StartupClass, Name, Icon and Exec match
     if (entry) {
+        // StartupWMClass first: it is the entry's own claim on a window class,
+        // and the only tie left once the id stops resembling it.
+        var entryClass = String(entry.startupClass || "").toLowerCase();
+        if (entryClass && (appClass === entryClass || appClassClean === entryClass || baseAppClass === entryClass)) return true;
+
         var entryId = stripDesktop(entry.id || "").toLowerCase();
         var normEntryId = normalizeKey(entryId);
         var entrySc = String(entry.startupClass || entry.startupWMClass || "").toLowerCase();
@@ -1483,6 +1495,12 @@ function createDesktopEntryIndex(desktopEntries) {
             var execBase = eExecVal.trim().split(/\s+/)[0].split("/").pop().toLowerCase();
             if (execBase && !byExec[execBase]) byExec[execBase] = e;
         }
+
+        // StartupWMClass is the only thing tying a window back to its entry
+        // when the two names differ, as with JetBrains Toolbox installs whose
+        // entry id carries a per-install UUID the window class never shows.
+        var startupClass = String(e.startupClass || "").toLowerCase();
+        if (startupClass && !byStartupClass[startupClass]) byStartupClass[startupClass] = e;
     }
 
     return { list: list, byId: byId, byName: byName, byNorm: byNorm, byExec: byExec, byStartupClass: byStartupClass };
@@ -1502,10 +1520,13 @@ function findEntryFast(index, appId) {
     // 2. O(1) direct Name match
     if (index.byName[target]) return index.byName[target];
 
-    // 3. O(1) Exec binary match
+    // 3. O(1) StartupWMClass match
+    if (index.byStartupClass && index.byStartupClass[target]) return index.byStartupClass[target];
+
+    // 4. O(1) Exec binary match
     if (index.byExec[target]) return index.byExec[target];
 
-    // 4. O(1) Normalized key match
+    // 5. O(1) Normalized key match
     var targetNorm = normalizeKey(target);
     if (targetNorm && index.byNorm[targetNorm]) return index.byNorm[targetNorm];
 
@@ -1587,7 +1608,7 @@ function findEntryFast(index, appId) {
         }
     }
 
-    // 6. Fallback to deep heuristic search on cache miss
+    // 7. Fallback to deep heuristic search on cache miss
     return findEntry(index.list, appId);
 }
 

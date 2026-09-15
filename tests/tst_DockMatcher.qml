@@ -50,6 +50,40 @@ TestCase {
         compare(ghosttyEntry.name, "Ghostty")
     }
 
+    // JetBrains Toolbox names its entry after a per-install UUID while the
+    // window keeps the plain class, so only StartupWMClass ties the two.
+    function test_desktopEntryIndex_startupClassLookup() {
+        var mockEntries = [
+            { id: "jetbrains-goland-e157c2b5.desktop", name: "GoLand 2026.2.2.1", startupClass: "jetbrains-goland", icon: "jetbrains-goland-e157c2b5" }
+        ]
+
+        var index = DockMatcher.createDesktopEntryIndex(mockEntries)
+        var golandFast = DockMatcher.findEntryFast(index, "jetbrains-goland")
+        verify(golandFast != null)
+        compare(golandFast.icon, "jetbrains-goland-e157c2b5")
+
+        var golandDeep = DockMatcher.findEntry(mockEntries, "jetbrains-goland")
+        verify(golandDeep != null)
+        compare(golandDeep.icon, "jetbrains-goland-e157c2b5")
+    }
+
+    // Once the entry is found the dock renames the item after the entry id, so
+    // a window whose class looks nothing like that id has to be tied back
+    // through StartupWMClass or its icon leaves the dock altogether.
+    function test_startupClassKeepsTheWindowOnItsIcon() {
+        var entries = [
+            { id: "jetbrains-goland-e157c2b5.desktop", name: "GoLand 2026.2.2.1", startupClass: "jetbrains-goland", icon: "jetbrains-goland-e157c2b5" }
+        ]
+        var top = { appId: "jetbrains-goland", title: "ccx-backend" }
+
+        verify(DockMatcher.matchToplevel(top, "jetbrains-goland-e157c2b5", entries[0], entries, null))
+
+        var items = DockMatcher.buildDockItems([], [top], top, entries, null, {}, {}, 0, [])
+        compare(items.length, 1)
+        compare(items[0].windowCount, 1)
+        compare(items[0].rawIcon, "jetbrains-goland-e157c2b5")
+    }
+
     function test_collectMatchingToplevels_activeAndMinimized() {
         var top1 = { appId: "google-chrome", title: "GitHub - Omarchy Dock" }
         var top2 = { appId: "google-chrome", title: "YouTube" }
