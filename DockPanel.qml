@@ -64,9 +64,10 @@ Item {
         return detectedBarTransparent
     }
 
-    // Static Standard Dock Geometry (Strictly stable, no jumping/twitching on window state)
-    readonly property real slotSize: 42
-    readonly property real iconBaseSize: 24
+    // Dynamic Standard Dock Geometry (Scales with shell type scale Style.fontScale, strictly stable)
+    readonly property real fontScale: (typeof Style !== "undefined" && typeof Style.fontScale === "number" && Style.fontScale > 0) ? Style.fontScale : 1.0
+    readonly property real slotSize: Math.round(42 * fontScale)
+    readonly property real iconBaseSize: Math.round(24 * fontScale)
 
     // Live 1D Rail Displacement for Main Dock Bar
     property int dockDragActiveIndex: -1
@@ -3049,7 +3050,7 @@ Item {
                                     return root.getWidgetIcon(modelData, it)
                                 }
                                 fontFamily: (leftWidgetLoader.item && leftWidgetLoader.item.fontFamily) ? leftWidgetLoader.item.fontFamily : ((leftWidgetLoader.item && leftWidgetLoader.item.font && leftWidgetLoader.item.font.family) ? leftWidgetLoader.item.font.family : Style.font.family)
-                                fontSize: 22
+                                fontSize: Math.round(22 * root.iconBaseSize / 24)
                                 color: leftWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
@@ -3366,7 +3367,7 @@ Item {
                                     return root.getWidgetIcon(modelData, it)
                                 }
                                 fontFamily: (rightWidgetLoader.item && rightWidgetLoader.item.fontFamily) ? rightWidgetLoader.item.fontFamily : ((rightWidgetLoader.item && rightWidgetLoader.item.font && rightWidgetLoader.item.font.family) ? rightWidgetLoader.item.font.family : Style.font.family)
-                                fontSize: 22
+                                fontSize: Math.round(22 * root.iconBaseSize / 24)
                                 color: rightWidgetSlotMouse.containsMouse ? Color.accent : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.95)
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }

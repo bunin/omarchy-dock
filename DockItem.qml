@@ -16,8 +16,9 @@ Item {
     property int totalCount: 1
     property string barPosition: "bottom"
     property var shell: null
-    property real slotSize: 42
-    property real iconBaseSize: 24
+    property real fontScale: (typeof Style !== "undefined" && typeof Style.fontScale === "number" && Style.fontScale > 0) ? Style.fontScale : 1.0
+    property real slotSize: Math.round(42 * fontScale)
+    property real iconBaseSize: Math.round(24 * fontScale)
     property int systemBorderSize: Style.normalBorderWidth > 0 ? Style.normalBorderWidth : 2
     property int systemRounding: Style.cornerRadius >= 0 ? Style.cornerRadius : 12
     property bool isSelected: false
@@ -339,7 +340,7 @@ Item {
             height: root.iconBaseSize
             text: (root.itemData && root.itemData.icon) ? root.itemData.icon : ""
             fontFamily: Style.font.family
-            fontSize: 20
+            fontSize: Math.round(20 * root.iconBaseSize / 24)
             color: Color.accent
         }
 
