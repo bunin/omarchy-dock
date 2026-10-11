@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "DockModel.js" as DockModel
+import "DockScroll.js" as DockScroll
 import "components"
 
 Item {
@@ -422,6 +423,16 @@ Item {
 
     property int previewTopIndex: -1
     property bool isWheelScrolling: false
+    property real pendingScroll: 0
+
+    Timer {
+        id: scrollResetTimer
+        interval: 180
+        repeat: false
+        onTriggered: {
+            root.pendingScroll = 0
+        }
+    }
 
     Timer {
         id: wheelCursorTimer
@@ -817,13 +828,19 @@ Item {
 
         onWheel: function(wheel) {
             if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
-                if (wheel.angleDelta.y < 0 || wheel.angleDelta.x > 0) {
-                    root.cycleDuplicate(true)
-                    wheel.accepted = true
-                } else if (wheel.angleDelta.y > 0 || wheel.angleDelta.x < 0) {
-                    root.cycleDuplicate(false)
-                    wheel.accepted = true
+                var pxX = (wheel.pixelDelta && typeof wheel.pixelDelta.x === "number") ? wheel.pixelDelta.x : 0
+                var pxY = (wheel.pixelDelta && typeof wheel.pixelDelta.y === "number") ? wheel.pixelDelta.y : 0
+                var angX = (wheel.angleDelta && typeof wheel.angleDelta.x === "number") ? wheel.angleDelta.x : 0
+                var angY = (wheel.angleDelta && typeof wheel.angleDelta.y === "number") ? wheel.angleDelta.y : 0
+
+                var res = DockScroll.step(root.pendingScroll, pxX, pxY, angX, angY)
+                root.pendingScroll = res.pending
+                scrollResetTimer.restart()
+
+                if (res.direction !== 0) {
+                    root.cycleDuplicate(res.direction > 0)
                 }
+                wheel.accepted = true
             }
         }
 
@@ -941,10 +958,17 @@ Item {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 onWheel: function(event) {
                     if (root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2) {
-                        if (event.angleDelta.y < 0 || event.angleDelta.x > 0) {
-                            root.cycleDuplicate(true)
-                        } else if (event.angleDelta.y > 0 || event.angleDelta.x < 0) {
-                            root.cycleDuplicate(false)
+                        var pxX = (event.pixelDelta && typeof event.pixelDelta.x === "number") ? event.pixelDelta.x : 0
+                        var pxY = (event.pixelDelta && typeof event.pixelDelta.y === "number") ? event.pixelDelta.y : 0
+                        var angX = (event.angleDelta && typeof event.angleDelta.x === "number") ? event.angleDelta.x : 0
+                        var angY = (event.angleDelta && typeof event.angleDelta.y === "number") ? event.angleDelta.y : 0
+
+                        var res = DockScroll.step(root.pendingScroll, pxX, pxY, angX, angY)
+                        root.pendingScroll = res.pending
+                        scrollResetTimer.restart()
+
+                        if (res.direction !== 0) {
+                            root.cycleDuplicate(res.direction > 0)
                         }
                     }
                 }
