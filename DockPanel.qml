@@ -199,52 +199,15 @@ Item {
         }
     }
 
-    // Persistent stable chronological window registry (never reordered on focus or workspace switch)
-    property var knownWindows: []
-    property string pendingFocusAppId: ""
-    property double pendingFocusTimestamp: 0
+    // Persistent stable chronological window registry (delegated to DockWindowTracker)
+    readonly property var knownWindows: windowTracker.knownWindows
 
     function requestFocusOnLaunch(appId) {
-        var clean = DockModel.stripDesktop(appId || "").toLowerCase()
-        if (!clean) return
-        root.pendingFocusAppId = clean
-        root.pendingFocusTimestamp = Date.now()
+        windowTracker.requestFocusOnLaunch(appId)
     }
 
     function syncKnownWindows() {
-        var live = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
-        var nextKnown = []
-        // 1. Preserve existing known windows in their original creation order if still alive
-        for (var i = 0; i < root.knownWindows.length; i++) {
-            var k = root.knownWindows[i]
-            for (var j = 0; j < live.length; j++) {
-                if (live[j] === k) {
-                    nextKnown.push(k)
-                    break
-                }
-            }
-        }
-        // 2. Append newly opened windows to the end
-        for (var l = 0; l < live.length; l++) {
-            var cand = live[l]
-            if (cand && nextKnown.indexOf(cand) === -1) {
-                nextKnown.push(cand)
-            }
-        }
-
-        var unchanged = nextKnown.length === root.knownWindows.length
-        if (unchanged) {
-            for (var m = 0; m < nextKnown.length; m++) {
-                if (nextKnown[m] !== root.knownWindows[m]) {
-                    unchanged = false
-                    break
-                }
-            }
-        }
-        if (!unchanged) {
-            root.knownWindows = nextKnown
-        }
-        return root.knownWindows
+        return windowTracker.syncKnownWindows()
     }
 
     function activateAppWindow(appId, winIndex) {
@@ -2167,7 +2130,7 @@ Item {
         root.pinnedIds = DockModel.parsePinned(userPinnedFile.text() || "")
         root.refreshLayers()
         root.updatePluginEnabled()
-        iconScanDebounceTimer.restart()
+        root.requestIconScan()
         root.updateDockItems()
         return "ok"
     }
@@ -2182,6 +2145,23 @@ Item {
 
     function updateDockItems() {
         batchUpdateTimer.restart()
+    }
+
+    DockWindowTracker {
+        id: windowTracker
+        toplevelManager: (typeof ToplevelManager !== "undefined") ? ToplevelManager : null
+        hyprland: (typeof Hyprland !== "undefined") ? Hyprland : null
+        util: (typeof Util !== "undefined") ? Util : null
+        onRefreshRequested: root.updateDockItems()
+        onIconRefreshRequested: {
+            root.iconRevision++
+            root.updateDockItems()
+        }
+        onFocusRequested: function(cleanAddr) {
+            if (typeof Util !== "undefined" && typeof Util.execDetached === "function") {
+                Util.execDetached("hyprctl dispatch focuswindow address:" + cleanAddr)
+            }
+        }
     }
 
     NotificationTracker {
@@ -2307,180 +2287,8 @@ Item {
         root.updateDockItems()
     }
 
-    Connections {
-        target: ToplevelManager.toplevels
-        function onValuesChanged() {
-            var live = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
-            var hasNewTerm = false
-            for (var i = 0; i < live.length; i++) {
-                var t = live[i]
-                if (t && (t.appId === "foot" || t.appId === "ghostty" || t.appId === "kitty" || t.appId === "alacritty" || t.appId === "wezterm")) {
-                    if (root.knownWindows.indexOf(t) === -1) {
-                        hasNewTerm = true
-                        break
-                    }
-                }
-            }
-            if (hasNewTerm) {
-                root.lastTerminalOpenTime = Date.now()
-                cliScannerProc.running = true
-                terminalSettleTimer.restart()
-            } else if (Date.now() - root.lastTerminalOpenTime < 150) {
-                terminalSettleTimer.restart()
-            } else {
-                root.updateDockItems()
-            }
-        }
-    }
-
-    Connections {
-        target: ToplevelManager
-        function onActiveToplevelChanged() {
-            if (Date.now() - root.lastTerminalOpenTime < 150) {
-                terminalSettleTimer.restart()
-            } else {
-                root.updateDockItems()
-            }
-        }
-    }
-
-    property double lastWindowOpenTime: 0
-    property double lastTerminalOpenTime: 0
-
-    Process {
-        id: cliScannerProc
-        running: false
-        command: ["python3", Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, ""), "scan-cli"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var apps = JSON.parse(text)
-                    if (Array.isArray(apps)) {
-                        DockModel.setDetectedCliApps(apps)
-                        root.updateDockItems()
-                    }
-                } catch(e) {}
-            }
-        }
-    }
-
-    Process {
-        id: iconScannerProc
-        running: false
-        command: ["python3", Qt.resolvedUrl("scripts/dock-minimize.py").toString().replace(/^file:\/\//, ""), "scan-icons"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var icons = JSON.parse(text)
-                    if (icons && typeof icons === "object") {
-                        DockModel.setDiskIcons(icons)
-                        root.iconRevision++
-                        root.updateDockItems()
-                    }
-                } catch(e) {}
-            }
-        }
-    }
-
-    Timer {
-        id: iconScanDebounceTimer
-        interval: 200
-        repeat: false
-        onTriggered: {
-            if (!iconScannerProc.running) {
-                iconScannerProc.running = true
-            }
-        }
-    }
-
-    Timer {
-        id: terminalSettleTimer
-        interval: 100
-        repeat: false
-        onTriggered: {
-            if (Date.now() - root.lastTerminalOpenTime < 2000) {
-                cliScannerProc.running = true
-            }
-            root.updateDockItems()
-        }
-    }
-
-    Timer {
-        id: titleChangeDebounceTimer
-        interval: 250
-        repeat: false
-        onTriggered: root.updateDockItems()
-    }
-
-    Timer {
-        id: minimizeRefreshTimer
-        interval: 65
-        repeat: false
-        onTriggered: root.updateDockItems()
-    }
-
-    Connections {
-        target: (typeof Hyprland !== "undefined") ? Hyprland : null
-        function onActiveToplevelChanged() {
-            if (Date.now() - root.lastTerminalOpenTime < 150) {
-                terminalSettleTimer.restart()
-            } else {
-                root.updateDockItems()
-            }
-        }
-        function onRawEvent(event) {
-            if (!event) return
-            var name = String(event.name || "")
-            if (name === "windowtitle" || name === "windowtitlev2") {
-                if (Date.now() - root.lastWindowOpenTime < 2000) {
-                    root.updateDockItems()
-                } else {
-                    titleChangeDebounceTimer.restart()
-                }
-                return
-            }
-            if (name === "movewindow" || name === "movewindowv2" || name === "activewindow" || name === "activewindowv2" || name === "closewindow" || name === "workspace" || name === "workspacev2" || name === "focusedmon") {
-                root.updateDockItems()
-                return
-            }
-            if (name === "openwindow") {
-                root.lastWindowOpenTime = Date.now()
-                iconScanDebounceTimer.restart()
-                var openArgs = String(event.args || "")
-                var openParts = openArgs.split(",")
-                var openClass = openParts.length >= 3 ? openParts[2].trim().toLowerCase() : ""
-                var isTerm = (openClass === "foot" || openClass === "ghostty" || openClass === "kitty" || openClass === "alacritty" || openClass === "wezterm")
-
-                if (isTerm) {
-                    root.lastTerminalOpenTime = Date.now()
-                    cliScannerProc.running = true
-                    terminalSettleTimer.restart()
-                } else {
-                    root.updateDockItems()
-                }
-
-                if (root.pendingFocusAppId) {
-                    if (Date.now() - root.pendingFocusTimestamp > 8000) {
-                        root.pendingFocusAppId = ""
-                        return
-                    }
-                    if (openParts.length >= 3) {
-                        var addr = openParts[0].trim()
-                        var winClass = openParts[2].trim().toLowerCase()
-                        var pending = root.pendingFocusAppId.toLowerCase()
-                        var normClass = winClass.replace(/[^a-z0-9]/g, "")
-                        var normPending = pending.replace(/[^a-z0-9]/g, "")
-                        if (winClass === pending || (normPending.length > 0 && (normClass.indexOf(normPending) !== -1 || normPending.indexOf(normClass) !== -1))) {
-                            root.pendingFocusAppId = ""
-                            var cleanAddr = (addr.indexOf("0x") === 0) ? addr : ("0x" + addr)
-                            Util.execDetached("hyprctl dispatch focuswindow address:" + cleanAddr)
-                        }
-                    }
-                }
-            }
-        }
+    function requestIconScan() {
+        windowTracker.requestIconScan()
     }
 
     Connections {
@@ -2508,7 +2316,7 @@ Item {
         target: DesktopEntries.applications
         function onValuesChanged() {
             root.appRows = (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : (DesktopEntries.applications.values || [])
-            iconScanDebounceTimer.restart()
+            root.requestIconScan()
             root.iconRevision++
             root.updateDockItems()
         }
@@ -2537,7 +2345,7 @@ Item {
             if (shell && shell.appLibrary && typeof shell.appLibrary.refreshIcons === "function") {
                 shell.appLibrary.refreshIcons()
             }
-            iconScanDebounceTimer.restart()
+            root.requestIconScan()
             root.appRows = (shell && shell.appLibrary) ? shell.appLibrary.sortedEntries("") : []
             root.iconRevision++
             root.doUpdateDockItems()
@@ -2690,7 +2498,7 @@ Item {
                 return origAppLibLaunch.apply(this, arguments)
             }
         }
-        iconScanDebounceTimer.restart()
+        root.requestIconScan()
         root.doUpdateDockItems()
     }
 
@@ -2852,9 +2660,11 @@ Item {
                 // client, since autohide puts this window on the Overlay layer
                 // -- for a dock that cannot be hovered anyway. Revealing it is
                 // the separate edge trigger's job. Hand the strip back.
-                mask: Region {
-                    width: dockLayer.slidOut ? 0 : dockLayer.width
-                    height: dockLayer.slidOut ? 0 : dockLayer.height
+                mask: DockInputRegion {
+                    surface: dockSurface
+                    translationX: autohideTranslate.x
+                    translationY: autohideTranslate.y
+                    hidden: dockLayer.slidOut
                 }
 
                 anchors {
