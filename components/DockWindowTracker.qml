@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "DockModel.js" as DockModel
+import "../DockModel.js" as DockModel
 
 Item {
     id: tracker
