@@ -271,7 +271,7 @@ PanelWindow {
                         sourceComponent: TextInput {
                             id: titleInput
                             width: parent ? parent.width : 0
-                            readOnly: !stackWindow.root.isEditingFolderTitle
+                            readOnly: true
                             maximumLength: 64
                             text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
                             font.family: Style.font.family
@@ -298,13 +298,67 @@ PanelWindow {
                                 stackCard.forceActiveFocus()
                             }
 
-                            Keys.onReturnPressed: function(event) { event.accepted = true; saveAndClose() }
-                            Keys.onEnterPressed:  function(event) { event.accepted = true; saveAndClose() }
-                            Keys.onEscapePressed: function(event) {
-                                event.accepted = true
+                            function cancelRename() {
                                 stackWindow.root.isEditingFolderTitle = false
                                 stackCard.forceActiveFocus()
                             }
+
+                            function replaceSelection(replacement) {
+                                var start = selectionStart
+                                var end = selectionEnd
+                                var room = maximumLength - (text.length - (end - start))
+                                var bounded = replacement.slice(0, Math.max(0, room))
+                                var last = bounded.charCodeAt(bounded.length - 1)
+                                if (last >= 0xd800 && last <= 0xdbff) bounded = bounded.slice(0, -1)
+                                text = text.slice(0, start) + bounded + text.slice(end)
+                                cursorPosition = start + bounded.length
+                            }
+
+                            function handleKey(event) {
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    event.accepted = true
+                                    saveAndClose()
+                                    return true
+                                }
+                                if (event.key === Qt.Key_Escape) {
+                                    event.accepted = true
+                                    cancelRename()
+                                    return true
+                                }
+                                var shortcut = event.modifiers & (Qt.ControlModifier | Qt.MetaModifier | Qt.AltModifier)
+                                if (shortcut) {
+                                    if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
+                                        selectAll()
+                                        event.accepted = true
+                                        return true
+                                    }
+                                    return false
+                                }
+                                if (event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) {
+                                    if (selectionStart === selectionEnd) {
+                                        var position = cursorPosition
+                                        if (event.key === Qt.Key_Backspace && position > 0) {
+                                            var previous = text.charCodeAt(position - 1)
+                                            var count = previous >= 0xdc00 && previous <= 0xdfff && position > 1 ? 2 : 1
+                                            select(position - count, position)
+                                        } else if (event.key === Qt.Key_Delete && position < text.length) {
+                                            var next = text.charCodeAt(position)
+                                            var count = next >= 0xd800 && next <= 0xdbff && position + 1 < text.length ? 2 : 1
+                                            select(position, position + count)
+                                        }
+                                    }
+                                    replaceSelection("")
+                                    event.accepted = true
+                                    return true
+                                } else if (event.text && !/[\x00-\x1f\x7f]/.test(event.text)) {
+                                    replaceSelection(event.text)
+                                    event.accepted = true
+                                    return true
+                                }
+                                return false
+                            }
+
+                            Keys.onPressed: function(event) { handleKey(event) }
                             onEditingFinished: saveAndClose()
                         }
                     }
