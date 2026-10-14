@@ -55,8 +55,8 @@ PanelWindow {
             z: 0
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: function(mouse) {
-                if (stackWindow.root.isEditingFolderTitle && typeof titleInput !== "undefined") {
-                    titleInput.saveAndClose()
+                if (stackWindow.root.isEditingFolderTitle && titleInputLoader.item) {
+                    titleInputLoader.item.saveAndClose()
                 }
                 stackWindow.root.activeStackItem = null
                 stackWindow.root.isEditMode = false
@@ -88,9 +88,6 @@ PanelWindow {
             Keys.onEscapePressed: function(event) {
                 event.accepted = true
                 if (stackWindow.root.isEditingFolderTitle) {
-                    if (typeof titleInput !== "undefined") {
-                        titleInput.text = (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
-                    }
                     stackWindow.root.isEditingFolderTitle = false
                     stackCard.forceActiveFocus()
                     return
@@ -137,8 +134,8 @@ PanelWindow {
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: (stackWindow.root.folderDragActiveIndex >= 0) ? Qt.BlankCursor : (stackWindow.root.isEditMode ? Qt.PointingHandCursor : Qt.ArrowCursor)
                 onClicked: function(mouse) {
-                    if (stackWindow.root.isEditingFolderTitle && typeof titleInput !== "undefined") {
-                        titleInput.saveAndClose()
+                    if (stackWindow.root.isEditingFolderTitle && titleInputLoader.item) {
+                        titleInputLoader.item.saveAndClose()
                     }
                     if (mouse.button === Qt.RightButton || mouse.button === Qt.LeftButton) {
                         stackWindow.root.isEditMode = false
@@ -159,7 +156,7 @@ PanelWindow {
                 // Silky smooth wiggle animation on hover and in edit mode
                 SequentialAnimation {
                     id: titleJiggleAnim
-                    running: (stackWindow.root.isEditMode || titleHoverArea.containsMouse) && !stackWindow.root.isEditingFolderTitle && !titleInput.activeFocus
+                    running: (stackWindow.root.isEditMode || titleHoverArea.containsMouse) && !stackWindow.root.isEditingFolderTitle
                     loops: Animation.Infinite
 
                     NumberAnimation {
@@ -185,11 +182,11 @@ PanelWindow {
                     to: 0.0
                     duration: 120
                     easing.type: Easing.OutCubic
-                    running: (!stackWindow.root.isEditMode && !titleHoverArea.containsMouse || stackWindow.root.isEditingFolderTitle || titleInput.activeFocus) && titleContainer.rotation !== 0.0
+                    running: (!stackWindow.root.isEditMode && !titleHoverArea.containsMouse || stackWindow.root.isEditingFolderTitle) && titleContainer.rotation !== 0.0
                 }
 
                 readonly property real availableTitleWidth: Math.max(10, width - 16)
-                readonly property bool needsMarquee: !stackWindow.root.isEditingFolderTitle && !titleInput.activeFocus && (titleLabel.implicitWidth > availableTitleWidth)
+                readonly property bool needsMarquee: !stackWindow.root.isEditingFolderTitle && (titleLabel.implicitWidth > availableTitleWidth)
                 readonly property real scrollDistance: Math.max(0, titleLabel.implicitWidth - availableTitleWidth)
                 property real marqueeOffset: 0
 
@@ -206,10 +203,10 @@ PanelWindow {
                     Rectangle {
                         anchors.fill: parent
                         radius: 6
-                        color: (stackWindow.root.isEditingFolderTitle || titleInput.activeFocus)
+                        color: stackWindow.root.isEditingFolderTitle
                             ? Style.hoverFillFor(Color.popups.text, Color.accent)
                             : (titleHoverArea.containsMouse ? Style.hoverFillFor(Color.popups.text, Color.accent) : "transparent")
-                        border.width: (stackWindow.root.isEditingFolderTitle || titleInput.activeFocus) ? 1 : 0
+                        border.width: stackWindow.root.isEditingFolderTitle ? 1 : 0
                         border.color: Color.accent
                         Behavior on color { ColorAnimation { duration: 150 } }
                     }
@@ -263,53 +260,53 @@ PanelWindow {
                         }
                     }
 
-                    // === EDIT: TextInput с прокруткой, виден только при фокусе ===
-                    TextInput {
-                        id: titleInput
+                    // === EDIT: TextInput dynamically loaded ONLY during folder renaming ===
+                    Loader {
+                        id: titleInputLoader
                         anchors.centerIn: parent
                         width: parent.width - 12
-                        visible: stackWindow.root.isEditingFolderTitle
-                        enabled: stackWindow.root.isEditingFolderTitle
+                        active: stackWindow.root.isEditingFolderTitle
                         focus: stackWindow.root.isEditingFolderTitle
-                        text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
-                        font.family: Style.font.family
-                        font.pixelSize: 12
-                        font.bold: true
-                        color: Color.popups.text
-                        selectByMouse: true
-                        cursorVisible: true
-                        clip: true
-                        horizontalAlignment: Text.AlignHCenter
 
-                        onVisibleChanged: {
-                            if (visible && stackWindow.root.activeStackItem) {
-                                text = (stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
+                        sourceComponent: TextInput {
+                            id: titleInput
+                            width: parent ? parent.width : 0
+                            readOnly: !stackWindow.root.isEditingFolderTitle
+                            maximumLength: 64
+                            text: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
+                            font.family: Style.font.family
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: Color.popups.text
+                            selectByMouse: true
+                            cursorVisible: true
+                            clip: true
+                            horizontalAlignment: Text.AlignHCenter
+
+                            Component.onCompleted: {
                                 selectAll()
                                 forceActiveFocus()
                             }
-                        }
 
-                        function saveAndClose() {
-                            var n = text.trim()
-                            if (stackWindow.root.activeStackItem) {
-                                stackWindow.root.setPinned(DockModel.renameStack(stackWindow.root.pinnedIds, stackWindow.root.activeStackItem.id, n))
-                                stackWindow.root.activeStackItem.name = n
+                            function saveAndClose() {
+                                var n = text.trim()
+                                if (stackWindow.root.activeStackItem) {
+                                    stackWindow.root.setPinned(DockModel.renameStack(stackWindow.root.pinnedIds, stackWindow.root.activeStackItem.id, n))
+                                    stackWindow.root.activeStackItem.name = n
+                                }
+                                stackWindow.root.isEditingFolderTitle = false
+                                stackCard.forceActiveFocus()
                             }
-                            stackWindow.root.isEditingFolderTitle = false
-                            focus = false
-                            stackCard.forceActiveFocus()
-                        }
 
-                        Keys.onReturnPressed: function(event) { event.accepted = true; saveAndClose() }
-                        Keys.onEnterPressed:  function(event) { event.accepted = true; saveAndClose() }
-                        Keys.onEscapePressed: function(event) {
-                            event.accepted = true
-                            text = (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.name !== undefined) ? stackWindow.root.activeStackItem.name : ""
-                            stackWindow.root.isEditingFolderTitle = false
-                            focus = false
-                            stackCard.forceActiveFocus()
+                            Keys.onReturnPressed: function(event) { event.accepted = true; saveAndClose() }
+                            Keys.onEnterPressed:  function(event) { event.accepted = true; saveAndClose() }
+                            Keys.onEscapePressed: function(event) {
+                                event.accepted = true
+                                stackWindow.root.isEditingFolderTitle = false
+                                stackCard.forceActiveFocus()
+                            }
+                            onEditingFinished: saveAndClose()
                         }
-                        onEditingFinished: saveAndClose()
                     }
 
                     MouseArea {
