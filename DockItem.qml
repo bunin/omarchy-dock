@@ -148,11 +148,18 @@ Item {
     property bool iconsReady: true
 
     // Dynamic Real-time Theme-aware Icon Resolution
+    function isLocalIconUri(uri) {
+        if (!uri) return false
+        var s = String(uri).trim()
+        return s.indexOf("file://") === 0 || s.indexOf("image://") === 0 || s.indexOf("qrc://") === 0
+    }
+
     function resolveIcon(itemObj) {
         if (!itemObj) return Quickshell.iconPath("application-x-executable", true) || "file:///usr/share/pixmaps/omarchy.png"
         var raw = (typeof itemObj === "string") ? itemObj : (itemObj.rawIcon || itemObj.icon || itemObj.appId || itemObj.id || "")
         if (!raw) return Quickshell.iconPath("application-x-executable", true) || "file:///usr/share/pixmaps/omarchy.png"
-        if (raw.indexOf("://") >= 0) return raw
+        if (isLocalIconUri(raw)) return raw
+        if (raw.indexOf("://") >= 0) return Quickshell.iconPath("application-x-executable", true) || "file:///usr/share/pixmaps/omarchy.png"
         if (raw.indexOf("/") === 0) return "file://" + raw
 
         var cands = (typeof itemObj === "string")
@@ -161,7 +168,8 @@ Item {
 
         for (var i = 0; i < cands.length; i++) {
             var c = cands[i]
-            if (c.indexOf("://") >= 0) return c
+            if (isLocalIconUri(c)) return c
+            if (c.indexOf("://") >= 0) continue
             if (c.indexOf("/") === 0) return "file://" + c
             var diskHit = DockModel.getDiskIcon(c)
             if (diskHit) return diskHit

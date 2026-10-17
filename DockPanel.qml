@@ -1907,7 +1907,7 @@ Item {
             Util.execDetached(cmd)
         }
         root.updateDockItems()
-        minimizeRefreshTimer.restart()
+        if (windowTracker) windowTracker.refreshSoon()
     }
 
     function restoreOrLaunchItem(itemData, targetIndex) {
@@ -1944,7 +1944,7 @@ Item {
             Util.execDetached(cmd)
         }
         root.updateDockItems()
-        minimizeRefreshTimer.restart()
+        if (windowTracker) windowTracker.refreshSoon()
     }
 
     // Right-Click Menu State
@@ -1977,11 +1977,18 @@ Item {
     // Curated available symbols for folder icon personalization (Clean monochrome vector glyphs)
     readonly property var availableFolderIcons: ["󰉋", "󰒓", "󰞷", "󰝚", "󰊴", "󰏘", "󰭹", "󰖟", "󰕧", "󰈔", "󰍹", "󰖩", "󰌾", "♥"]
 
+    function isLocalIconUri(uri) {
+        if (!uri) return false
+        var s = String(uri).trim()
+        return s.indexOf("file://") === 0 || s.indexOf("image://") === 0 || s.indexOf("qrc://") === 0
+    }
+
     function resolveIcon(itemObj) {
         if (!itemObj) return Quickshell.iconPath("application-x-executable", true)
         var raw = (typeof itemObj === "string") ? itemObj : (itemObj.rawIcon || itemObj.icon || itemObj.appId || itemObj.id || "")
         if (!raw) return Quickshell.iconPath("application-x-executable", true)
-        if (raw.indexOf("://") >= 0) return raw
+        if (isLocalIconUri(raw)) return raw
+        if (raw.indexOf("://") >= 0) return Quickshell.iconPath("application-x-executable", true)
         if (raw.indexOf("/") === 0) return "file://" + raw
 
         var cands = (typeof itemObj === "string")
@@ -1990,7 +1997,8 @@ Item {
 
         for (var i = 0; i < cands.length; i++) {
             var c = cands[i]
-            if (c.indexOf("://") >= 0) return c
+            if (isLocalIconUri(c)) return c
+            if (c.indexOf("://") >= 0) continue
             if (c.indexOf("/") === 0) return "file://" + c
             var diskHit = DockModel.getDiskIcon(c)
             if (diskHit) return diskHit

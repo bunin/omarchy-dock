@@ -19,6 +19,12 @@ function cleanWindowAppId(id) {
     return value;
 }
 
+function isLocalIconUri(uri) {
+    if (!uri) return false;
+    var s = String(uri).trim();
+    return s.indexOf("file://") === 0 || s.indexOf("image://") === 0 || s.indexOf("qrc://") === 0;
+}
+
 function toArray(list) {
     if (Array.isArray(list)) return list;
     if (list && typeof list.length === "number") {
@@ -772,7 +778,7 @@ function setDiskIcons(iconsObj) {
 function getDiskIcon(name) {
     if (!name) return "";
     var s = String(name).trim();
-    if (s.indexOf("://") >= 0) return s;
+    if (s.indexOf("://") >= 0) return isLocalIconUri(s) ? s : "";
     if (s.charAt(0) === "/") return "file://" + s;
 
     var low = s.toLowerCase();
@@ -798,19 +804,23 @@ function getDiskIcon(name) {
 
 function resolveIcon(entry, appId, appLibrary) {
     if (entry && entry.iconSource && entry.iconSource.length > 0 && entry.iconSource.indexOf("application-x-executable") === -1) {
-        return entry.iconSource;
+        if (entry.iconSource.indexOf("://") < 0 || isLocalIconUri(entry.iconSource)) {
+            return entry.iconSource;
+        }
     }
     if (entry && entry.icon) {
         var iconVal = String(entry.icon).trim();
-        if (iconVal.indexOf("file://") === 0 || iconVal.indexOf("image://") === 0) return iconVal;
+        if (isLocalIconUri(iconVal)) return iconVal;
         if (iconVal.charAt(0) === "/") return "file://" + iconVal;
         var diskFound = getDiskIcon(iconVal);
         if (diskFound) return diskFound;
         if (appLibrary && typeof appLibrary.iconSource === "function") {
             var src = appLibrary.iconSource(iconVal);
-            if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) return src;
+            if (src && src.length > 0 && src.indexOf("application-x-executable") === -1) {
+                if (src.indexOf("://") < 0 || isLocalIconUri(src)) return src;
+            }
         }
-        return iconVal;
+        if (iconVal.indexOf("://") < 0) return iconVal;
     }
     var id = stripDesktop(appId);
     var diskIdFound = getDiskIcon(id);
@@ -820,12 +830,14 @@ function resolveIcon(entry, appId, appLibrary) {
         var candidates = getCandidates(entry ? entry.icon : "", "", id);
         for (var i = 0; i < candidates.length; i++) {
             var cand = candidates[i];
-            if (cand.indexOf("file://") === 0 || cand.indexOf("image://") === 0) return cand;
+            if (isLocalIconUri(cand)) return cand;
             if (cand.charAt(0) === "/") return "file://" + cand;
             var cDisk = getDiskIcon(cand);
             if (cDisk) return cDisk;
             var cSrc = appLibrary.iconSource(cand);
-            if (cSrc && cSrc.length > 0 && cSrc.indexOf("application-x-executable") === -1) return cSrc;
+            if (cSrc && cSrc.length > 0 && cSrc.indexOf("application-x-executable") === -1) {
+                if (cSrc.indexOf("://") < 0 || isLocalIconUri(cSrc)) return cSrc;
+            }
         }
 
         // Try hyphenated/spaced variations (e.g. "Google Maps" -> "google-maps")
@@ -833,13 +845,17 @@ function resolveIcon(entry, appId, appLibrary) {
         var hypDisk = getDiskIcon(hyp);
         if (hypDisk) return hypDisk;
         var src3 = appLibrary.iconSource(hyp);
-        if (src3 && src3.length > 0 && src3.indexOf("application-x-executable") === -1) return src3;
+        if (src3 && src3.length > 0 && src3.indexOf("application-x-executable") === -1) {
+            if (src3.indexOf("://") < 0 || isLocalIconUri(src3)) return src3;
+        }
 
         var spc = id.toLowerCase().replace(/[-_]+/g, " ");
         var spcDisk = getDiskIcon(spc);
         if (spcDisk) return spcDisk;
         var src4 = appLibrary.iconSource(spc);
-        if (src4 && src4.length > 0 && src4.indexOf("application-x-executable") === -1) return src4;
+        if (src4 && src4.length > 0 && src4.indexOf("application-x-executable") === -1) {
+            if (src4.indexOf("://") < 0 || isLocalIconUri(src4)) return src4;
+        }
     } else {
         var cands = getCandidates(entry ? entry.icon : "", "", id);
         for (var ci = 0; ci < cands.length; ci++) {
@@ -847,7 +863,7 @@ function resolveIcon(entry, appId, appLibrary) {
             if (cd) return cd;
         }
     }
-    return id || "application-x-executable";
+    return (id && id.indexOf("://") < 0) ? id : "application-x-executable";
 }
 
 function isBrowserApp(id) {
@@ -1920,7 +1936,7 @@ function buildDockItems(pinnedList, toplevelsList, activeToplevel, desktopEntrie
         if (rEntry && rEntry.id) {
             rAppId = stripDesktop(rEntry.id);
         }
-        var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : (rAppId || "application-x-executable");
+        var rRawIcon = (rEntry && rEntry.icon) ? rEntry.icon : ((rAppId && rAppId.indexOf("://") < 0) ? rAppId : "application-x-executable");
         var rIcon = resolveIcon(rEntry, rAppId, appLibrary);
         var rName = (rEntry && rEntry.name) ? rEntry.name : (rTitle || rAppId || "App");
         var rIconSource = (rEntry && rEntry.iconSource) ? rEntry.iconSource : "";

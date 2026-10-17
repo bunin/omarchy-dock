@@ -520,6 +520,14 @@ TestCase {
 
         var resolvedShow = DockMatcher.resolveIcon({ icon: "omashow" }, "omashow", null)
         compare(resolvedShow, "file:///usr/share/icons/hicolor/scalable/apps/omashow.svg")
+
+        // Remote URL injection rejection
+        compare(DockMatcher.getDiskIcon("https://evil.example.com/exploit.png"), "")
+        compare(DockMatcher.getDiskIcon("http://evil.example.com/exploit.png"), "")
+        var resolvedRemote = DockMatcher.resolveIcon({ icon: "https://evil.example.com/icon.png" }, "test", null)
+        compare(resolvedRemote !== "https://evil.example.com/icon.png", true)
+        var resolvedRemoteId = DockMatcher.resolveIcon(null, "https://evil.example.com/app", null)
+        compare(resolvedRemoteId, "application-x-executable")
     }
 
     function test_quickshellDesktopEntryExecString() {
