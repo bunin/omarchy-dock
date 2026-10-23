@@ -122,11 +122,10 @@ the currently focused monitor, and hovering a screen edge reveals only that
 screen's dock — the other monitors' docks stay slid out until their own edge
 is hovered or the shortcut is used while they are focused.
 
-Hovering an icon for about half a second labels it: the window's own title
-when the app has exactly one window open, the app name and a window count
-when it has several, and just the name for a folder or an app that is not
-running. The label never takes pointer input, so it cannot steal the hover
-that summoned it.
+Hovering an icon opens one card for it: the window's own title when the app
+has exactly one window open, and just the name for a folder or an app that is
+not running. An app with several windows gets its name as a caption over the
+list of its windows, one row per window title, to pick from.
 
 Pinned items and folder layouts are automatically saved to `~/.config/omarchy/dock-pinned.json`.
 

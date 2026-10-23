@@ -44,10 +44,6 @@ Item {
     signal dragStarted(int fromIndex)
     signal dragEnded()
     signal windowListHoverChanged(bool hovered)
-    // Reported in this item's window coordinates so the tooltip window can
-    // line itself up with the icon without re-deriving the dock layout.
-    signal tooltipRequested(var itemData, point windowCenter)
-    signal tooltipDismissed(var itemData)
 
     readonly property int badgeCount: (root.itemData && typeof root.itemData.badgeCount === "number") ? root.itemData.badgeCount : 0
 
@@ -56,10 +52,12 @@ Item {
     // The dock sits on the screen edge opposite the status bar.
     readonly property string dockEdge: oppositeEdge === "top" ? "bottom" : (oppositeEdge === "bottom" ? "top" : (oppositeEdge === "left" ? "right" : "left"))
 
-    // Hovering an app with several windows lists them by title, so the one to
+    // Hovering any item opens one card titled by DockModel.hoverTitleFor. An
+    // app with several windows also lists them there by title, so the one to
     // focus can be picked directly instead of by its dot in the capsule.
     readonly property bool hasSeveralWindows: !!(root.itemData && !root.itemData.isStack && root.itemData.isRunning && root.itemData.toplevels && root.itemData.toplevels.length >= 2)
-    readonly property bool canShowWindowList: root.hasSeveralWindows && root.iconsReady && !root.isEditMode && !root.isAnyDragging
+    readonly property string hoverTitle: DockModel.hoverTitleFor(root.itemData)
+    readonly property bool canShowWindowList: root.hoverTitle.length > 0 && root.iconsReady && !root.isEditMode && !root.isAnyDragging
     property bool windowListOpen: false
     property bool windowListHovered: false
 
@@ -651,7 +649,6 @@ Item {
             mouseArea.forceActiveFocus()
             windowListCloseTimer.stop()
             if (root.canShowWindowList && !root.windowListOpen) windowListOpenTimer.restart()
-            root.tooltipRequested(root.itemData, root.mapToItem(null, root.width / 2, root.height / 2))
         }
 
         Keys.onRightPressed: function(event) {
@@ -825,7 +822,6 @@ Item {
             if (!root.windowListHovered && !root.windowListOpen) {
                 previewResetTimer.restart()
             }
-            root.tooltipDismissed(root.itemData)
         }
 
         onCanceled: {
@@ -919,7 +915,7 @@ Item {
 
     PopupWindow {
         id: windowList
-        visible: root.windowListOpen && root.hasSeveralWindows
+        visible: root.windowListOpen
         color: "transparent"
         implicitWidth: windowListCard.width
         implicitHeight: windowListCard.height
@@ -1027,7 +1023,7 @@ Item {
                     target: root
                     function onEffectiveTopIndexChanged() {
                         if (windowListFlickable.contentHeight > windowListFlickable.height) {
-                            var itemY = root.effectiveTopIndex * 30
+                            var itemY = windowListHeader.height + root.effectiveTopIndex * 30
                             if (itemY < windowListFlickable.contentY) {
                                 windowListFlickable.contentY = itemY
                             } else if (itemY + 30 > windowListFlickable.contentY + windowListFlickable.height) {
@@ -1040,8 +1036,33 @@ Item {
                 Column {
                     id: windowListColumn
 
+                    // Over a list of windows the title is a quiet caption naming
+                    // the app, lined up with the window titles; alone it is the
+                    // whole card and reads as plain text.
+                    Item {
+                        id: windowListHeader
+                        width: root.hasSeveralWindows
+                            ? Math.min(420, Math.max(160, windowListTitle.implicitWidth + 31))
+                            : Math.min(420, windowListTitle.implicitWidth + 16)
+                        height: 24
+
+                        Text {
+                            id: windowListTitle
+                            x: root.hasSeveralWindows ? 23 : 8
+                            width: windowListColumn.width - x - 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.hoverTitle
+                            elide: Text.ElideRight
+                            color: root.hasSeveralWindows
+                                ? Color.composed("popups.text", "popups.text-alpha", Color.text, 0.55)
+                                : Color.composed("popups.text", "popups.text-alpha", Color.text, 0.9)
+                            font.family: Style.font.family
+                            font.pixelSize: root.hasSeveralWindows ? 11 : 12
+                        }
+                    }
+
                     Repeater {
-                        model: (root.itemData && root.itemData.toplevels) ? root.itemData.toplevels : []
+                        model: (root.hasSeveralWindows && root.itemData.toplevels) ? root.itemData.toplevels : []
 
                         Item {
                             id: windowRow
